@@ -209,6 +209,39 @@ let envRT=null,envBakedNf=-1;
     scene.add(horizonBand);
   }
 }
+/* far ranges: where the country is rugged, the horizon grows teeth */
+const mountainRing=(()=>{
+  const c=document.createElement('canvas');c.width=2048;c.height=220;
+  const g=c.getContext('2d');
+  for(const[base,amp,col]of[[150,95,'rgba(34,40,52,.95)'],[180,60,'rgba(22,27,36,.95)']]){
+    g.fillStyle=col;
+    g.beginPath();g.moveTo(0,220);
+    let y=base-Math.random()*amp*.5;
+    for(let x=0;x<=2048;x+=16){
+      y+=rand(-14,14);
+      y=clamp(y,220-base-amp,220-base+amp*.4);
+      g.lineTo(x,y);
+      if(Math.random()<.12)y=220-base-amp*Math.random();  // a sudden peak
+    }
+    g.lineTo(2048,220);g.closePath();g.fill();
+  }
+  // snow on the highest shoulders
+  const img=g.getImageData(0,0,2048,220),d2=img.data;
+  for(let x=0;x<2048;x++)for(let y2=0;y2<70;y2++){
+    const i=(y2*2048+x)*4;
+    if(d2[i+3]>0&&Math.random()<.5){d2[i]=170;d2[i+1]=180;d2[i+2]=198;}
+  }
+  g.putImageData(img,0,0);
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=THREE.RepeatWrapping;tex.repeat.set(2,1);
+  const m=new THREE.Mesh(
+    new THREE.CylinderGeometry(390,390,64,48,1,true),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.BackSide,
+      fog:false,depthWrite:false,color:0x586274}));
+  m.position.y=22;m.renderOrder=-2;m.visible=false;
+  scene.add(m);
+  return m;
+})();
 
 function bakeEnv(nf){
   if(Math.abs(nf-envBakedNf)<.07&&envRT)return;
@@ -1460,8 +1493,36 @@ const GEESE=[];
   }
 }
 let geeseT=70,geese=null;
+/* ducks: where there is water, something is always already using it */
+const DUCKS=[];
+{
+  for(let i=0;i<3;i++){
+    const g=new THREE.Group();
+    const drake=i%2===0;
+    const body=new THREE.Mesh(new THREE.SphereGeometry(.16,7,5),
+      new THREE.MeshStandardMaterial({color:drake?0x5a4a38:0x6a5844,roughness:.9}));
+    body.scale.set(1,.7,1.5);body.position.y=.1;g.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.08,6,5),
+      new THREE.MeshStandardMaterial({color:drake?0x1e4a2e:0x4a3c30,roughness:.7}));
+    head.position.set(0,.26,.18);g.add(head);
+    const beak=new THREE.Mesh(new THREE.ConeGeometry(.03,.09,4),
+      new THREE.MeshStandardMaterial({color:0xb89030,roughness:.8}));
+    beak.rotation.x=Math.PI/2;beak.position.set(0,.25,.3);g.add(beak);
+    g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    g.visible=false;scene.add(g);
+    DUCKS.push({mesh:g,pond:null,a:rand(TAU),r:.5,state:'paddle',vy:0,ph:rand(TAU)});
+  }
+}
 function scatterDeer(){
   const ok=!BAST.on;          // no living thing grazes a battlefield
+  {
+    const wet=ponds.filter(p=>p.visible&&!BIOME.snow); // nobody paddles on ice
+    for(const dk of DUCKS){
+      dk.pond=ok&&wet.length&&Math.random()<.7?pick(wet):null;
+      dk.state='paddle';dk.a=rand(TAU);dk.r=rand(.3,.65);
+      dk.mesh.visible=false;
+    }
+  }
   for(const r of RABBITS){
     r.alive=ok&&Math.random()<.6;
     r.mesh.visible=false;
@@ -1523,6 +1584,29 @@ function updateWildlife(dt,t,nf){
       }
       if(geese.t>26){geese=null;for(const s of GEESE)s.visible=false;}
     }else for(const s of GEESE)s.visible=false;
+  }
+  for(const dk of DUCKS){ // paddling circles until something with boots gets curious
+    if(!dk.pond){dk.mesh.visible=false;continue;}
+    dk.mesh.visible=true;
+    const P=dk.pond;
+    if(dk.state==='paddle'){
+      dk.a+=dt*.25;
+      const rr=P.scale.x*dk.r*(1+Math.sin(t*.3+dk.ph)*.25);
+      const x=P.position.x+Math.cos(dk.a)*rr,z=P.position.z+Math.sin(dk.a)*rr;
+      dk.mesh.position.set(x,P.position.y+.02+Math.sin(t*2.1+dk.ph)*.025,z);
+      dk.mesh.rotation.y=-dk.a;                       // beak leads the turn
+      if(Math.hypot(player.x-x,player.z-z)<9){dk.state='fly';dk.vy=2.2;dk.t2=0;
+        sNoise(.14,'bandpass',1400,700,.05);          // wings slap the water
+        dk.fa=Math.atan2(x-player.x,z-player.z);}
+    }else{ // fly: up, away, gone
+      dk.t2=(dk.t2||0)+dt;
+      dk.mesh.position.x+=Math.sin(dk.fa)*9*dt;
+      dk.mesh.position.z+=Math.cos(dk.fa)*9*dt;
+      dk.mesh.position.y+=dk.vy*dt;dk.vy=Math.min(4,dk.vy+dt*2);
+      dk.mesh.rotation.y=dk.fa;
+      dk.mesh.position.y+=Math.sin(t*14)*.02;          // wingbeat
+      if(dk.t2>6)dk.pond=null;
+    }
   }
   // somewhere out past the treeline, the wolves keep their own count
   if(nf>.6&&!BAST.on&&G.state==='play'){
@@ -1955,6 +2039,78 @@ function updateSnow(dt,t){
     snowPos[i*3+1]=y;
   }
   snowGeo.attributes.position.needsUpdate=true;
+}
+/* falling leaves: the broadleaf woods shed something all year in this country */
+const LEAF_N=46;
+const leafGeo=new THREE.BufferGeometry();
+const leafPos=new Float32Array(LEAF_N*3),leafPh=new Float32Array(LEAF_N),leafCol=new Float32Array(LEAF_N*3);
+{
+  const C2=new THREE.Color();
+  for(let i=0;i<LEAF_N;i++){
+    leafPos[i*3]=rand(-25,25);leafPos[i*3+1]=rand(0,11);leafPos[i*3+2]=rand(-25,25);
+    leafPh[i]=rand(TAU);
+    C2.setHSL(rand(.05,.16),rand(.5,.75),rand(.28,.42));   // every autumn at once
+    leafCol[i*3]=C2.r;leafCol[i*3+1]=C2.g;leafCol[i*3+2]=C2.b;
+  }
+}
+leafGeo.setAttribute('position',new THREE.BufferAttribute(leafPos,3));
+leafGeo.setAttribute('color',new THREE.BufferAttribute(leafCol,3));
+const leafPts=new THREE.Points(leafGeo,new THREE.PointsMaterial({size:.09,vertexColors:true,
+  transparent:true,opacity:0,depthWrite:false,sizeAttenuation:true}));
+leafPts.frustumCulled=false;scene.add(leafPts);
+function updateLeaves(dt,t){
+  const leafy=BIOME.treeK>=.7&&!BIOME.snow&&!BIOME.desert&&!BIOME.ash;
+  const want=leafy&&G.state==='play'?.85:0;
+  leafPts.material.opacity+=(want-leafPts.material.opacity)*Math.min(1,dt*1.2);
+  if(leafPts.material.opacity<.02){leafPts.visible=false;return;}
+  leafPts.visible=true;
+  leafPts.position.set(player.x,0,player.z);
+  for(let i=0;i<LEAF_N;i++){
+    let y=leafPos[i*3+1]-dt*(.55+(i%4)*.12);
+    leafPos[i*3]+=Math.sin(t*1.9+leafPh[i])*dt*1.1;       // the flutter
+    leafPos[i*3+2]+=Math.cos(t*1.55+leafPh[i]*1.3)*dt*.9;
+    if(y<-1)y+=12;
+    if(leafPos[i*3]<-25)leafPos[i*3]+=50;else if(leafPos[i*3]>25)leafPos[i*3]-=50;
+    if(leafPos[i*3+2]<-25)leafPos[i*3+2]+=50;else if(leafPos[i*3+2]>25)leafPos[i*3+2]-=50;
+    leafPos[i*3+1]=y;
+  }
+  leafGeo.attributes.position.needsUpdate=true;
+}
+/* footprints: the snow remembers where you walked; so does the dust */
+const prints=[];
+{
+  const c=document.createElement('canvas');c.width=24;c.height=40;
+  const g=c.getContext('2d');
+  g.fillStyle='rgba(255,255,255,.95)';
+  g.beginPath();g.ellipse(12,13,6.5,10.5,0,0,TAU);g.fill();  // sole
+  g.beginPath();g.ellipse(12,32,5,5.5,0,0,TAU);g.fill();     // heel
+  const tex=new THREE.CanvasTexture(c);
+  const geo=new THREE.PlaneGeometry(.23,.4);geo.rotateX(-Math.PI/2);
+  for(let i=0;i<40;i++){
+    const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,alphaMap:tex,transparent:true,
+      opacity:0,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,color:0x2e3a4e}));
+    scene.add(m);prints.push({mesh:m,t:0});
+  }
+}
+let printHead=0,printSide=1,printLastX=0,printLastZ=0;
+function updatePrints(dt){
+  for(const p of prints){
+    if(p.t>0){p.t-=dt;p.mesh.material.opacity=Math.min(.42,p.t*.045);}
+    else p.mesh.material.opacity=0;
+  }
+  if(!(BIOME.snow||BIOME.desert)||G.state!=='play'||!player.alive||player.ride)return;
+  const dx=player.x-printLastX,dz=player.z-printLastZ;
+  const d=Math.hypot(dx,dz);
+  if(d<.8)return;
+  printLastX=player.x;printLastZ=player.z;
+  if(d>3)return;                       // teleports and respawns leave no tracks
+  printSide*=-1;
+  const p=prints[printHead];printHead=(printHead+1)%prints.length;
+  const ox=-dz/d*.15*printSide,oz=dx/d*.15*printSide;
+  p.t=22;
+  p.mesh.position.set(player.x+ox,heightAt(player.x+ox,player.z+oz)+.03,player.z+oz);
+  p.mesh.rotation.y=Math.atan2(dx,dz);
+  p.mesh.material.color.setHex(BIOME.snow?0x39465c:0x2e2114);
 }
 const smokes=[];
 {
@@ -4038,6 +4194,7 @@ function buildWorld(legSeed){
   scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterCity();
   scatterDeer();
   sea.visible=!!BIOME.shore;
+  mountainRing.visible=BIOME.rugged>=1.3;   // the rough countries live in the shadow of rougher ones
   for(const d of decals)d.material.opacity=0;
   envBakedNf=-1;
 }
@@ -7447,6 +7604,7 @@ function frame(now){
   updateWeather(dt);
   skyMat.uniforms.nightF.value=nf;
   skyMat.uniforms.aurora.value+=((BIOME.snow?1:0)-skyMat.uniforms.aurora.value)*Math.min(1,dt*.5);
+  if(mountainRing.visible){const mk=1-nf*.78;mountainRing.material.color.setRGB(.345*mk,.384*mk,.455*mk);}
   skyMat.uniforms.flash.value=flashT;
   skyMat.uniforms.cover.value=wxParam('cover',nf);
   scene.fog.color.lerpColors(DUSK.fog,NIGHT.fog,nf);
@@ -7475,6 +7633,8 @@ function frame(now){
   }
   updateRain(dt,wxParam('rain',nf)*(BIOME.snow||BIOME.ash?0:1));  // the waste is too cold, the ashfall too dry
   updateSnow(dt,elapsed);
+  updateLeaves(dt,elapsed);
+  updatePrints(dt);
   updateSmokes(dt);
   updateShells(dt);
   updateDust(dt);
