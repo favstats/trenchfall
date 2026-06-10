@@ -1,4 +1,4 @@
-const k = '/audio/kenney/';
+const k = 'audio/kenney/';
 
 export const SFX_ASSETS = {
   footstepEarth: [
