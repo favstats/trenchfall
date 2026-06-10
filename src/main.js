@@ -2607,13 +2607,13 @@ let zGeoBody,zGeoHead;
 {
   const cloth=[],flesh=[];
   const add=(arr,geo,x,y,z,rx=0)=>{geo.rotateX(rx);geo.translate(x,y,z);arr.push(geo);};
-  const blob=(r,sx,sy,sz)=>{const g=new THREE.SphereGeometry(r,8,6);g.scale(sx,sy,sz);return g;};
+  const blob=(r,sx,sy,sz)=>{const g=new THREE.SphereGeometry(r,14,10);g.scale(sx,sy,sz);return g;};
   // what's left of a coat: ribcage, shoulders, hips
   add(cloth,blob(.3,1.0,1.2,.62),0,1.1,0,.15);
   add(cloth,blob(.3,1.08,.42,.55),0,1.42,.05,.1);
   add(cloth,blob(.24,.88,.52,.6),0,.76,0);
   // what's left of a person: neck, skull, jaw, one bare rib
-  {const n=new THREE.CylinderGeometry(.07,.095,.2,6);n.translate(0,1.53,.08);flesh.push(n);}
+  {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,1,1.14,1.04),0,1.69,.1,.25);
   add(flesh,blob(.085,1,.55,1.2),0,1.52,.22,.5);
   add(flesh,blob(.05,1.2,.8,1),-.15,1.18,.16);
@@ -2646,12 +2646,12 @@ zHead.castShadow=true;zHead.frustumCulled=false;
 scene.add(zHead);
 /* articulated limbs, four extra instanced meshes, posed per-frame */
 const armGeo=(()=>{ // wasted arm ending in a grasping hand
-  const a=new THREE.CylinderGeometry(.048,.066,.5,6);a.rotateX(Math.PI/2);a.translate(0,0,.25);
-  const h=new THREE.SphereGeometry(.062,6,4);h.scale(1,.75,1.35);h.translate(0,-.01,.53);
+  const a=new THREE.CylinderGeometry(.048,.066,.5,10);a.rotateX(Math.PI/2);a.translate(0,0,.25);
+  const h=new THREE.SphereGeometry(.062,10,7);h.scale(1,.75,1.35);h.translate(0,-.01,.53);
   return mergeGeometries([a,h]);})();
 const legGeo=(()=>{
-  const l=new THREE.CylinderGeometry(.075,.058,.68,6);l.translate(0,-.34,0);
-  const f=new THREE.SphereGeometry(.07,6,4);f.scale(.9,.5,1.6);f.translate(0,-.7,.06);
+  const l=new THREE.CylinderGeometry(.075,.058,.68,10);l.translate(0,-.34,0);
+  const f=new THREE.SphereGeometry(.07,10,7);f.scale(.9,.5,1.6);f.translate(0,-.7,.06);
   return mergeGeometries([l,f]);})();
 const LIMBS=[];
 function makeLimb(geo){
@@ -2662,8 +2662,8 @@ function makeLimb(geo){
 const zArmL=makeLimb(armGeo),zArmR=makeLimb(armGeo),zLegL=makeLimb(legGeo),zLegR=makeLimb(legGeo);
 let zEyes;
 {
-  const e1=new THREE.BoxGeometry(.075,.05,.04);e1.translate(-.085,1.7,.26);
-  const e2=new THREE.BoxGeometry(.075,.05,.04);e2.translate(.085,1.7,.26);
+  const e1=new THREE.SphereGeometry(.04,8,6);e1.scale(1,.75,.55);e1.translate(-.085,1.7,.26);
+  const e2=new THREE.SphereGeometry(.04,8,6);e2.scale(1,.75,.55);e2.translate(.085,1.7,.26);
   const eyeMat=new THREE.MeshBasicMaterial();
   eyeMat.color.setRGB(1,1,1);   // per-instance HDR colors decide the glow
   zEyes=new THREE.InstancedMesh(mergeGeometries([e1,e2]),eyeMat,MAXZ);
@@ -2671,9 +2671,9 @@ let zEyes;
 }
 let zHats;
 {
-  const dome=new THREE.SphereGeometry(.2,8,5,0,TAU,0,1.5);
+  const dome=new THREE.SphereGeometry(.2,14,9,0,TAU,0,1.5);
   dome.scale(1,.8,1.05);dome.translate(0,1.78,.09);
-  const brim=new THREE.CylinderGeometry(.24,.26,.02,10);brim.translate(0,1.71,.09);
+  const brim=new THREE.CylinderGeometry(.24,.26,.02,16);brim.translate(0,1.71,.09);
   zHats=new THREE.InstancedMesh(mergeGeometries([dome,brim]),
     new THREE.MeshStandardMaterial({color:0x3a3b2c,roughness:.95}),MAXZ);
   zHats.castShadow=true;zHats.frustumCulled=false;scene.add(zHats);
@@ -3459,17 +3459,18 @@ function buildAllyMesh(role,civ){
   const g=new THREE.Group();
   const tint=.85+Math.random()*.3; // no two coats faded alike, and not all of them were issued
   const coatC=Math.random()<.6?0x5d6243:[0x4a3e33,0x55584a,0x3e4654,0x6a5a40][Math.floor(Math.random()*4)];
-  const uni=new THREE.MeshStandardMaterial({color:new THREE.Color(coatC).multiplyScalar(tint),roughness:.85});
-  const dk=new THREE.MeshStandardMaterial({color:0x3c402f,roughness:.85});
+  const uni=new THREE.MeshStandardMaterial({color:new THREE.Color(coatC).multiplyScalar(tint),roughness:.85,
+    bumpMap:fleshTex,bumpScale:.25}); // wool weave: borrowed noise, read as cloth
+  const dk=new THREE.MeshStandardMaterial({color:0x3c402f,roughness:.85,bumpMap:fleshTex,bumpScale:.2});
   const lthr=new THREE.MeshStandardMaterial({color:0x46341f,roughness:.55});
-  const skin=new THREE.MeshStandardMaterial({color:0xb89a78,roughness:.8});
+  const skin=new THREE.MeshStandardMaterial({color:0xb89a78,roughness:.8,bumpMap:fleshTex,bumpScale:.12});
   const stl=new THREE.MeshStandardMaterial({color:0x4d4d46,roughness:.32,metalness:.85,envMapIntensity:1.2});
   const P=(geo,mat,x,y,z,rx=0,ry=0,rz=0)=>{const m=new THREE.Mesh(geo,mat);
     m.position.set(x,y,z);m.rotation.set(rx,ry,rz);m.castShadow=true;g.add(m);return m;};
   // greatcoat: flared skirt, cinched waist, broad chest
-  P(new THREE.CylinderGeometry(.205,.3,.52,9),uni,0,.76,0);
-  P(new THREE.CylinderGeometry(.195,.215,.44,9),uni,0,1.21,0);
-  P(new THREE.CylinderGeometry(.215,.215,.07,9),lthr,0,1.0,0);            // belt
+  P(new THREE.CylinderGeometry(.205,.3,.52,14),uni,0,.76,0);
+  P(new THREE.CylinderGeometry(.195,.215,.44,14),uni,0,1.21,0);
+  P(new THREE.CylinderGeometry(.215,.215,.07,14),lthr,0,1.0,0);           // belt
   P(new THREE.BoxGeometry(.04,.04,.05),stl,0,1.0,.21);                    // buckle
   P(new THREE.BoxGeometry(.1,.13,.06),lthr,-.13,.97,.18);                 // ammo pouches
   P(new THREE.BoxGeometry(.1,.13,.06),lthr,.13,.97,.18);
@@ -3485,16 +3486,16 @@ function buildAllyMesh(role,civ){
   P(new THREE.BoxGeometry(.3,.3,.14),dk,0,1.26,-.22);
   P(new THREE.CylinderGeometry(.06,.06,.4,8),dk,0,1.46,-.22,0,0,Math.PI/2);
   // shoulders + arms cradling the rifle at port
-  P(new THREE.SphereGeometry(.085,7,5),uni,-.2,1.4,0);
-  P(new THREE.SphereGeometry(.085,7,5),uni,.2,1.4,0);
-  P(new THREE.CylinderGeometry(.052,.06,.34,7),uni,-.25,1.24,.05,.55,0,.3);
-  P(new THREE.CylinderGeometry(.052,.06,.34,7),uni,.25,1.26,.03,.4,0,-.25);
-  P(new THREE.CylinderGeometry(.045,.05,.28,7),uni,-.16,1.13,.23,1.3,0,.15);
-  P(new THREE.CylinderGeometry(.045,.05,.28,7),uni,.2,1.16,.2,1.25,0,-.1);
-  P(new THREE.SphereGeometry(.055,6,4),skin,-.13,1.16,.34);               // hands on the piece
-  P(new THREE.SphereGeometry(.055,6,4),skin,.18,1.2,.3);
+  P(new THREE.SphereGeometry(.085,10,7),uni,-.2,1.4,0);
+  P(new THREE.SphereGeometry(.085,10,7),uni,.2,1.4,0);
+  P(new THREE.CylinderGeometry(.052,.06,.34,10),uni,-.25,1.24,.05,.55,0,.3);
+  P(new THREE.CylinderGeometry(.052,.06,.34,10),uni,.25,1.26,.03,.4,0,-.25);
+  P(new THREE.CylinderGeometry(.045,.05,.28,10),uni,-.16,1.13,.23,1.3,0,.15);
+  P(new THREE.CylinderGeometry(.045,.05,.28,10),uni,.2,1.16,.2,1.25,0,-.1);
+  P(new THREE.SphereGeometry(.055,9,6),skin,-.13,1.16,.34);               // hands on the piece
+  P(new THREE.SphereGeometry(.055,9,6),skin,.18,1.2,.3);
   // head: weathered face under a brimmed steel helmet
-  P(new THREE.SphereGeometry(.142,9,7),skin,0,1.6,.02);
+  P(new THREE.SphereGeometry(.142,16,12),skin,0,1.6,.02);
   P(new THREE.SphereGeometry(.012,5,4),dk,-.05,1.63,.145).castShadow=false; // eyes
   P(new THREE.SphereGeometry(.012,5,4),dk,.05,1.63,.145).castShadow=false;
   P(new THREE.SphereGeometry(.02,5,4),skin,0,1.6,.155);                   // nose
@@ -3510,9 +3511,9 @@ function buildAllyMesh(role,civ){
   }
   const hg=Math.random();
   if(hg<.55){ // steel helmet
-    const dome=P(new THREE.SphereGeometry(.195,11,7,0,TAU,0,1.8),dk,0,1.645,.01);
+    const dome=P(new THREE.SphereGeometry(.195,16,11,0,TAU,0,1.8),dk,0,1.645,.01);
     dome.scale.set(1.02,.8,1.1);
-    P(new THREE.CylinderGeometry(.222,.242,.022,13),dk,0,1.614,.01);
+    P(new THREE.CylinderGeometry(.222,.242,.022,18),dk,0,1.614,.01);
     if(role==='MEDIC'){ // the cross, so they aim elsewhere
       P(new THREE.BoxGeometry(.09,.02,.012),new THREE.MeshStandardMaterial({color:0xe8e0d0}),0,1.7,.17);
       P(new THREE.BoxGeometry(.02,.09,.012),new THREE.MeshStandardMaterial({color:0xe8e0d0}),0,1.7,.17);
@@ -3521,7 +3522,7 @@ function buildAllyMesh(role,civ){
     const cap=P(new THREE.BoxGeometry(.2,.07,.26),dk,0,1.74,.02,0,0,.18);
     cap.scale.z=.9;
   }else{ // bare-headed: hair and the wind
-    P(new THREE.SphereGeometry(.148,8,5,0,TAU,0,1.5),hairC,0,1.64,.0).scale.set(1,.7,1.05);
+    P(new THREE.SphereGeometry(.148,12,8,0,TAU,0,1.5),hairC,0,1.64,.0).scale.set(1,.7,1.05);
   }
   if(Math.random()<.4){ // a scarf against the long cold
     P(new THREE.TorusGeometry(.12,.045,6,10),
@@ -3538,8 +3539,8 @@ function buildAllyMesh(role,civ){
   // legs that hinge at the hip, so the walk reads human
   const mkLeg=sx=>{
     const lg=new THREE.Group();lg.position.set(sx,.62,0);
-    const th=new THREE.Mesh(new THREE.CylinderGeometry(.072,.066,.34,7),uni);th.position.y=-.2;th.castShadow=true;lg.add(th);
-    const pt=new THREE.Mesh(new THREE.CylinderGeometry(.062,.074,.22,7),dk);pt.position.y=-.47;pt.castShadow=true;lg.add(pt);
+    const th=new THREE.Mesh(new THREE.CylinderGeometry(.072,.066,.34,10),uni);th.position.y=-.2;th.castShadow=true;lg.add(th);
+    const pt=new THREE.Mesh(new THREE.CylinderGeometry(.062,.074,.22,10),dk);pt.position.y=-.47;pt.castShadow=true;lg.add(pt);
     const bt=new THREE.Mesh(new THREE.BoxGeometry(.12,.07,.22),lthr);bt.position.set(0,-.585,.03);bt.castShadow=true;lg.add(bt);
     g.add(lg);return lg;};
   g.userData.legL=mkLeg(-.11);g.userData.legR=mkLeg(.11);
@@ -7309,6 +7310,26 @@ function saveWander(){
        kills:G.kills,items:G.items,speedMul:G.speedMul},
   }));}catch(e){}
 }
+function buildCacheMesh(rich){ // a crate that was packed by hands, not extruded
+  const g=new THREE.Group();
+  const wood=new THREE.MeshStandardMaterial({color:rich?0x4a3e33:0x5d6243,map:woodTex,
+    roughness:.85,bumpMap:woodTex,bumpScale:.4});
+  const trim=new THREE.MeshStandardMaterial({color:0x3e3528,map:woodTex,roughness:.9});
+  const box=new THREE.Mesh(new THREE.BoxGeometry(1.04,.74,1.04),wood);
+  box.castShadow=true;box.receiveShadow=true;g.add(box);
+  for(const sx of[-.45,.45]){ // corner battens
+    const sl=new THREE.Mesh(new THREE.BoxGeometry(.1,.78,1.08),trim);
+    sl.position.x=sx;sl.castShadow=true;g.add(sl);
+  }
+  const band=new THREE.Mesh(new THREE.BoxGeometry(1.1,.07,1.1),
+    new THREE.MeshStandardMaterial({color:0x4d4a42,metalness:.65,roughness:.45}));
+  band.position.y=.14;g.add(band);
+  const lid=new THREE.Mesh(new THREE.BoxGeometry(1.12,.07,1.12),trim);
+  lid.position.y=.4;lid.rotation.y=.04;lid.castShadow=true;g.add(lid);
+  g.rotation.y=Math.random()*TAU;                 // cosmetic: outside the seeded dice
+  g.rotation.z=(Math.random()-.5)*.08;            // settled into the ground, not placed
+  return g;
+}
 function buildWanderRegion(idx){
   const seed=regionSeed(idx);
   setSeed(seed);
@@ -7325,9 +7346,8 @@ function buildWanderRegion(idx){
   for(let i=0;i<11;i++){ // caches: deterministic, region-fixed
     const x=srand(-half+15,half-15),z=srand(-half+15,half-15);
     if(Math.hypot(x,z)<25)continue;
-    const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
-      new THREE.MeshStandardMaterial({color:0x5d6243,map:woodTex,roughness:.85}));
-    c.position.set(x,heightAt(x,z)+.4,z);c.castShadow=true;
+    const c=buildCacheMesh(false);
+    c.position.set(x,heightAt(x,z)+.38,z);
     scene.add(c);WANDER._meshes.push(c);
     WANDER.loot.push({x,z,mesh:c,taken:false});
   }
@@ -7335,10 +7355,9 @@ function buildWanderRegion(idx){
     const a=srand(TAU),r=srand(half*.5,half*.8);
     WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
     for(let i=0;i<3;i++){
-      const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
-        new THREE.MeshStandardMaterial({color:0x4a3e33,map:woodTex,roughness:.85}));
-      c.position.set(WANDER.den.x+srand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+srand(-2,2));
-      c.castShadow=true;scene.add(c);WANDER._meshes.push(c);
+      const c=buildCacheMesh(true);
+      c.position.set(WANDER.den.x+srand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.38,WANDER.den.z+srand(-2,2));
+      scene.add(c);WANDER._meshes.push(c);
       WANDER.loot.push({x:c.position.x,z:c.position.z,mesh:c,taken:false,rich:true});
     }
   }
@@ -7373,20 +7392,21 @@ function buildLandmark(){
   const x=clamp(Math.cos(a)*r,-half+20,half-20),z=clamp(Math.sin(a)*r,-half+20,half-20);
   const gy=heightAt(x,z);
   const g=new THREE.Group();
-  const stone=new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95});
+  const stone=new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95,
+    bumpMap:fleshTex,bumpScale:.5}); // the mottle reads as weathered rock at this scale
   let name='';
   if(kind==='bell'){
     name='THE BELL TOWER';
-    const t2=new THREE.Mesh(new THREE.CylinderGeometry(1.5,2,11,7),stone);t2.position.y=5.5;g.add(t2);
-    const cap=new THREE.Mesh(new THREE.ConeGeometry(2.2,2,7),stone);cap.position.y=12;g.add(cap);
-    const bell=new THREE.Mesh(new THREE.SphereGeometry(.7,8,6),
+    const t2=new THREE.Mesh(new THREE.CylinderGeometry(1.5,2,11,14),stone);t2.position.y=5.5;g.add(t2);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(2.2,2,14),stone);cap.position.y=12;g.add(cap);
+    const bell=new THREE.Mesh(new THREE.SphereGeometry(.7,14,10),
       new THREE.MeshStandardMaterial({color:0x8a7340,metalness:.7,roughness:.4}));
     bell.position.y=10.2;bell.scale.y=1.2;g.add(bell);
     COLLIDERS.push({x,z,r:2.2});
   }else if(kind==='giant'){
     name='THE STONE GIANT';
     const sizes=[[2.6,0],[2.1,3.4],[1.5,6.2],[.9,8.2]];
-    for(const[s2,y2]of sizes){const b=new THREE.Mesh(new THREE.SphereGeometry(s2,7,6),stone);
+    for(const[s2,y2]of sizes){const b=new THREE.Mesh(new THREE.SphereGeometry(s2,14,10),stone);
       b.position.set(srand(-.3,.3),y2+s2*.7,srand(-.3,.3));b.scale.y=.85;g.add(b);}
     COLLIDERS.push({x,z,r:3});
   }else{
