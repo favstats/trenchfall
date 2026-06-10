@@ -4,7 +4,7 @@ const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftsh
 const page=await browser.newPage({viewport:{width:640,height:360}});
 const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
-await page.goto('http://127.0.0.1:5179/',{waitUntil:'domcontentloaded',timeout:60000});
+await page.goto('http://127.0.0.1:5180/',{waitUntil:'domcontentloaded',timeout:60000});
 await page.waitForSelector('#startBtn',{timeout:60000});
 await page.waitForTimeout(3000);
 await page.$eval('#wandBtn',el=>el.click());
