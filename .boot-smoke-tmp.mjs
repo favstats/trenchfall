@@ -115,11 +115,11 @@ scene.fog=new THREE.Fog(0x70755c,34,150);   // luminous mist: the world dissolve
 
 /* sky dome: gradient + stars + blood moon */
 const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
-  uniforms:{nightF:{value:0},time:{value:0},flash:{value:0},cover:{value:.15}},
+  uniforms:{nightF:{value:0},time:{value:0},flash:{value:0},cover:{value:.15},aurora:{value:0}},
   vertexShader:`varying vec3 vP;void main(){vP=position;
     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`
-    varying vec3 vP;uniform float nightF;uniform float time;uniform float flash;uniform float cover;
+    varying vec3 vP;uniform float nightF;uniform float time;uniform float flash;uniform float cover;uniform float aurora;
     float hash(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,45.164)))*43758.5453);}
     float vnoise(vec2 p){
       vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -155,6 +155,16 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
       float m=dot(d,md);
       col+=vec3(1.1,.36,.2)*smoothstep(.99955,.99985,m)*(.35+.85*nightF)*(1.-cm*.85);
       col+=vec3(.5,.13,.08)*pow(max(m,0.),90.)*.32*(.3+.7*nightF)*(1.-cm*.6);
+      // aurora: the cold sky keeps its own slow fire
+      if(aurora>.01&&nightF>.35&&d.y>.04){
+        float lon=atan(d.x,d.z);
+        float curt=vnoise(vec2(lon*2.2+time*.045,d.y*1.3));
+        float curt2=vnoise(vec2(lon*5.1-time*.06,d.y*2.6+3.7));
+        float aw=pow(max(curt*.6+curt2*.4-.34,0.)*1.9,2.2);
+        float vert=smoothstep(.04,.22,d.y)*smoothstep(1.,.45,d.y);
+        col+=(vec3(.12,.9,.5)*aw+vec3(.45,.15,.75)*aw*aw)
+             *vert*aurora*smoothstep(.35,.7,nightF)*1.5*(1.-cm);
+      }
       // lightning lights the clouds from within
       col+=flash*vec3(.45,.5,.66)*(1.+cm*2.2);
       gl_FragColor=vec4(col,1.);
@@ -237,15 +247,20 @@ const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 const gradePass=new ShaderPass({
-  uniforms:{tDiffuse:{value:null},time:{value:0},tint:{value:new THREE.Vector3(1,1,1)},
+  uniforms:{tDiffuse:{value:null},time:{value:0},heat:{value:0},tint:{value:new THREE.Vector3(1,1,1)},
     px:{value:new THREE.Vector2(1/1280,1/720)},
     sunPos:{value:new THREE.Vector2(.5,.8)},rayI:{value:0},rayCol:{value:new THREE.Vector3(1,.5,.3)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;
     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time;uniform vec3 tint;
-    uniform vec2 px;uniform vec2 sunPos;uniform float rayI;uniform vec3 rayCol;
+    uniform vec2 px;uniform vec2 sunPos;uniform float rayI;uniform vec3 rayCol;uniform float heat;
     void main(){
       vec2 uv=vUv,cc=uv-.5;float rd=dot(cc,cc);
+      // heat shimmer: the hardpan bends the air above it
+      if(heat>.001){
+        float hb=smoothstep(.78,.5,uv.y)*smoothstep(.08,.3,uv.y);
+        uv+=vec2(sin(uv.y*230.+time*12.)*.0016,cos(uv.x*190.-time*10.)*.0011)*hb*heat;
+      }
       // chromatic aberration toward frame edges
       vec3 col;
       col.r=texture2D(tDiffuse,uv+cc*rd*.009).r;
@@ -1427,6 +1442,30 @@ const RABBITS=[];
   }
 }
 let wolfT=50;
+/* tumbleweeds: the dry country's only traffic */
+const WEEDS=[];
+{
+  const m=new THREE.MeshStandardMaterial({color:0x8a7448,roughness:1,wireframe:true});
+  for(let i=0;i<3;i++){
+    const w=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(.45,.7),1),m);
+    w.visible=false;w.castShadow=true;scene.add(w);
+    WEEDS.push({mesh:w,x:0,z:0,r:w.geometry.parameters.radius,active:false,ph:rand(TAU)});
+  }
+}
+/* geese: a V crossing high, going somewhere better */
+const GEESE=[];
+{
+  const c=document.createElement('canvas');c.width=32;c.height=16;
+  const g=c.getContext('2d');g.strokeStyle='rgba(48,44,38,.95)';g.lineWidth=2.6;
+  g.beginPath();g.moveTo(2,11);g.quadraticCurveTo(9,3,16,9);g.quadraticCurveTo(23,3,30,11);g.stroke();
+  const tex=new THREE.CanvasTexture(c);
+  for(let i=0;i<7;i++){
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.9}));
+    sp.scale.set(2.2,1.1,1);sp.visible=false;scene.add(sp);
+    GEESE.push(sp);
+  }
+}
+let geeseT=70,geese=null;
 function scatterDeer(){
   const ok=!BAST.on;          // no living thing grazes a battlefield
   for(const r of RABBITS){
@@ -1589,10 +1628,42 @@ for(let i=0;i<5;i++){
   p.rotation.x=-Math.PI/2;p.visible=false;p.renderOrder=1;
   scene.add(p);ponds.push(p);
 }
+const reeds=(()=>{ // cattails: every pond wears a ragged collar
+  const c=document.createElement('canvas');c.width=64;c.height=128;
+  const g=c.getContext('2d');
+  for(let i=0;i<11;i++){
+    const bx=8+Math.random()*48,lean=rand(-7,7),top=rand(4,26);
+    const grd=g.createLinearGradient(0,128,0,top);
+    grd.addColorStop(0,'rgba(52,72,30,1)');grd.addColorStop(1,'rgba(118,128,62,.9)');
+    g.strokeStyle=grd;g.lineWidth=rand(1.6,2.6);
+    g.beginPath();g.moveTo(bx,128);g.quadraticCurveTo(bx+lean*.5,70,bx+lean,top);g.stroke();
+    if(Math.random()<.5){ // the brown velvet head
+      g.fillStyle='rgba(92,58,34,.95)';
+      g.beginPath();g.ellipse(bx+lean,top+6,2.4,9,0,0,TAU);g.fill();
+    }
+  }
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const p1=new THREE.PlaneGeometry(1.5,2.6,1,3);p1.translate(0,1.2,0);
+  const p2=p1.clone();p2.rotateY(Math.PI/2);
+  const geo=mergeGeometries([p1,p2]);
+  const mat=new THREE.MeshStandardMaterial({map:tex,alphaTest:.4,side:THREE.DoubleSide,
+    roughness:.92,envMapIntensity:.3});
+  mat.onBeforeCompile=s=>{
+    s.uniforms.uWindT=WindU;
+    s.vertexShader='uniform float uWindT;\n'+s.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+       vec4 rwp=instanceMatrix*vec4(transformed,1.);
+       transformed.xz+=(sin(uWindT*1.4+rwp.x*.5+rwp.z*.4))*uv.y*uv.y*vec2(.13,.09);`);
+  };
+  const m=new THREE.InstancedMesh(geo,mat,150);
+  m.count=0;scene.add(m);
+  return m;
+})();
 function scatterPonds(){
   const want=BIOME.desert||BIOME.name==='SALT FLATS'?0:
     BIOME.name==='DROWNED MIRE'?5:BIOME.shore?1:2;
-  let pi=0;
+  let pi=0,ri=0;
+  const M=new THREE.Matrix4(),Q=new THREE.Quaternion(),S=new THREE.Vector3(),P=new THREE.Vector3(),E=new THREE.Euler();
   for(let i=0;i<70&&pi<want;i++){
     const x=srand(-half+22,half-22),z=srand(-half+22,half-22);
     if(Math.hypot(x,z)<34||Math.abs(z-roadZ(x))<12)continue;
@@ -1603,8 +1674,22 @@ function scatterPonds(){
     p.scale.setScalar(srand(4.5,9));
     p.position.set(x,h+.45,z);    // water finds its level partway up the bank
     p.material=BIOME.snow?iceMat:pondMat;
+    if(!BIOME.snow){ // reeds stand where the water meets the land
+      const n=8+(srnd()*8|0);
+      for(let r2=0;r2<n&&ri<150;r2++){
+        const a2=srand(TAU),rr=p.scale.x*srand(.8,1.1);
+        const rx=x+Math.cos(a2)*rr,rz=z+Math.sin(a2)*rr;
+        E.set(0,srand(TAU),srand(-.08,.08));Q.setFromEuler(E);
+        const sc=srand(.6,1.1);S.set(sc,sc*srand(.9,1.3),sc);
+        P.set(rx,heightAt(rx,rz),rz);M.compose(P,Q,S);
+        reeds.setMatrixAt(ri++,M);
+      }
+    }
   }
   for(let i=pi;i<ponds.length;i++)ponds[i].visible=false;
+  reeds.count=ri;
+  reeds.instanceMatrix.needsUpdate=true;
+  reeds.computeBoundingSphere();
 }
 const setpieces=new THREE.Group();scene.add(setpieces);
 function scatterSetpieces(){
@@ -2883,10 +2968,28 @@ function wreckEnvironment(x,z,r){
     if(Math.hypot(COLLIDERS[i].x-x,COLLIDERS[i].z-z)<r)COLLIDERS.splice(i,1);
 }
 const ROCKETS=[];
+const rocketPool=[];
+{
+  const bodyM=new THREE.MeshStandardMaterial({color:0x4a4d3a,roughness:.6,metalness:.4});
+  const tipM=new THREE.MeshStandardMaterial({color:0x8a6a30,metalness:.7,roughness:.35});
+  for(let i=0;i<4;i++){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.4,7),bodyM);
+    body.rotation.x=Math.PI/2;g.add(body);
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(.05,.14,7),tipM);
+    tip.rotation.x=-Math.PI/2;tip.position.z=-.27;g.add(tip);
+    const burn=new THREE.Sprite(new THREE.SpriteMaterial({map:softDot,transparent:true,
+      opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+    burn.material.color.setRGB(6,3.2,1);burn.scale.setScalar(.5);burn.position.z=.28;g.add(burn);
+    g.visible=false;scene.add(g);rocketPool.push(g);
+  }
+}
 function fireRocket(){
   camera.getWorldDirection(_dir);
+  const mesh=rocketPool.find(g=>!g.visible);
+  if(mesh)mesh.visible=true;
   ROCKETS.push({x:camera.position.x+_dir.x,y:camera.position.y+_dir.y-.2,z:camera.position.z+_dir.z,
-    vx:_dir.x*34,vy:_dir.y*34,vz:_dir.z*34,t:0});
+    vx:_dir.x*34,vy:_dir.y*34,vz:_dir.z*34,t:0,mesh});
   SFX.dmr();sNoise(.5,'lowpass',1400,200,.3);
   for(let i=0;i<4;i++)puffSmoke(_tv.set(
     camera.position.x-_dir.x*(1.5+i*.7)+rand(-.3,.3),
@@ -2899,10 +3002,15 @@ function updateRockets(dt){
     const r=ROCKETS[i];r.t+=dt;
     r.vy-=5.5*dt;   // the round remembers it is heavy
     r.x+=r.vx*dt;r.y+=r.vy*dt;r.z+=r.vz*dt;
+    if(r.mesh){
+      r.mesh.position.set(r.x,r.y,r.z);
+      r.mesh.lookAt(r.x+r.vx,r.y+r.vy,r.z+r.vz);
+    }
     if(Math.random()<.85)puffSmoke(_tv.set(r.x,r.y,r.z),false,true);
     let hit=r.t>6||r.y<=heightAt(r.x,r.z)+.25;
     if(!hit)for(const zb of zombies)if(zb.alive&&Math.hypot(zb.x-r.x,zb.z-r.z)<1.4&&Math.abs(r.y-heightAt(zb.x,zb.z)-1)<2){hit=true;break;}
     if(hit){
+      if(r.mesh)r.mesh.visible=false;
       ROCKETS.splice(i,1);
       explode(r.x,Math.max(r.y,heightAt(r.x,r.z))+.5,r.z,9.5,210,1.7);
     }
@@ -6488,7 +6596,7 @@ function cleanupModes(){ // no mode inherits another's furniture
   for(const w of wires)scene.remove(w.mesh);wires.length=0;
   for(const t of turrets)scene.remove(t.mesh);turrets.length=0;
   for(const f of firePool){f.live=false;f.material.opacity=0;}
-  zombies.length=0;player.man=null;player.ride=null;ROCKETS.length=0;
+  zombies.length=0;player.man=null;player.ride=null;for(const r of ROCKETS)if(r.mesh)r.mesh.visible=false;ROCKETS.length=0;
   mortarRing.visible=false;beacon.visible=false;
 }
 function saveBastion(){
@@ -7302,6 +7410,7 @@ function frame(now){
   const nf=WANDER.on?(0.5-0.5*Math.cos(WANDER.t/150*TAU)):CAMP.on?clamp(CAMP.nf,0,1):clamp(G.wave/7,0,1);
   updateWeather(dt);
   skyMat.uniforms.nightF.value=nf;
+  skyMat.uniforms.aurora.value+=((BIOME.snow?1:0)-skyMat.uniforms.aurora.value)*Math.min(1,dt*.5);
   skyMat.uniforms.flash.value=flashT;
   skyMat.uniforms.cover.value=wxParam('cover',nf);
   scene.fog.color.lerpColors(DUSK.fog,NIGHT.fog,nf);
@@ -7312,6 +7421,7 @@ function frame(now){
   scene.fog.near=wxParam('n',nf)-flashT*12;
   scene.fog.far=wxParam('f',nf)+flashT*120;
   const tnt=[1,1,1];wxTint(tnt);
+  gradePass.uniforms.heat.value=BIOME.desert?Math.max(0,1-nf*1.7):0; // the mirage dies with the day
   gradePass.uniforms.tint.value.set(
     tnt[0]*lerp(1,.86,nf*.8),tnt[1]*lerp(1,.95,nf*.8),tnt[2]*lerp(1,1.14,nf*.8));
   sun.color.lerpColors(DUSK.sun,NIGHT.sun,nf);
