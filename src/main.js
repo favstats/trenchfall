@@ -1382,8 +1382,39 @@ const DEER=[];
     DEER.push({mesh:g,legs,front,x:0,z:0,a:0,state:'graze',t:rand(2,6),sp:0,ph:rand(TAU),alive:true});
   }
 }
+const RABBITS=[];
+{
+  const furM=new THREE.MeshStandardMaterial({color:0x7a6a52,roughness:.95});
+  const tailM=new THREE.MeshStandardMaterial({color:0xd8d2c4,roughness:1});
+  for(let i=0;i<6;i++){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.SphereGeometry(.16,7,6),furM);
+    body.scale.set(1,.85,1.4);body.position.y=.16;g.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.09,6,5),furM);
+    head.position.set(0,.28,.2);g.add(head);
+    for(const s of[-1,1]){
+      const ear=new THREE.Mesh(new THREE.ConeGeometry(.03,.17,4),furM);
+      ear.position.set(s*.04,.43,.18);ear.rotation.x=-.15;g.add(ear);
+    }
+    const tail=new THREE.Mesh(new THREE.SphereGeometry(.05,5,4),tailM);
+    tail.position.set(0,.18,-.24);g.add(tail);
+    g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    g.visible=false;scene.add(g);
+    RABBITS.push({mesh:g,x:0,z:0,a:0,state:'nibble',t:rand(1,4),hopT:rand(TAU),alive:true,ph:rand(TAU)});
+  }
+}
+let wolfT=50;
 function scatterDeer(){
   const ok=!BAST.on;          // no living thing grazes a battlefield
+  for(const r of RABBITS){
+    r.alive=ok&&Math.random()<.6;
+    r.mesh.visible=false;
+    if(!r.alive)continue;
+    const a=rand(TAU),rr=rand(half*.35,half*.85);
+    r.x=clamp(Math.cos(a)*rr,-half+8,half-8);
+    r.z=clamp(Math.sin(a)*rr,-half+8,half-8);
+    r.a=rand(TAU);r.state='nibble';r.t=rand(1,4);
+  }
   for(const d of DEER){
     d.alive=ok&&Math.random()<.75;
     d.mesh.visible=false;
@@ -1394,7 +1425,46 @@ function scatterDeer(){
     d.a=rand(TAU);d.state='graze';d.t=rand(2,6);d.sp=0;
   }
 }
-function updateWildlife(dt,t){
+function updateWildlife(dt,t,nf){
+  // somewhere out past the treeline, the wolves keep their own count
+  if(nf>.6&&!BAST.on&&G.state==='play'){
+    wolfT-=dt;
+    if(wolfT<=0){
+      wolfT=rand(45,95);
+      sTone('sine',290,440,1.2,.045);
+      setTimeout(()=>sTone('sine',450,235,1.6,.04),1100);
+      setTimeout(()=>sTone('sine',300,420,1.1,.022),2600); // a second voice, further off
+      setTimeout(()=>sTone('sine',430,250,1.3,.018),3650);
+    }
+  }
+  for(const r of RABBITS){
+    if(!r.alive){r.mesh.visible=false;continue;}
+    r.mesh.visible=true;
+    const pd=Math.hypot(player.x-r.x,player.z-r.z);
+    let zd=99;
+    for(const z of zombies)if(z.alive&&z.rise<=0){
+      const dd=Math.hypot(z.x-r.x,z.z-r.z);if(dd<zd)zd=dd;}
+    if(r.state!=='bolt'&&(pd<7||zd<6||(muzzle.intensity>1&&pd<40))){
+      r.state='bolt';r.t=rand(2,3.2);
+      r.a=Math.atan2(r.x-player.x,r.z-player.z)+rand(-.5,.5);
+    }
+    r.t-=dt;
+    let sp=0;
+    if(r.state==='bolt'){
+      sp=5.4;r.a+=Math.sin(t*9+r.ph)*dt*2.4;     // a rabbit never runs in a straight line
+      if(r.t<=0){r.state='nibble';r.t=rand(2,5);}
+    }else if(r.state==='hop'){
+      sp=1.4;
+      if(r.t<=0){r.state='nibble';r.t=rand(1.5,4);}
+    }else if(r.t<=0){r.state='hop';r.a=rand(TAU);r.t=rand(1,2.5);}
+    if(sp>0){
+      r.hopT+=dt*(sp>3?11:7);
+      r.x=clamp(r.x+Math.sin(r.a)*sp*dt,-half+5,half-5);
+      r.z=clamp(r.z+Math.cos(r.a)*sp*dt,-half+5,half-5);
+    }
+    r.mesh.position.set(r.x,heightAt(r.x,r.z)+(sp>0?Math.abs(Math.sin(r.hopT))*.22:0),r.z);
+    r.mesh.rotation.y=r.a;
+  }
   for(const d of DEER){
     if(!d.alive){d.mesh.visible=false;continue;}
     d.mesh.visible=true;
@@ -7155,7 +7225,7 @@ function frame(now){
   updateDust(dt);
   updateCrows(dt,elapsed);
   updateFireflies(dt,elapsed,nf);
-  updateWildlife(dt,elapsed);
+  updateWildlife(dt,elapsed,nf);
   bakeEnv(nf);
   updateGodrays(nf,flashT);
   cityWins.visible=cityWins.count>0&&nf>.42;
