@@ -336,7 +336,6 @@
   #legacyBox{margin-top:8px !important;max-width:920px !important}
   #legacyBox>div:not(:first-child){font-size:10.5px !important;padding:5px 9px !important}
   #startBtn{font-size:17px;padding:11px 38px}
-    #btnRow{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:16px}
 
   /* muster cinematic: a face, a name, one true sentence */
   #l3{position:fixed;left:50%;bottom:10vh;transform:translateX(-50%);z-index:9;display:none;
@@ -432,7 +431,7 @@
     letter-spacing:.14em;color:#5d5c48;margin-top:1px;text-transform:lowercase}
   .mItem:hover .ms{color:var(--olive)}
   #contBtn{color:var(--signal)}
-  #howBox,#legacyHost{margin-top:20px}
+  #howBox{margin-top:20px}
   @media (prefers-reduced-motion:no-preference){
     #start.show #bootTag{animation:bootFade 1s .2s backwards}
     #start.show #bootTitle{animation:stampIn .7s cubic-bezier(.2,1.4,.4,1) .5s backwards}
@@ -487,6 +486,6 @@ body.hudmin #waveBox,body.hudmin #depotBox,body.hudmin #compass{display:none!imp
 .sqRow{background:none;border:none;padding:2px 0;text-shadow:0 1px 3px #000}
 .sqRow .sn{font-size:10.5px;opacity:.85}
 .sqRow .sb{height:3px;background:rgba(8,9,6,.55)}
-#bars{background:none;border:none;box-shadow:none;padding:0}
+#convoyBars{background:none;border:none;box-shadow:none;padding:0}
 .tbar .tn{font-size:9px;letter-spacing:.28em;opacity:.7;text-shadow:0 1px 3px #000}
 .tbar .bar{height:4px;background:rgba(8,9,6,.55)}
