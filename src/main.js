@@ -2444,7 +2444,7 @@ const firePool=[];
   rg.addColorStop(0,'rgba(255,200,90,.95)');rg.addColorStop(.45,'rgba(240,110,30,.6)');rg.addColorStop(1,'rgba(180,40,10,0)');
   g.fillStyle=rg;g.fillRect(0,0,64,64);
   const tex=new THREE.CanvasTexture(c);
-  for(let i=0;i<14;i++){
+  for(let i=0;i<26;i++){
     const mat=new THREE.SpriteMaterial({map:tex,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
     mat.color.setRGB(2.4,1.1,.4);
     const s=new THREE.Sprite(mat);
@@ -2453,7 +2453,13 @@ const firePool=[];
 }
 const fireLight=new THREE.PointLight(0xff7826,0,30);scene.add(fireLight);
 function addFirePatch(x,z,r,life){
-  const s=firePool.find(f=>!f.live);if(!s)return;
+  let s=firePool.find(f=>!f.live);
+  if(!s){ // evict the oldest mortal flame; the braziers are forever
+    let best=null,bt=-1;
+    for(const f of firePool)if(f.userData.life<5000&&f.userData.t>bt){bt=f.userData.t;best=f;}
+    if(!best)return;
+    s=best;
+  }
   s.live=true;
   s.position.set(x,heightAt(x,z)+.8,z);
   s.userData={t:0,life,r};
