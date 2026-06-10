@@ -3567,6 +3567,7 @@ let best=+(localStorage.getItem('trenchfall_best')||0);
 
 /* ---------------- campaign flow ---------------- */
 function startCampaign(seed){
+  cleanupModes();
   audioInit();
   if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   CAMP.on=true;
@@ -5662,8 +5663,26 @@ function buildFort(){
   heli.visible=false;scene.add(heli);
   BAST.heli=heli;
 }
+function cleanupModes(){ // no mode inherits another's furniture
+  for(const g of (BAST.guns||[])){if(g.mesh)scene.remove(g.mesh);}
+  BAST.guns=[];
+  if(BAST.search){scene.remove(BAST.search.target);scene.remove(BAST.search);BAST.search=null;}
+  if(BAST.beam){scene.remove(BAST.beam);BAST.beam=null;}
+  for(const d of (BAST.drops||[]))scene.remove(d.mesh);
+  BAST.drops=[];BAST.heli&&(BAST.heli.visible=false);
+  if(BAST.rotorG){try{BAST.rotorG.o.stop()}catch(e){};BAST.rotorG=null;}
+  for(const o of (WANDER._meshes||[]))scene.remove(o);
+  WANDER._meshes=[];WANDER.loot=[];WANDER.on=false;BAST.on=false;
+  for(const b of bags)scene.remove(b.mesh);bags.length=0;
+  for(const w of wires)scene.remove(w.mesh);wires.length=0;
+  for(const t of turrets)scene.remove(t.mesh);turrets.length=0;
+  for(const f of firePool){f.live=false;f.material.opacity=0;}
+  zombies.length=0;player.man=null;player.ride=null;
+  mortarRing.visible=false;beacon.visible=false;
+}
 function startBastion(){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
+  cleanupModes();
   CAMP.on=false;BAST.on=true;
   CAMP.comps=[];CAMP.heirlooms=[];CAMP.mode='menu';
   $('roster').classList.remove('on');
@@ -6038,6 +6057,7 @@ function strikeBolt(){
 const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0};
 function startWander(){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
+  cleanupModes();
   CAMP.on=false;BAST.on=false;WANDER.on=true;
   WANDER.road=Math.random()<.55;   // some country still remembers its roads
   CAMP.comps=[];CAMP.mode='menu';
