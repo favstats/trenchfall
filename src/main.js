@@ -573,7 +573,7 @@ function genTerrain(){
     let h=(smoothNoise(ix*.06,iz*.06)-.5)*3.2*BIOME.rugged+(smoothNoise(ix*.18,iz*.18)-.5)*.9;
     const dDep=Math.hypot(x,z);
     h*=clamp((dDep-10)/26,0,1);
-    if(!WANDER.on){const rd=Math.abs(z-roadZ(x));
+    if(!WANDER.on||WANDER.road){const rd=Math.abs(z-roadZ(x));
     if(rd<8.5)h*=clamp((rd-3.4)/4.6,0,1);}
     const dCamp=Math.hypot(x,z-9.5);
     if(dCamp<17)h*=clamp((dCamp-13)/4,0,1);
@@ -588,7 +588,7 @@ function heightAt(x,z){
   const a=H[iz*VN+ix],b=H[iz*VN+ix+1],c=H[(iz+1)*VN+ix],d=H[(iz+1)*VN+ix+1];
   return a*(1-fx)*(1-fz)+b*fx*(1-fz)+c*(1-fx)*fz+d*fx*fz;
 }
-function isRoad(x,z){if(WANDER.on)return false;return Math.abs(z-roadZ(x))<3.6;}
+function isRoad(x,z){if(WANDER.on&&!WANDER.road)return false;return Math.abs(z-roadZ(x))<3.6;}
 const tGeo=new THREE.BufferGeometry();
 {
   const pos=new Float32Array(VN*VN*3),col=new Float32Array(VN*VN*3),uv=new Float32Array(VN*VN*2),idx=[];
@@ -803,7 +803,7 @@ const roadPosts=new THREE.InstancedMesh(
 roadPosts.castShadow=true;scene.add(roadPosts);
 function scatterPosts(){
   const M=new THREE.Matrix4();let i=0;
-  if(WANDER.on){roadPosts.count=0;roadPosts.instanceMatrix.needsUpdate=true;return;}
+  if(WANDER.on&&!WANDER.road){roadPosts.count=0;roadPosts.instanceMatrix.needsUpdate=true;return;}
   for(let x=-half+6;x<half-6&&i<92;x+=8){
     if(srnd()<.3)continue;                 // the war ate some of the fence
     const rz=roadZ(x);
@@ -6025,10 +6025,11 @@ function strikeBolt(){
 /* ============================================================
    WANDER, the open country: no road, no orders, no one coming
    ============================================================ */
-const WANDER={on:false,t:0,loot:[],spawnT:6,kills0:0};
+const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0};
 function startWander(){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   CAMP.on=false;BAST.on=false;WANDER.on=true;
+  WANDER.road=Math.random()<.55;   // some country still remembers its roads
   CAMP.comps=[];CAMP.mode='menu';
   setSeed((Math.random()*2**31)|0);
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
@@ -6061,7 +6062,7 @@ function startWander(){
   $('start').classList.remove('show');$('gameover').classList.remove('show');
   $('hud').classList.add('on');
   initSlots();refreshVM();
-  announce('WANDER · '+BIOME.name.toUpperCase(),'walk. scavenge. the dark gets bolder with every hour.');
+  announce('WANDER · '+BIOME.name.toUpperCase(),WANDER.road?'an old road still crosses this country. walk it, or don\'t.':'no roads out here. walk. scavenge. the dark gets bolder.');
   tryLock();
 }
 function wanderUpdate(dt){
