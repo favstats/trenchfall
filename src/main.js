@@ -1161,7 +1161,7 @@ let scatterForest=null;
       const h=heightAt(x,z),kind=srnd();
       COLLIDERS.push({x,z,r:.5});
       E.set(srand(-.06,.06),srand(TAU),srand(-.06,.06));Q.setFromEuler(E);
-      if(kind<.42&&bi<wantB){                     // birch + crown
+      if(kind<.42*(1-(BIOME.pineBias||0))&&bi<wantB){ // birch + crown (conifers own the cold biomes)
         const sc=srand(.8,1.4);S.set(sc,sc*srand(.85,1.2),sc);
         P.set(x,h,z);M.compose(P,Q,S);birchT.setMatrixAt(bi++,M);
         const top=h+13*S.y;
@@ -1171,7 +1171,9 @@ let scatterForest=null;
           S.setScalar(srand(.75,1.4)*sc);
           P.set(x+srand(-2.2,2.2),top-srand(0,5.5),z+srand(-2.2,2.2));
           M.compose(P,Q,S);leafCards.setMatrixAt(lc,M);
-          C.setHSL(srand(.22,.30)+BIOME.leafHue,srand(.32,.45),srand(.3,.48));leafCards.setColorAt(lc++,C);
+          C.setHSL(srand(.22,.30)+BIOME.leafHue,
+            srand(.32,.45)*(BIOME.snow?.4:1),
+            Math.min(.8,srand(.3,.48)*(BIOME.snow?1.5:1)));leafCards.setColorAt(lc++,C);
         }
       }else if(kind<.8&&fi<wantF){                // fir + needle tiers
         const sc=srand(.9,1.55);S.set(sc,sc*srand(.9,1.15),sc);
@@ -1181,7 +1183,9 @@ let scatterForest=null;
           const ts=(1.5-tI*.28)*sc;S.setScalar(ts);
           P.set(x,h+(3.6+tI*2.7)*sc,z);
           M.compose(P,Q,S);pineCards.setMatrixAt(pc,M);
-          C.setHSL(srand(.3,.38)+BIOME.leafHue,srand(.28,.42),srand(.22,.36));pineCards.setColorAt(pc++,C);
+          C.setHSL(srand(.3,.38)+BIOME.leafHue,
+            srand(.28,.42)*(BIOME.snow?.35:1),
+            Math.min(.8,srand(.22,.36)*(BIOME.snow?1.7:1)));pineCards.setColorAt(pc++,C); // snow-laden boughs
         }
       }else if(di<wantD){                         // shell-shattered dead tree
         const sc=srand(.7,1.5);S.setScalar(sc);
@@ -1248,16 +1252,19 @@ function scatterGrass(){
   const C=new THREE.Color();
   grassData.length=0;
   let gi=0;
-  const want=Math.round(N*BIOME.grassK);
+  const want=Math.min(N,Math.round(N*BIOME.grassK));
+  const tall=BIOME.grassK>1.5?1.45:1;   // the steppe carries its grass waist-high
   for(let i=0;i<N*3&&gi<want;i++){
     const x=srand(-half+4,half-4),z=srand(-half+4,half-4);
     if(isRoad(x,z)||Math.hypot(x,z)<11)continue;
     const h=heightAt(x,z);
     E.set(0,srand(TAU),srand(-.1,.1));Q.setFromEuler(E);
-    const sc=srand(.6,1.5);S.set(sc,sc*srand(.8,1.35),sc);
+    const sc=srand(.6,1.5)*tall;S.set(sc,sc*srand(.8,1.35),sc);
     P.set(x,h,z);M.compose(P,Q,S);
     grassMesh.setMatrixAt(gi,M);
-    C.setHSL(srand(.21,.32)+BIOME.grassHue,srand(.3,.45),srand(.12,.24));  // deep meadow greens
+    C.setHSL(srand(.21,.32)+BIOME.grassHue,
+      srand(.3,.45)*(BIOME.grassS??1),
+      Math.min(.78,srand(.12,.24)*(BIOME.grassL??1)));  // meadow green, steppe straw, frost
     grassMesh.setColorAt(gi,C);
     grassData.push({x,z,h0:h,m:M.clone()});
     gi++;
@@ -1539,6 +1546,32 @@ function updateRain(dt,nf){
     pos[i*6+3]=x+.12;pos[i*6+4]=y-.72;pos[i*6+5]=z+.06;
   }
   rainGeo.attributes.position.needsUpdate=true;
+}
+/* snowfall: the white waste keeps its own weather */
+const SNOW_N=700;
+const snowGeo=new THREE.BufferGeometry();
+const snowPos=new Float32Array(SNOW_N*3),snowPh=new Float32Array(SNOW_N);
+for(let i=0;i<SNOW_N;i++){snowPos[i*3]=rand(-26,26);snowPos[i*3+1]=rand(0,16);snowPos[i*3+2]=rand(-26,26);snowPh[i]=rand(TAU);}
+snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
+const snowPts=new THREE.Points(snowGeo,new THREE.PointsMaterial({color:0xe8eef8,size:.07,
+  map:softDot,transparent:true,opacity:0,depthWrite:false,sizeAttenuation:true}));
+snowPts.frustumCulled=false;scene.add(snowPts);
+function updateSnow(dt,t){
+  const want=BIOME.snow&&G.state==='play'?.8:0;
+  snowPts.material.opacity+=(want-snowPts.material.opacity)*Math.min(1,dt*1.5);
+  if(snowPts.material.opacity<.02){snowPts.visible=false;return;}
+  snowPts.visible=true;
+  snowPts.position.set(player.x,player.y,player.z);
+  for(let i=0;i<SNOW_N;i++){
+    let y=snowPos[i*3+1]-dt*(1.4+(i%5)*.22);    // each flake falls at its own pace
+    snowPos[i*3]+=Math.sin(t*.8+snowPh[i])*dt*.8;
+    snowPos[i*3+2]+=Math.cos(t*.66+snowPh[i])*dt*.65;
+    if(y<-2)y+=18;
+    if(snowPos[i*3]<-26)snowPos[i*3]+=52;else if(snowPos[i*3]>26)snowPos[i*3]-=52;
+    if(snowPos[i*3+2]<-26)snowPos[i*3+2]+=52;else if(snowPos[i*3+2]>26)snowPos[i*3+2]-=52;
+    snowPos[i*3+1]=y;
+  }
+  snowGeo.attributes.position.needsUpdate=true;
 }
 const smokes=[];
 {
@@ -6904,7 +6937,8 @@ function frame(now){
     m.position.z=u.bz+Math.cos(elapsed*.016*u.sp*wind+u.ph)*12;
     m.material.opacity=.065+nf*.05+wxParam('cover',nf)*.04;
   }
-  updateRain(dt,wxParam('rain',nf));
+  updateRain(dt,wxParam('rain',nf)*(BIOME.snow?0:1));  // too cold to rain in the waste
+  updateSnow(dt,elapsed);
   updateSmokes(dt);
   updateShells(dt);
   updateDust(dt);
