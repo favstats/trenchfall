@@ -1959,7 +1959,11 @@ function updateShells(dt){
     u.vy-=13*dt;
     s.position.x+=u.vx*dt;s.position.y+=u.vy*dt;s.position.z+=u.vz*dt;
     s.rotation.x+=u.sx*dt;s.rotation.y+=u.sy*dt;
-    if(u.t>1||s.position.y<heightAt(s.position.x,s.position.z)){s.live=false;s.visible=false;}
+    if(u.t>1||s.position.y<heightAt(s.position.x,s.position.z)){
+      s.live=false;s.visible=false;
+      if(Math.hypot(s.position.x-player.x,s.position.z-player.z)<6&&Math.random()<.7)
+        sTone('sine',rand(2400,3200),1800,.05,.025);
+    }
   }
 }
 
@@ -4756,6 +4760,8 @@ function damagePlayer(d){
   SFX.hurt();
   if(player.hp<=0){
     player.alive=false;player.respawnT=5;
+    player.man=null;player.ride=null;vm.visible=true;
+    if(typeof mortarRing!=='undefined')mortarRing.visible=false;
     player.reserve=Math.floor(player.reserve/2);
     $('respawn').classList.add('show');
     document.exitPointerLock&&document.exitPointerLock();
@@ -5496,8 +5502,8 @@ function updatePlayer(dt,t){
     player.x+rand(-1,1)*camShake*.18,
     eye+rand(-1,1)*camShake*.14,
     player.z+rand(-1,1)*camShake*.18);
-  camera.rotation.y=player.yaw+rand(-1,1)*camShake*.01;
-  camera.rotation.x=player.pitch+rand(-1,1)*camShake*.01;
+  camera.rotation.y=player.yaw+rand(-1,1)*camShake*.01+(player.ads?Math.cos(t*1.3)*.0011:0);
+  camera.rotation.x=player.pitch+rand(-1,1)*camShake*.01+(player.ads?Math.sin(t*1.7)*.0011:0);
   camShake=Math.max(0,camShake-dt*2.1);
 
   const wantFov=player.ads?curW().zoom:(player.sprint?80:72);
