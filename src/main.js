@@ -4489,6 +4489,7 @@ function gameOver(){
     $('goTag').textContent=WANDER.region+' regions · '+Math.floor(WANDER.t/60)+' minutes · '+G.kills+' put down';
     WANDER.story.push('Fell in region '+WANDER.region+', '+Math.floor(WANDER.t/60)+' minutes out. The crows know the rest.');
     localStorage.removeItem('tlr_wander');
+    $('contW').style.display='none';
     gameOver._story='YOUR STORY: '+WANDER.story.join(' ');
   }else if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
@@ -6434,11 +6435,9 @@ function applyRegionState(st){
   st.loot.forEach((tk,i)=>{const L=WANDER.loot[i];
     if(L&&tk){L.taken=true;scene.remove(L.mesh);}});
   if(st.den&&WANDER.den)WANDER.den.woken=true;
-  const seen={};
   for(const e of st.sites){
-    if(typeof e==='number')continue;          // pre-v1 saves: skip safely
-    if(!e.u)continue;
-    const s=WANDER.sites.find(s2=>s2.kind===e.k&&!seen[s2===s2]&&!s2.used);
+    if(typeof e==='number'||!e.u)continue;    // pre-v1 saves: skip safely
+    const s=WANDER.sites.find(s2=>s2.kind===e.k&&!s2.used); // one site per kind per region
     if(s){s.used=true;if(s.kind==='stranded')scene.remove(s.mesh);}
   }
   if(st.quest&&WANDER.quest)Object.assign(WANDER.quest,st.quest);
