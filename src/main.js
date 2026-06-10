@@ -6173,6 +6173,14 @@ function wanderUpdate(dt){
   if(wnf>.75&&!WANDER.nightSaid){WANDER.nightSaid=true;
     say('THE COUNTRY','Dead of night. They move faster when nothing watches.',3600);}
   if(wnf<.5)WANDER.nightSaid=false;
+  if(wnf>.75)WANDER.nightLived=true;
+  if(wnf<.2&&WANDER.nightLived){ // you watched the night through
+    WANDER.nightLived=false;
+    player.hp=Math.min(player.maxhp,player.hp+20);
+    G.score+=150;
+    announce('DAWN','you watched the night through. the country counts it.');
+    SFX.chime();
+  }
   if(WANDER.den&&!WANDER.den.woken&&Math.hypot(player.x-WANDER.den.x,player.z-WANDER.den.z)<26){
     WANDER.den.woken=true;
     for(const z of zombies)if(z.sleeping){z.sleeping=false;z.rise=rand(1.2,2.4);}
