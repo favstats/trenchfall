@@ -2034,7 +2034,7 @@ const WEAPONS=[
  {name:'TRENCH KNIFE',    price:0,  magSize:0,  rate:.42, dmg:46,head:70, spread:.018,adsSpread:.012, pellets:1,reload:0,  auto:false,zoom:66,pierce:0,sfx:'slash',  kick:.35,range:3.1, melee:true,
   ds:'No magazine. No mercy. Always on you.'},
  {name:'M9 BAZOOKA',      price:520,magSize:1,  rate:1.4, dmg:0, head:0,  spread:.006,adsSpread:.002, pellets:0,reload:3.2,auto:false,zoom:50,pierce:0,sfx:'dmr',    kick:2.6,range:220, rocket:true,
-  ds:'The argument that remodels terrain.'},
+  ds:'The argument that remodels terrain. Aim high at range; the round drops.'},
 ];
 function defaultOwned(){return WEAPONS.map((w,i)=>i===0||!!w.melee);}
 function defaultMags(){return WEAPONS.map(w=>w.melee?0:w.magSize);}
@@ -2891,6 +2891,7 @@ function fireRocket(){
 function updateRockets(dt){
   for(let i=ROCKETS.length-1;i>=0;i--){
     const r=ROCKETS[i];r.t+=dt;
+    r.vy-=5.5*dt;   // the round remembers it is heavy
     r.x+=r.vx*dt;r.y+=r.vy*dt;r.z+=r.vz*dt;
     if(Math.random()<.85)puffSmoke(_tv.set(r.x,r.y,r.z),false,true);
     let hit=r.t>6||r.y<=heightAt(r.x,r.z)+.25;
