@@ -1633,6 +1633,7 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyI'&&G.state==='play')toggleInv();
   if(e.code==='KeyC'&&BAST.on&&G.state==='play'&&!shopOpen&&!perkOpen&&!invOpen)cmdUI(!cmdOpen);
   if(cmdOpen){const dg=/^Digit([1-5])$/.exec(e.code);if(dg)giveOrder(+dg[1]);}
+  if(e.code==='KeyU'&&G.state==='play')document.body.classList.toggle('hudmin');
   if(e.code==='KeyM'){AU.muted=!AU.muted;if(AU.master)AU.master.gain.value=AU.muted?0:.5;}
   if(G.state!=='play')return;
   if(e.code==='KeyB'){toggleShop();return;}

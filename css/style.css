@@ -449,3 +449,31 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important;transition-duration:.001s !important}
   }
+
+/* ---- AAA HUD pass: no boxes, no billboards. light text floating on the world ---- */
+#ammoBox,#vitals{background:none;border:none;box-shadow:none;padding:0}
+#ammoBox::before,#ammoBox::after,#vitals::before,#vitals::after{display:none}
+#ammoBox{right:26px;bottom:22px}
+#wname{font-size:10px;letter-spacing:.3em;opacity:.75;margin-bottom:0;text-shadow:0 1px 4px #000}
+#mag{font-size:40px;border-bottom:none;padding-bottom:0;margin-bottom:0;display:inline;
+  text-shadow:0 2px 8px rgba(0,0,0,.9)}
+#reserve{display:inline;font-size:14px;color:var(--olive);letter-spacing:.12em;margin-left:7px;
+  text-shadow:0 1px 4px #000}
+#slots{gap:9px;margin-top:4px}
+.slot{font-size:10px;padding:0;border:none;opacity:.55;text-shadow:0 1px 3px #000}
+.slot.sel{opacity:1;color:var(--signal);border:none;background:none;transform:scale(1.15)}
+.slot.dim{opacity:.22}
+#modes{margin-top:3px;gap:11px}
+.mode{font-size:9px;padding:0;border:none;opacity:.45;text-shadow:0 1px 3px #000}
+.mode.sel{opacity:1;color:var(--signal);background:none}
+#consum{margin-top:3px;font-size:10px;opacity:.6;gap:8px}
+#vitals{left:26px;bottom:22px;min-width:150px}
+#vitals .barlbl{font-size:9px;letter-spacing:.3em;opacity:.7}
+#vitals .bar{height:4px;width:150px;background:rgba(8,9,6,.55)}
+#vitals .row{font-size:10.5px;gap:11px;margin-top:4px;opacity:.75;text-shadow:0 1px 3px #000}
+#vitals.low{animation:none}
+#vitals.low .bar i{animation:lowBlink 1s ease-in-out infinite}
+@keyframes lowBlink{50%{opacity:.45}}
+/* U toggles the whole instrument layer */
+body.hudmin #vitals,body.hudmin #ammoBox,body.hudmin #mapWrap,body.hudmin #squad,
+body.hudmin #sitrep,body.hudmin #bars,body.hudmin #compass{display:none!important}
