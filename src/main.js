@@ -647,7 +647,13 @@ function vertColor(v,out){
   else if(dug>.18){const d=clamp(dug/2.6,.0,1);r=.30-d*.14+n*.03;g=.21-d*.10+n*.02;b=.13-d*.06;}
   else if(dug<-.18){r=.38+n*.05;g=.30+n*.04;b=.18;}
   else{const k=n*.5+smoothNoise(ix*.3,iz*.3)*.5;
-    r=.16+k*.10;g=.235+k*.13;b=.10+k*.045;}   // deep meadow loam, matches the grass
+    r=.16+k*.10;g=.235+k*.13;b=.10+k*.045;    // deep meadow loam, matches the grass
+    const mac=smoothNoise(ix*.045+7,iz*.045+13);   // macro patchwork: the land changes its mind in 30m sweeps
+    if(mac>.56){const mw=Math.min(1,(mac-.56)*4);  // dry straw shoulders
+      r=lerp(r,.295+k*.06,mw);g=lerp(g,.25+k*.05,mw);b=lerp(b,.125,mw);}
+    else if(mac<.42){const mw=Math.min(1,(.42-mac)*4); // damp dark hollows
+      r=lerp(r,.115,mw);g=lerp(g,.165,mw);b=lerp(b,.078,mw);}
+  }
   if(ix>0&&ix<TER.N&&iz>0&&iz<TER.N){
     const s=Math.abs(H[v+1]-H[v-1])+Math.abs(H[v+VN]-H[v-VN]);
     const sf=clamp((s-.8)/2.2,0,1);
