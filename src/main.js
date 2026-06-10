@@ -154,10 +154,10 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
         float lon=atan(d.x,d.z);
         float curt=vnoise(vec2(lon*2.2+time*.045,d.y*1.3));
         float curt2=vnoise(vec2(lon*5.1-time*.06,d.y*2.6+3.7));
-        float aw=pow(max(curt*.6+curt2*.4-.34,0.)*1.9,2.2);
+        float aw=pow(max(curt*.6+curt2*.4-.30,0.)*2.1,2.0);
         float vert=smoothstep(.04,.22,d.y)*smoothstep(1.,.45,d.y);
         col+=(vec3(.12,.9,.5)*aw+vec3(.45,.15,.75)*aw*aw)
-             *vert*aurora*smoothstep(.35,.7,nightF)*1.5*(1.-cm);
+             *vert*aurora*smoothstep(.35,.7,nightF)*2.4*(1.-cm);
       }
       // lightning lights the clouds from within
       col+=flash*vec3(.45,.5,.66)*(1.+cm*2.2);
