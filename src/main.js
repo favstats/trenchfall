@@ -617,7 +617,8 @@ function roadZ(x){return ROAD.a1*Math.sin(x*ROAD.f1)*ROAD.s1+ROAD.a2*Math.sin(x*
 const BIOME={name:'GREYFIELD MARCH',tint:[1,1,1],rugged:1,treeK:1,grassK:1,rockK:1,risk:1,nfBias:0,leafHue:0,grassHue:0,city:0,shore:false};
 let terrainSkirt=null;
 function buildSkirt(){
-  if(terrainSkirt)scene.remove(terrainSkirt);
+  if(terrainSkirt){scene.remove(terrainSkirt);
+    terrainSkirt.geometry.dispose();terrainSkirt.material.dispose();}
   // a square apron: inner edge welded to the terrain rim, outer edge falling away
   const SEG=26,DROP=34,OUT=150;
   const verts=[],idx=[];
@@ -650,7 +651,10 @@ function buildSkirt(){
   g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(verts),3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  terrainSkirt=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x202515,roughness:1,side:THREE.DoubleSide}));
+  const tnt=BIOME.tint||[1,1,1];
+  terrainSkirt=new THREE.Mesh(g,new THREE.MeshStandardMaterial({
+    color:new THREE.Color(.14*tnt[0],.19*tnt[1],.09*tnt[2]),  // the meadow tone, in this country's light
+    roughness:1,side:THREE.DoubleSide}));
   terrainSkirt.receiveShadow=true;
   scene.add(terrainSkirt);
 }
