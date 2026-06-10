@@ -2540,8 +2540,11 @@ function updateFires(dt,t){
     const d=Math.hypot(player.x-s.position.x,player.z-s.position.z);
     if(d<nd){nd=d;nearest=s;}
   }
-  if(nearest){fireLight.position.copy(nearest.position);fireLight.intensity=26+Math.sin(t*17)*9;}
-  else fireLight.intensity=0;
+  if(nearest){
+    fireLight.position.set(nearest.position.x,nearest.position.y+1.1,nearest.position.z);
+    const want=(15+Math.sin(t*13)*4+Math.sin(t*31)*2.5)*Math.min(2.4,(nearest.userData.r||1));
+    fireLight.intensity=lerp(fireLight.intensity,want,Math.min(1,dt*5)); // breathes up, never pops
+  }else fireLight.intensity=Math.max(0,fireLight.intensity-dt*40);
 }
 /* mines */
 const minePool=[];
