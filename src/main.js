@@ -6374,7 +6374,7 @@ function captureRegionState(){
   return {
     loot:WANDER.loot.map(L=>L.taken?1:0),
     den:!!(WANDER.den&&WANDER.den.woken),
-    sites:WANDER.sites.map(s=>s.used?1:0),
+    sites:WANDER.sites.map(s=>({k:s.kind,u:s.used?1:0})),
     quest:WANDER.quest?{taken:WANDER.quest.taken,objDone:WANDER.quest.objDone,turned:WANDER.quest.turned}:null,
     lm:!!(WANDER.landmark&&WANDER.landmark.found),
     rung:!!(WANDER.landmark&&WANDER.landmark.rung),
@@ -6434,8 +6434,13 @@ function applyRegionState(st){
   st.loot.forEach((tk,i)=>{const L=WANDER.loot[i];
     if(L&&tk){L.taken=true;scene.remove(L.mesh);}});
   if(st.den&&WANDER.den)WANDER.den.woken=true;
-  st.sites.forEach((u,i)=>{const s=WANDER.sites[i];
-    if(s&&u){s.used=true;if(s.kind==='stranded')scene.remove(s.mesh);}});
+  const seen={};
+  for(const e of st.sites){
+    if(typeof e==='number')continue;          // pre-v1 saves: skip safely
+    if(!e.u)continue;
+    const s=WANDER.sites.find(s2=>s2.kind===e.k&&!seen[s2===s2]&&!s2.used);
+    if(s){s.used=true;if(s.kind==='stranded')scene.remove(s.mesh);}
+  }
   if(st.quest&&WANDER.quest)Object.assign(WANDER.quest,st.quest);
   if(WANDER.landmark){WANDER.landmark.found=!!st.lm;WANDER.landmark.rung=!!st.rung;}
   if(!(WANDER.den&&WANDER.den.woken)){ // sleepers only if the den never woke
