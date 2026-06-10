@@ -2053,7 +2053,12 @@ function zombieTarget(zb){
   if(CAMP.on){const l=leadTruck();
     if(l)return{x:l.x,z:roadZ(l.x),kind:'truck',range:2.8,ref:l};
     return{x:player.x,z:player.z,kind:'player',range:1.5};}
-  if(WANDER.on)return{x:player.x,z:player.z,kind:'player',range:1.5};
+  if(WANDER.on){
+    for(const s of WANDER.sites)
+      if(s.kind==='stranded'&&!s.used&&Math.hypot(zb.x-s.x,zb.z-s.z)<26)
+        return{x:s.x,z:s.z,kind:'waypoint',range:.9};
+    return{x:player.x,z:player.z,kind:'player',range:1.5};
+  }
   if(BAST.on&&zb.gate&&zb.x<-23)
     return{x:-21,z:roadZ(-24),kind:'waypoint',range:.8};   // make for the gate
   return{x:0,z:9.5,kind:'depot',range:8.2};
@@ -2782,7 +2787,11 @@ function damageAlly(a,d){
     }
     scene.remove(a.mesh);allies.splice(allies.indexOf(a),1);
     decal(a.x,a.z,1.2);
-    toast('RIFLEMAN DOWN');
+    if(WANDER.survivor===a){
+      WANDER.survivor=null;
+      WANDER.story.push('Lost '+a.name+' in region '+WANDER.region+'. Walked on alone.');
+      say('THE COUNTRY',a.name+' stays here now. You do not.',4200);
+    }else toast('RIFLEMAN DOWN');
     sTone('sawtooth',300,80,.5,.25);
   }
 }
@@ -6171,7 +6180,7 @@ function startWander(){
   zombies.length=0;
   for(const t of convoy)t.mesh.visible=false;
   for(const a of allies)scene.remove(a.mesh);allies.length=0;
-  WANDER.t=0;WANDER.spawnT=8;WANDER.loot=[];WANDER.kills0=0;
+  WANDER.t=0;WANDER.spawnT=8;WANDER.loot=[];WANDER.kills0=0;WANDER.survivor=null;WANDER.sites=[];
   for(const o of WANDER._meshes||[])scene.remove(o);
   WANDER._meshes=[];
   for(let i=0;i<11;i++){ // the country keeps its caches far apart
