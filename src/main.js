@@ -1322,6 +1322,94 @@ function updateCrows(dt,t){
       sTone('sawtooth',rand(620,780),rand(380,460),.14,.05);
       setTimeout(()=>sTone('sawtooth',rand(600,740),380,.12,.04),200);}}
 }
+/* ---------------- wildlife: the country is not only dead things ---------------- */
+const DEER=[];
+{
+  const hideM=new THREE.MeshStandardMaterial({color:0x6a4f35,roughness:.9});
+  const darkM=new THREE.MeshStandardMaterial({color:0x3a2c1e,roughness:.95});
+  for(let i=0;i<4;i++){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(.34,.4,1.5,7),hideM);
+    body.rotation.z=Math.PI/2;body.position.y=1.05;g.add(body);
+    const front=new THREE.Group();front.position.set(.6,1.3,0);g.add(front); // neck+head tip together
+    const neck=new THREE.Mesh(new THREE.CylinderGeometry(.11,.16,.85,5),hideM);
+    neck.position.set(.18,.2,0);neck.rotation.z=-.5;front.add(neck);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(.42,.22,.2),hideM);
+    head.position.set(.52,.56,0);front.add(head);
+    const earL=new THREE.Mesh(new THREE.ConeGeometry(.06,.2,4),darkM);
+    earL.position.set(.4,.72,.12);front.add(earL);
+    const earR=earL.clone();earR.position.z=-.12;front.add(earR);
+    if(i%2===0){ // a buck carries his crown
+      for(const sz of[-.08,.08]){
+        const a1=new THREE.Mesh(new THREE.CylinderGeometry(.02,.035,.5,4),darkM);
+        a1.position.set(.42,.9,sz);a1.rotation.x=sz*4;a1.rotation.z=.5;front.add(a1);
+        const a2=new THREE.Mesh(new THREE.CylinderGeometry(.015,.025,.3,4),darkM);
+        a2.position.set(.45,1.02,sz*1.8);a2.rotation.x=sz*7;front.add(a2);
+      }
+    }
+    const tail=new THREE.Mesh(new THREE.ConeGeometry(.09,.26,5),darkM);
+    tail.position.set(-.82,1.28,0);tail.rotation.z=1.2;g.add(tail);
+    const legs=[];
+    for(const[lx,lz]of[[.55,.2],[.55,-.2],[-.55,.2],[-.55,-.2]]){
+      const leg=new THREE.Mesh(new THREE.CylinderGeometry(.05,.04,1.0,5),darkM);
+      leg.geometry.translate(0,-.5,0);   // pivot at the hip
+      leg.position.set(lx,1.0,lz);g.add(leg);legs.push(leg);
+    }
+    g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    g.visible=false;scene.add(g);
+    DEER.push({mesh:g,legs,front,x:0,z:0,a:0,state:'graze',t:rand(2,6),sp:0,ph:rand(TAU),alive:true});
+  }
+}
+function scatterDeer(){
+  const ok=!BAST.on;          // no living thing grazes a battlefield
+  for(const d of DEER){
+    d.alive=ok&&Math.random()<.75;
+    d.mesh.visible=false;
+    if(!d.alive)continue;
+    const a=rand(TAU),r=rand(half*.45,half*.85);
+    d.x=clamp(Math.cos(a)*r,-half+10,half-10);
+    d.z=clamp(Math.sin(a)*r,-half+10,half-10);
+    d.a=rand(TAU);d.state='graze';d.t=rand(2,6);d.sp=0;
+  }
+}
+function updateWildlife(dt,t){
+  for(const d of DEER){
+    if(!d.alive){d.mesh.visible=false;continue;}
+    d.mesh.visible=true;
+    // fear: the player too close, the dead too close, or gunfire
+    let threatA=null;
+    const pd=Math.hypot(player.x-d.x,player.z-d.z);
+    if(pd<18||(muzzle.intensity>1&&pd<60))threatA=Math.atan2(d.x-player.x,d.z-player.z);
+    if(!threatA)for(const z of zombies){if(!z.alive||z.rise>0)continue;
+      const zd=Math.hypot(z.x-d.x,z.z-d.z);
+      if(zd<13){threatA=Math.atan2(d.x-z.x,d.z-z.z);break;}}
+    if(threatA!==null){d.state='flee';d.fleeA=threatA;d.t=rand(2.5,4);}
+    d.t-=dt;
+    if(d.state==='flee'){
+      d.a=lerp(d.a,d.fleeA,Math.min(1,dt*6));
+      d.sp=Math.min(9,d.sp+dt*22);
+      if(d.t<=0&&pd>42){d.state='graze';d.t=rand(3,7);}
+    }else if(d.state==='amble'){
+      d.sp=Math.min(1.6,d.sp+dt*4);
+      if(d.t<=0){d.state='graze';d.t=rand(3,8);}
+    }else{ // graze
+      d.sp=Math.max(0,d.sp-dt*8);
+      if(d.t<=0){d.state='amble';d.a=rand(TAU);d.t=rand(2,5);}
+    }
+    if(d.sp>0){
+      d.x+=Math.sin(d.a)*d.sp*dt;d.z+=Math.cos(d.a)*d.sp*dt;
+      d.x=clamp(d.x,-half+6,half-6);d.z=clamp(d.z,-half+6,half-6);
+    }
+    d.mesh.position.set(d.x,heightAt(d.x,d.z),d.z);
+    d.mesh.rotation.y=d.a-Math.PI/2;
+    const stride=d.sp>4?11:7;
+    for(let li=0;li<4;li++)
+      d.legs[li].rotation.x=d.sp>.1?Math.sin(t*stride+d.ph+(li%2?Math.PI:0))*.5*Math.min(1,d.sp/3):0;
+    // head down to graze, up to run
+    const wantTip=d.state==='graze'&&d.sp<.2?-1.05:0;
+    d.front.rotation.z=lerp(d.front.rotation.z,wantTip,Math.min(1,dt*3));
+  }
+}
 const DUST_N=240;
 const dustGeo=new THREE.BufferGeometry();
 const dustPos=new Float32Array(DUST_N*3),dustVel=new Float32Array(DUST_N*3);
@@ -1344,8 +1432,19 @@ function updateDust(dt){
   }
   dustGeo.attributes.position.needsUpdate=true;
 }
-const sea=new THREE.Mesh(new THREE.PlaneGeometry(760,260),
+const sea=new THREE.Mesh(new THREE.PlaneGeometry(760,260,96,32),
   new THREE.MeshStandardMaterial({color:0x16202a,roughness:.12,metalness:.55,envMapIntensity:1.6}));
+sea.material.onBeforeCompile=s=>{ // the dead flat sea learns to breathe
+  s.uniforms.uT=WindU;
+  s.vertexShader='uniform float uT;\n'+s.vertexShader
+    .replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
+      float swA=position.x*.045+uT*.7, swB=position.y*.085-uT*.5, swC=(position.x+position.y)*.12+uT*1.05;
+      float dhdx=.42*.045*cos(swA)+.14*.12*cos(swC);
+      float dhdy=.26*.085*cos(swB)+.14*.12*cos(swC);
+      objectNormal=normalize(vec3(-dhdx*6.,-dhdy*6.,1.));`)
+    .replace('#include <begin_vertex>',`#include <begin_vertex>
+      transformed.z+=.42*sin(swA)+.26*sin(swB)+.14*sin(swC);`);
+};
 sea.rotation.x=-Math.PI/2;sea.position.set(0,-.7,175);sea.visible=false;scene.add(sea);
 const setpieces=new THREE.Group();scene.add(setpieces);
 function scatterSetpieces(){
@@ -3558,6 +3657,7 @@ function buildWorld(legSeed){
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
   scatterPosts();scatterForest();scatterSetpieces();scatterGrass();scatterCity();
+  scatterDeer();
   sea.visible=!!BIOME.shore;
   for(const d of decals)d.material.opacity=0;
   envBakedNf=-1;
@@ -4660,6 +4760,8 @@ function gameOver(){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
     if(BAST.wave>bb)localStorage.setItem('tlr_bastion_best',BAST.wave);
     gameOver._bw=BAST.wave;
+    localStorage.removeItem('tlr_bastion_run');
+    $('contB').style.display='none';
     $('goTitle').textContent='THE WALL FALLS';
     $('goTag').textContent='night '+BAST.wave+' · best '+Math.max(BAST.wave,bb);
   }else{gameOver._bw=null;$('goTitle').textContent='THE ROAD ENDS';$('goTag').textContent='the convoy is lost';}
@@ -4738,7 +4840,12 @@ function startGame(){
 }
 $('startBtn').addEventListener('click',()=>startCampaign());
 $('againBtn').addEventListener('click',()=>{ $('gameover').classList.remove('show');startCampaign(); });
-$('bastBtn').addEventListener('click',startBastion);
+$('bastBtn').addEventListener('click',()=>startBastion(false));
+$('contB').addEventListener('click',()=>startBastion(true));
+try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
+  if(bsv&&bsv.runSeed){$('contB').style.display='';
+    $('contBms').textContent='night '+bsv.wave+' held · '+bsv.crew.length+' still on the wall';}
+}catch(e){}
 $('wandBtn').addEventListener('click',()=>startWander(false));
 $('contW').addEventListener('click',()=>startWander(true));
 try{const wsv=JSON.parse(localStorage.getItem('tlr_wander'));
@@ -6135,16 +6242,31 @@ function cleanupModes(){ // no mode inherits another's furniture
   zombies.length=0;player.man=null;player.ride=null;
   mortarRing.visible=false;beacon.visible=false;
 }
-function startBastion(){
+function saveBastion(){
+  if(!BAST.on)return;
+  try{localStorage.setItem('tlr_bastion_run',JSON.stringify({v:1,
+    runSeed:BAST.runSeed,wave:BAST.wave,cache:BAST.cache,shells:BAST.shells,
+    depotHp:G.depotHp,scrap:G.scrap,kills:G.kills,score:G.score,items:G.items,
+    p:{hp:player.hp,maxhp:player.maxhp,reserve:player.reserve,wid:player.wid,
+       owned:player.owned,mags:player.mags},
+    crew:allies.map(a=>({name:a.name,xp:a.xp||0,ammo:a.ammo??55,post:a.post?a.post.z:null})),
+  }));}catch(e){}
+}
+function startBastion(load){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   cleanupModes();
   CAMP.on=false;BAST.on=true;
   CAMP.comps=[];CAMP.heirlooms=[];CAMP.mode='menu';
   $('roster').classList.remove('on');
-  Object.assign(BAST,{wave:0,shells:8,cache:240,heliT:34,drops:[],interT:5,lastStand:false,rally:false,breachT:0});
-  setSeed((Math.random()*2**31)|0);
+  let sv=null;
+  if(load){try{sv=JSON.parse(localStorage.getItem('tlr_bastion_run'));}catch(e){}}
+  Object.assign(BAST,{wave:sv?sv.wave:0,shells:sv?sv.shells:8,cache:sv?sv.cache:240,
+    heliT:34,drops:[],interT:sv?9:5,lastStand:false,rally:false,breachT:0,cleared:false,
+    runSeed:sv?sv.runSeed:((Math.random()*2**31)|0)});
+  setSeed(BAST.runSeed);
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);  // tonight's theater, drawn from the deck
-  buildWorld((Math.random()*2**31)|0);
+  buildWorld((BAST.runSeed^0x9e3779b9)>>>0);
+  setSeed((BAST.runSeed^0x51ed2701)>>>0);   // the fort dresses the same way every time
   buildFort();
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
     items:{nade:3,molotov:1,mine:2,medkit:1,flare:2},
@@ -6156,10 +6278,21 @@ function startBastion(){
     wid:0,owned:defaultOwned(),
     mags:defaultMags(),tool:null,buildType:0,healT:0,
     fireCd:0,reloadT:0,respawnT:0,ads:false,fireHeld:false,ride:null,man:null});
+  if(sv){
+    G.scrap=sv.scrap;G.kills=sv.kills;G.score=sv.score;G.items=sv.items;G.depotHp=sv.depotHp;
+    Object.assign(player,{hp:sv.p.hp,maxhp:sv.p.maxhp,reserve:sv.p.reserve,
+      wid:sv.p.wid,owned:sv.p.owned,mags:sv.p.mags});
+  }
   zombies.length=0;
   for(const t of convoy)t.mesh.visible=false;
   for(const a of allies)scene.remove(a.mesh);allies.length=0;
-  for(const pz of[-32,-12,16,34]){   // the wall crew, each with a post and a finite belt
+  if(sv&&sv.crew&&sv.crew.length){ // the same crew, the same posts, the same debts
+    for(const c of sv.crew){
+      const a=spawnAlly(-22,c.post??0);
+      if(a){a.name=c.name;a.xp=c.xp;a.ammo=c.ammo;
+        if(c.post!==null)a.post={x:-22.5,z:c.post};}
+    }
+  }else for(const pz of[-32,-12,16,34]){   // the wall crew, each with a post and a finite belt
     const a=spawnAlly(-22,pz);
     if(a){a.post={x:-22.5,z:pz};a.ammo=55+Math.floor(Math.random()*20);}
   }
@@ -6234,6 +6367,7 @@ function bastionUpdate(dt){
           (G.kills-sn.k)+' put down · wall took '+dHp+' · '+(G.shots-sn.sh)+' rounds spent · '
           +allies.length+' on the wall'+(allies.length<sn.crew?' · we are fewer':''));
       }
+      saveBastion();
       const nw=BAST.wave+1;
       BAST.planned=(nw>=3&&nw%3===0)?pick(['moon','tide','fog','swarm']):null;
       if(BAST.planned)setTimeout(()=>say('LOOKOUT',{
@@ -6944,6 +7078,7 @@ function frame(now){
   updateDust(dt);
   updateCrows(dt,elapsed);
   updateFireflies(dt,elapsed,nf);
+  updateWildlife(dt,elapsed);
   bakeEnv(nf);
   updateGodrays(nf,flashT);
   cityWins.visible=cityWins.count>0&&nf>.42;
