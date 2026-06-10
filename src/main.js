@@ -1446,6 +1446,51 @@ sea.material.onBeforeCompile=s=>{ // the dead flat sea learns to breathe
       transformed.z+=.42*sin(swA)+.26*sin(swB)+.14*sin(swC);`);
 };
 sea.rotation.x=-Math.PI/2;sea.position.set(0,-.7,175);sea.visible=false;scene.add(sea);
+/* ponds: standing water in the country's hollows; ice where it's cold enough */
+const ponds=[];
+const pondMat=(()=>{
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d');
+  const rg=g.createRadialGradient(64,64,30,64,64,64);
+  rg.addColorStop(0,'rgba(255,255,255,1)');rg.addColorStop(.78,'rgba(255,255,255,.9)');
+  rg.addColorStop(1,'rgba(255,255,255,0)');     // banks fade into the mud
+  g.fillStyle=rg;g.fillRect(0,0,128,128);
+  const alpha=new THREE.CanvasTexture(c);
+  const m=new THREE.MeshStandardMaterial({color:0x141f28,roughness:.07,metalness:.6,
+    envMapIntensity:1.9,transparent:true,alphaMap:alpha,depthWrite:false});
+  m.onBeforeCompile=s=>{ // a small wind worries the surface
+    s.uniforms.uT=WindU;
+    s.vertexShader='uniform float uT;\n'+s.vertexShader
+      .replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
+        float pwA=uv.x*34.+uT*1.3,pwB=uv.y*27.-uT*1.05;
+        objectNormal=normalize(vec3(-.05*cos(pwA),-.04*cos(pwB),1.));`);
+  };
+  return m;
+})();
+const iceMat=new THREE.MeshStandardMaterial({color:0xaec6dd,roughness:.06,metalness:.35,
+  envMapIntensity:2.1,transparent:true,opacity:.96,alphaMap:pondMat.alphaMap,depthWrite:false});
+for(let i=0;i<5;i++){
+  const p=new THREE.Mesh(new THREE.PlaneGeometry(2,2,10,10),pondMat);
+  p.rotation.x=-Math.PI/2;p.visible=false;p.renderOrder=1;
+  scene.add(p);ponds.push(p);
+}
+function scatterPonds(){
+  const want=BIOME.desert||BIOME.name==='SALT FLATS'?0:
+    BIOME.name==='DROWNED MIRE'?5:BIOME.shore?1:2;
+  let pi=0;
+  for(let i=0;i<70&&pi<want;i++){
+    const x=srand(-half+22,half-22),z=srand(-half+22,half-22);
+    if(Math.hypot(x,z)<34||Math.abs(z-roadZ(x))<12)continue;
+    for(let pass=0;pass<3;pass++)modifyTerrain(x,z,srand(4.5,7),-.5); // dig the basin
+    const h=heightAt(x,z);
+    const p=ponds[pi++];
+    p.visible=true;
+    p.scale.setScalar(srand(4.5,9));
+    p.position.set(x,h+.45,z);    // water finds its level partway up the bank
+    p.material=BIOME.snow?iceMat:pondMat;
+  }
+  for(let i=pi;i<ponds.length;i++)ponds[i].visible=false;
+}
 const setpieces=new THREE.Group();scene.add(setpieces);
 function scatterSetpieces(){
   while(setpieces.children.length)setpieces.remove(setpieces.children[0]);
@@ -3656,7 +3701,7 @@ function buildWorld(legSeed){
   buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
-  scatterPosts();scatterForest();scatterSetpieces();scatterGrass();scatterCity();
+  scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterCity();
   scatterDeer();
   sea.visible=!!BIOME.shore;
   for(const d of decals)d.material.opacity=0;
