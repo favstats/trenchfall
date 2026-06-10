@@ -71,6 +71,14 @@ sun.shadow.camera.top=46;sun.shadow.camera.bottom=-46;
 sun.shadow.camera.far=320;sun.shadow.bias=-0.0005;
 sun.shadow.normalBias=.02;sun.shadow.radius=5;
 scene.add(sun);scene.add(sun.target);
+const softDot=(()=>{
+  const c=document.createElement('canvas');c.width=c.height=32;
+  const g=c.getContext('2d');
+  const rg=g.createRadialGradient(16,16,1,16,16,15);
+  rg.addColorStop(0,'rgba(255,255,255,1)');rg.addColorStop(.55,'rgba(255,255,255,.6)');rg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=rg;g.fillRect(0,0,32,32);
+  return new THREE.CanvasTexture(c);
+})();
 // the sun has a body: an HDR core that blooms, a halo that breathes
 const sunDisc=new THREE.Sprite(new THREE.SpriteMaterial({
   map:softDot,transparent:true,opacity:.9,fog:false,depthWrite:false}));
@@ -1473,14 +1481,6 @@ const pGeo=new THREE.BufferGeometry();
 const pPos=new Float32Array(MAXP*3),pCol=new Float32Array(MAXP*3);
 pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
 pGeo.setAttribute('color',new THREE.BufferAttribute(pCol,3));
-const softDot=(()=>{
-  const c=document.createElement('canvas');c.width=c.height=32;
-  const g=c.getContext('2d');
-  const rg=g.createRadialGradient(16,16,1,16,16,15);
-  rg.addColorStop(0,'rgba(255,255,255,1)');rg.addColorStop(.55,'rgba(255,255,255,.6)');rg.addColorStop(1,'rgba(255,255,255,0)');
-  g.fillStyle=rg;g.fillRect(0,0,32,32);
-  return new THREE.CanvasTexture(c);
-})();
 const points=new THREE.Points(pGeo,new THREE.PointsMaterial({size:.3,vertexColors:true,
   map:softDot,transparent:true,depthWrite:false}));
 points.frustumCulled=false;scene.add(points);
