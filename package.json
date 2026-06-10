@@ -7,12 +7,14 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "check": "node --check src/main.js"
+    "check": "node --check src/main.js && node scripts/check-order.mjs"
   },
   "dependencies": {
     "three": "0.160.0"
   },
   "devDependencies": {
+    "acorn": "^8.16.0",
+    "acorn-walk": "^8.3.5",
     "vite": "^7.1.0"
   }
 }
