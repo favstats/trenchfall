@@ -250,6 +250,28 @@ const gradePass=new ShaderPass({
         }
         float sd=length((sunPos-uv)*vec2(1.78,1.));
         col+=acc*(1.0/28.0)*rayCol*rayI*2.6*smoothstep(1.35,.15,sd);
+        // lens flare: ghost chain + anamorphic streak, driven by what the lens actually sees
+        vec2 asp=vec2(px.y/px.x,1.);
+        vec3 sb=texture2D(tDiffuse,sunPos).rgb
+               +texture2D(tDiffuse,sunPos+vec2(px.x*5.,0.)).rgb
+               +texture2D(tDiffuse,sunPos-vec2(px.x*5.,0.)).rgb
+               +texture2D(tDiffuse,sunPos+vec2(0.,px.y*5.)).rgb
+               +texture2D(tDiffuse,sunPos-vec2(0.,px.y*5.)).rgb;
+        float bri=smoothstep(2.8,4.6,dot(sb,vec3(.299,.587,.114)));
+        if(bri>0.002){
+          vec2 v=vec2(.5)-sunPos;vec3 fc=vec3(0.);vec2 dd;float ds;
+          dd=(uv-(sunPos+v*.62))*asp;ds=dot(dd,dd);
+          fc+=vec3(.9,.5,.3)*exp(-ds*900.)*.42;
+          dd=(uv-(sunPos+v*1.3))*asp;ds=dot(dd,dd);
+          fc+=vec3(.38,.6,.42)*exp(-ds*2400.)*.36;
+          dd=(uv-(sunPos+v*1.85))*asp;ds=dot(dd,dd);
+          fc+=vec3(.3,.42,.8)*exp(-ds*420.)*.3;
+          dd=(uv-(sunPos+v*2.5))*asp;ds=dot(dd,dd);
+          fc+=vec3(.85,.32,.18)*exp(-ds*1600.)*.26;
+          dd=(uv-sunPos)*asp;
+          fc+=vec3(.4,.58,1.)*exp(-abs(dd.y)*95.)*exp(-abs(dd.x)*4.2)*.8;
+          col+=fc*bri*min(rayI,1.);
+        }
       }
       // filmic split-tone: cool shadows, warm highlights
       float l=dot(col,vec3(.299,.587,.114));
@@ -1575,6 +1597,42 @@ function updateParticles(dt){
     if(pLife[i]<=0)pPos[i*3+1]=-999;
   }
   if(any)pGeo.attributes.position.needsUpdate=true;
+}
+/* fireflies: the dark keeps a few small lights of its own */
+const FIREFLIES=[];
+const fireflyPts=(()=>{
+  const N=80;
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
+  geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(N*3),3));
+  for(let i=0;i<N;i++)FIREFLIES.push({a:rand(TAU),r:rand(8,46),sp:rand(.04,.14),
+    ph:rand(TAU),bl:rand(1.4,3),y:rand(.5,2.2)});
+  const p=new THREE.Points(geo,new THREE.PointsMaterial({size:.14,map:softDot,
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true}));
+  p.visible=false;p.frustumCulled=false;scene.add(p);
+  return p;
+})();
+function updateFireflies(dt,t,nf){
+  const on=nf>.55&&wxParam('rain',nf)<.05&&G.state==='play'&&!BIOME.snow;
+  fireflyPts.visible=on;
+  if(!on)return;
+  const pos=fireflyPts.geometry.attributes.position.array,
+        col=fireflyPts.geometry.attributes.color.array;
+  const fade=Math.min(1,(nf-.55)*4);
+  for(let i=0;i<FIREFLIES.length;i++){
+    const f=FIREFLIES[i];
+    f.a+=dt*f.sp;
+    const x=player.x+Math.cos(f.a)*f.r+Math.sin(t*.31+f.ph)*2.4,
+          z=player.z+Math.sin(f.a*.9+f.ph)*f.r+Math.cos(t*.27+f.ph)*2.4;
+    pos[i*3]=x;
+    pos[i*3+1]=heightAt(x,z)+f.y+Math.sin(t*.8+f.ph)*.35;
+    pos[i*3+2]=z;
+    const b=Math.max(0,Math.sin(t*f.bl+f.ph));
+    const k=b*b*b*fade;                     // sharp blink, long dark
+    col[i*3]=.62*k;col[i*3+1]=k;col[i*3+2]=.2*k;
+  }
+  fireflyPts.geometry.attributes.position.needsUpdate=true;
+  fireflyPts.geometry.attributes.color.needsUpdate=true;
 }
 const tracers=[];
 for(let i=0;i<24;i++){
@@ -5912,9 +5970,30 @@ function buildFort(){
     housing.position.copy(pole.position).y+=2.7;setpieces.add(housing);
     const beamG=new THREE.CylinderGeometry(.35,5.5,120,12,1,true);
     beamG.translate(0,-60,0);beamG.rotateX(-Math.PI/2);
-    BAST.beam=new THREE.Mesh(beamG,new THREE.MeshBasicMaterial({color:0xfff2d8,
-      transparent:true,opacity:.03,blending:THREE.AdditiveBlending,
-      depthWrite:false,side:THREE.DoubleSide}));
+    BAST.beam=new THREE.Mesh(beamG,new THREE.ShaderMaterial({
+      transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,
+      uniforms:{time:{value:0},glow:{value:.03}},
+      vertexShader:`varying vec2 vUv;varying vec3 vN,vV;
+        void main(){vUv=uv;vN=normalize(normalMatrix*normal);
+          vec4 mv=modelViewMatrix*vec4(position,1.);vV=normalize(-mv.xyz);
+          gl_Position=projectionMatrix*mv;}`,
+      fragmentShader:`varying vec2 vUv;varying vec3 vN,vV;uniform float time;uniform float glow;
+        float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),
+                     mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+        void main(){
+          // soft cylinder silhouette: full through the middle, gone at the rim
+          float edge=pow(abs(dot(normalize(vN),normalize(vV))),1.5);
+          float along=vUv.y;                 // 1 at the lamp, 0 at the far end
+          // dust riding the beam, two layers drifting toward the dark
+          float d1=vnoise(vec2(vUv.x*7.,along*30.+time*.6));
+          float d2=vnoise(vec2(vUv.x*15.+7.,along*58.-time*.95));
+          float dust=max(d1*.6+d2*.4-.38,0.)*2.4;
+          float a=(glow*(.55+.45*along)+glow*1.8*dust)*edge;
+          a*=.93+.07*sin(time*46.);          // the arc lamp breathes
+          gl_FragColor=vec4(vec3(1.,.95,.84),a);
+        }`}));
     BAST.beam.position.copy(housing.position);
     scene.add(BAST.beam);
     const sl=new THREE.SpotLight(0xfff2d8,900,150,.11,.45,1.4);
@@ -6190,7 +6269,8 @@ function bastionUpdate(dt){
     BAST.search.intensity=850+Math.sin((BAST.searchA||0)*7)*120;
     if(BAST.beam){
       BAST.beam.lookAt(BAST.search.target.position);
-      BAST.beam.material.opacity=.022+CAMP.nf*.025;
+      BAST.beam.material.uniforms.glow.value=.022+CAMP.nf*.025;
+      BAST.beam.material.uniforms.time.value=elapsed;
     }
   }
   if(BAST.heli.visible&&BAST.heli.userData.nav)
@@ -6799,6 +6879,7 @@ function frame(now){
   updateShells(dt);
   updateDust(dt);
   updateCrows(dt,elapsed);
+  updateFireflies(dt,elapsed,nf);
   bakeEnv(nf);
   updateGodrays(nf,flashT);
   cityWins.visible=cityWins.count>0&&nf>.42;
