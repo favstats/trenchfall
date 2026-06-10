@@ -6316,6 +6316,16 @@ function wanderUpdate(dt){
     G.score+=150;
     announce('DAWN','you watched the night through. the country counts it.');
     SFX.chime();
+    if(WANDER.survivor&&allies.includes(WANDER.survivor)){
+      WANDER.survivor.dmgMul=(WANDER.survivor.dmgMul||1)+.05;
+      say(WANDER.survivor.name,pick([
+        'Another dawn. That\'s two of us who saw it.',
+        'I used to count nights alone. I like this arithmetic better.',
+        'You watch east, I\'ll watch west. That\'s the whole constitution of our country.'])
+        ,4200);
+      WANDER.story.push('Watched a dawn with '+WANDER.survivor.name+'.');
+    }
+    if(WANDER.story.length>40)WANDER.story.splice(1,WANDER.story.length-40);
   }
   if(WANDER.den&&!WANDER.den.woken&&Math.hypot(player.x-WANDER.den.x,player.z-WANDER.den.z)<26){
     WANDER.den.woken=true;
