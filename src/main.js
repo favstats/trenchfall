@@ -6228,6 +6228,7 @@ function wanderPopulate(){
     mesh.position.set(x,heightAt(x,z),z);
     scene.add(mesh);
     addFirePatch(x+1.4,z,1,9999);
+    COLLIDERS.push({x:x+1.4,z,r:.8});
     WANDER.sites.push({kind:'hermit',x,z,mesh,used:false});
   }
   // THE STRANDED: someone alive, for now, with the dead closing
@@ -6242,7 +6243,18 @@ function wanderPopulate(){
       if(zb){zb.x=x+rand(-14,14);zb.z=z+rand(-14,14);zb.rise=rand(2,5);}}
   }
 }
+let fadeEl=null;
+function fadeBlink(){
+  if(!fadeEl){fadeEl=document.createElement('div');
+    fadeEl.style.cssText='position:fixed;inset:0;background:#070604;opacity:0;pointer-events:none;z-index:30;transition:opacity .5s';
+    document.body.appendChild(fadeEl);}
+  fadeEl.style.opacity=1;
+  document.body.classList.add('cine');
+  setTimeout(()=>{fadeEl.style.opacity=0;},700);
+  setTimeout(()=>document.body.classList.remove('cine'),2400);
+}
 function travelRegion(){
+  fadeBlink();
   WANDER.region++;
   const heading=Math.abs(player.x)>Math.abs(player.z)?(player.x>0?'east':'west'):(player.z>0?'south':'north');
   setSeed((Math.random()*2**31)|0);
