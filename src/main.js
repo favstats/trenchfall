@@ -45,7 +45,7 @@ function srnd(){let t=SEED+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(
 const srand=(a=1,b)=>b===undefined?srnd()*a:a+srnd()*(b-a);
 const spick=arr=>arr[Math.floor(srnd()*arr.length)];
 let HSALT=0;   // world salt: re-rolls the terrain noise field per leg
-const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0}; // declared early: worldgen consults it at boot
+const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0,region:1,story:[],sites:[],hermit:null,survivor:null}; // declared early: worldgen consults it at boot
 
 /* ---------------- renderer / scene ---------------- */
 const renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:true});
@@ -2805,7 +2805,8 @@ function updateAllies(dt,t){
     if(a.wanderT<=0){
       a.wanderT=rand(2.5,6);
       let ax=0,az=0,rr=[11,16];
-      if(BAST.on){ // duty first, then thirst, then the post. travel by the road, like people.
+      if(WANDER.on){ax=player.x;az=player.z;rr=[2,5];}
+      else if(BAST.on){ // duty first, then thirst, then the post. travel by the road, like people.
         const mortar=BAST.guns.find(g2=>g2.type==='mortar');
         const viaRoad=(tx2,tz2)=>{ // cross between wall and camp through the gate lane
           const westNow=a.x<-9,westDest=tx2<-9;
@@ -4414,9 +4415,11 @@ function damagePlayer(d){
 function gameOver(){
   if(WANDER.on){
     WANDER.on=false;
-    gameOver._bw=Math.floor(WANDER.t/60);
+    gameOver._bw=WANDER.region;
     $('goTitle').textContent='THE COUNTRY KEEPS YOU';
-    $('goTag').textContent=Math.floor(WANDER.t/60)+' minutes walked · '+G.kills+' put down';
+    $('goTag').textContent=WANDER.region+' regions · '+Math.floor(WANDER.t/60)+' minutes · '+G.kills+' put down';
+    WANDER.story.push('Fell in region '+WANDER.region+', '+Math.floor(WANDER.t/60)+' minutes out. The crows know the rest.');
+    $('goBest').textContent='YOUR STORY: '+WANDER.story.join(' ');
   }else if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
     if(BAST.wave>bb)localStorage.setItem('tlr_bastion_best',BAST.wave);
@@ -4731,6 +4734,39 @@ function interact(){
     return;
   }
   if(WANDER.on){
+    for(const s of WANDER.sites){
+      if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
+        if(s.kind==='hermit'){
+          const met=+(localStorage.getItem('tlr_hermit')||0)+1;
+          localStorage.setItem('tlr_hermit',met);
+          s.used=true;
+          WANDER.story.push('Found the hermit\'s fire. Meeting '+met+'.');
+          wanderTalk('THE HERMIT','he does not look up from the kettle',
+            met===1?'Sit. The dead don\'t come to this fire, and I don\'t ask why anymore. Take what you can carry and leave the silence as you found it.':
+            met===2?'You again. Different country, same fire. Either you\'re following me or the road is folding. Sit. The kettle remembers you.':
+            met===3?'Three fires, three countries, one face. That makes you family by walker\'s law. Take this. I carried it long enough.':
+            'There you are. The kettle\'s on. The world ends slower with company.',
+            [['Trade 30 scrap for supplies','+40 rounds · +1 medkit',()=>{
+                if(G.scrap>=30){G.scrap-=30;player.reserve=Math.min(player.carryCap,player.reserve+40);G.items.medkit++;SFX.buy();}
+                else SFX.deny();}],
+             ['Sit a while','rest by a fire the dead avoid',()=>{
+                player.hp=Math.min(player.maxhp,player.hp+30);G.score+=50;SFX.chime();}],
+             met===3?['Take the walker\'s charm','+10% speed, forever this run',()=>{
+                G.speedMul*=1.1;WANDER.story.push('The hermit gave up his charm. Family, by walker\'s law.');SFX.chime();}]
+              :['Leave quietly','the silence as you found it',null]]);
+          return;
+        }
+        if(s.kind==='stranded'){
+          s.used=true;scene.remove(s.mesh);
+          WANDER.story.push('Pulled a stranger out of the teeth in region '+WANDER.region+'.');
+          const a=spawnAlly(player.x+2,player.z+2);
+          if(a){a.name=pick(ALLY_NAMES);WANDER.survivor=a;a.dmgMul=1.2;
+            say(a.name,'You came. Nobody comes. I\'m with you now, wherever it goes.',4200);}
+          G.score+=200;SFX.chime();
+          return;
+        }
+      }
+    }
     for(const L of WANDER.loot){
       if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){
         L.taken=true;scene.remove(L.mesh);
@@ -5455,6 +5491,8 @@ function updateHUD(dt){
         put(Math.atan2(L.x-player.x,L.z-player.z),'▾','cpsPoi',L.rich?'#e8742c':'#9dff70');
       if(WANDER.den&&!WANDER.den.woken)
         put(Math.atan2(WANDER.den.x-player.x,WANDER.den.z-player.z),'☠','cpsPoi','#a3271e');
+      for(const s2 of WANDER.sites)if(!s2.used)
+        put(Math.atan2(s2.x-player.x,s2.z-player.z),s2.kind==='hermit'?'⌂':'!','cpsPoi',s2.kind==='hermit'?'#e8c050':'#7fa0c8');
       compassEl.innerHTML=html;
     }
   }
@@ -6145,6 +6183,8 @@ function startWander(){
     scene.add(c);WANDER._meshes.push(c);
     WANDER.loot.push({x,z,mesh:c,taken:false});
   }
+  WANDER.region=1;WANDER.story=['Set out alone into '+BIOME.name.toLowerCase()+'.'];
+  wanderPopulate();
   { // the den: somewhere out there, the dead sleep on a hoard
     const a=rand(TAU),r=rand(half*.5,half*.8);
     WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
@@ -6166,6 +6206,93 @@ function startWander(){
   initSlots();refreshVM();
   announce('WANDER · '+BIOME.name.toUpperCase(),WANDER.road?'an old road still crosses this country. walk it, or don\'t.':'no roads out here. walk. scavenge. the dark gets bolder.');
   tryLock();
+}
+function wanderPopulate(){
+  // sites: the country is inhabited, barely
+  for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);if(s.fire)s.fire.live=false;}
+  WANDER.sites=[];
+  // THE HERMIT: a fire, a kettle, a man who remembers
+  if(Math.random()<.6){
+    const a=rand(TAU),r=rand(half*.35,half*.7);
+    const x=clamp(Math.cos(a)*r,-half+15,half-15),z=clamp(Math.sin(a)*r,-half+15,half-15);
+    const mesh=buildAllyMesh(null,true);
+    mesh.position.set(x,heightAt(x,z),z);
+    scene.add(mesh);
+    addFirePatch(x+1.4,z,1,9999);
+    WANDER.sites.push({kind:'hermit',x,z,mesh,used:false});
+  }
+  // THE STRANDED: someone alive, for now, with the dead closing
+  if(Math.random()<.55&&!WANDER.survivor){
+    const a=rand(TAU),r=rand(half*.4,half*.75);
+    const x=clamp(Math.cos(a)*r,-half+15,half-15),z=clamp(Math.sin(a)*r,-half+15,half-15);
+    const mesh=buildAllyMesh(null,true);
+    mesh.position.set(x,heightAt(x,z),z);
+    scene.add(mesh);
+    WANDER.sites.push({kind:'stranded',x,z,mesh,used:false});
+    for(let i=0;i<5;i++){const zb=spawnZombie();
+      if(zb){zb.x=x+rand(-14,14);zb.z=z+rand(-14,14);zb.rise=rand(2,5);}}
+  }
+}
+function travelRegion(){
+  WANDER.region++;
+  const heading=Math.abs(player.x)>Math.abs(player.z)?(player.x>0?'east':'west'):(player.z>0?'south':'north');
+  setSeed((Math.random()*2**31)|0);
+  setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
+  WANDER.road=Math.random()<.55;
+  for(const o of WANDER._meshes||[])scene.remove(o);
+  WANDER._meshes=[];WANDER.loot=[];
+  for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);}
+  WANDER.sites=[];
+  zombies.length=0;
+  for(const f of firePool){f.live=false;f.material.opacity=0;}
+  buildWorld((Math.random()*2**31)|0);
+  // step through the treeline into the next country
+  player.x=-player.x*.88;player.z=-player.z*.88;
+  for(const al of allies){al.x=player.x+rand(-4,4);al.z=player.z+rand(-4,4);al.tx=al.x;al.tz=al.z;}
+  for(let i=0;i<11;i++){
+    const x=srand(-half+15,half-15),z=srand(-half+15,half-15);
+    if(Math.hypot(x-player.x,z-player.z)<25){i--;continue;}
+    const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
+      new THREE.MeshStandardMaterial({color:0x5d6243,map:woodTex,roughness:.85}));
+    c.position.set(x,heightAt(x,z)+.4,z);c.castShadow=true;
+    scene.add(c);WANDER._meshes.push(c);
+    WANDER.loot.push({x,z,mesh:c,taken:false});
+  }
+  { const a=rand(TAU),r=rand(half*.5,half*.8);
+    WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
+    for(let i=0;i<3;i++){
+      const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
+        new THREE.MeshStandardMaterial({color:0x4a3e33,map:woodTex,roughness:.85}));
+      c.position.set(WANDER.den.x+rand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+rand(-2,2));
+      c.castShadow=true;scene.add(c);WANDER._meshes.push(c);
+      WANDER.loot.push({x:c.position.x,z:c.position.z,mesh:c,taken:false,rich:true});
+    }
+    for(let i=0;i<7;i++){const z=spawnZombie(i===0?'brute':null);
+      if(z){z.x=WANDER.den.x+rand(-9,9);z.z=WANDER.den.z+rand(-9,9);z.rise=999;z.sleeping=true;}}
+  }
+  wanderPopulate();
+  WANDER.story.push('Walked '+heading+' into '+BIOME.name.toLowerCase()+'. Region '+WANDER.region+'.');
+  G.score+=100;
+  announce('REGION '+WANDER.region+' · '+BIOME.name.toUpperCase(),'the country goes on. so do you.');
+}
+function wanderTalk(title,who,text,opts){
+  CAMP._back=CAMP.mode;CAMP.mode='talk';
+  document.exitPointerLock&&document.exitPointerLock();
+  document.body.classList.add('cine');vm.visible=false;
+  const dlg=$('dlg');
+  dlg.querySelector('.n').textContent=title;
+  dlg.querySelector('.r').textContent=who;
+  dlg.querySelector('.q').textContent='"'+text+'"';
+  const wrap=$('dlgC');wrap.innerHTML='';
+  for(const[l,sub,fn]of opts){
+    const d=document.createElement('div');d.className='choice';
+    d.innerHTML=l+(sub?'<span class="sub">'+sub+'</span>':'');
+    d.addEventListener('click',()=>{
+      dlg.classList.remove('on');document.body.classList.remove('cine');
+      vm.visible=true;CAMP.mode='menu';if(fn)fn();tryLock();});
+    wrap.appendChild(d);
+  }
+  setTimeout(()=>dlg.classList.add('on'),350);
 }
 function wanderUpdate(dt){
   WANDER.t+=dt;
@@ -6201,6 +6328,17 @@ function wanderUpdate(dt){
   }
   if(G.kills>=WANDER.kills0+25){WANDER.kills0=G.kills;
     say('THE COUNTRY','Twenty-five more under the grass. It has noticed.',3200);}
+  if(Math.abs(player.x)>half-5||Math.abs(player.z)>half-5)travelRegion();
+  // the stranded die if you dawdle
+  for(const s of WANDER.sites){
+    if(s.kind==='stranded'&&!s.used){
+      const near=zombies.filter(z=>z.alive&&z.rise<=0&&Math.hypot(z.x-s.x,z.z-s.z)<4).length;
+      if(near>0){s.hp=(s.hp??14)-near*dt*2;
+        if(s.hp<=0){s.used=true;scene.remove(s.mesh);
+          WANDER.story.push('Heard someone calling in region '+WANDER.region+'. Arrived too late.');
+          say('THE COUNTRY','The calling stops. The country files it away.',3400);}}
+    }
+  }
 }
 window.startWander=startWander;
 /* ---------------- main loop ---------------- */
