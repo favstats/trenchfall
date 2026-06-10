@@ -573,8 +573,8 @@ function genTerrain(){
     let h=(smoothNoise(ix*.06,iz*.06)-.5)*3.2*BIOME.rugged+(smoothNoise(ix*.18,iz*.18)-.5)*.9;
     const dDep=Math.hypot(x,z);
     h*=clamp((dDep-10)/26,0,1);
-    const rd=Math.abs(z-roadZ(x));
-    if(rd<8.5)h*=clamp((rd-3.4)/4.6,0,1);
+    if(!WANDER.on){const rd=Math.abs(z-roadZ(x));
+    if(rd<8.5)h*=clamp((rd-3.4)/4.6,0,1);}
     const dCamp=Math.hypot(x,z-9.5);
     if(dCamp<17)h*=clamp((dCamp-13)/4,0,1);
     if(BIOME.shore)h-=Math.max(0,(z-50)/18)*3.5;   // the land bows to the sea
@@ -588,7 +588,7 @@ function heightAt(x,z){
   const a=H[iz*VN+ix],b=H[iz*VN+ix+1],c=H[(iz+1)*VN+ix],d=H[(iz+1)*VN+ix+1];
   return a*(1-fx)*(1-fz)+b*fx*(1-fz)+c*(1-fx)*fz+d*fx*fz;
 }
-function isRoad(x,z){return Math.abs(z-roadZ(x))<3.6;}
+function isRoad(x,z){if(WANDER.on)return false;return Math.abs(z-roadZ(x))<3.6;}
 const tGeo=new THREE.BufferGeometry();
 {
   const pos=new Float32Array(VN*VN*3),col=new Float32Array(VN*VN*3),uv=new Float32Array(VN*VN*2),idx=[];
@@ -803,6 +803,7 @@ const roadPosts=new THREE.InstancedMesh(
 roadPosts.castShadow=true;scene.add(roadPosts);
 function scatterPosts(){
   const M=new THREE.Matrix4();let i=0;
+  if(WANDER.on){roadPosts.count=0;roadPosts.instanceMatrix.needsUpdate=true;return;}
   for(let x=-half+6;x<half-6&&i<92;x+=8){
     if(srnd()<.3)continue;                 // the war ate some of the fence
     const rz=roadZ(x);
@@ -2031,6 +2032,7 @@ function zombieTarget(zb){
   if(CAMP.on){const l=leadTruck();
     if(l)return{x:l.x,z:roadZ(l.x),kind:'truck',range:2.8,ref:l};
     return{x:player.x,z:player.z,kind:'player',range:1.5};}
+  if(WANDER.on)return{x:player.x,z:player.z,kind:'player',range:1.5};
   if(BAST.on&&zb.gate&&zb.x<-23)
     return{x:-21,z:roadZ(-24),kind:'waypoint',range:.8};   // make for the gate
   return{x:0,z:9.5,kind:'depot',range:8.2};
@@ -3083,7 +3085,7 @@ function mountGun(t){
   t.mesh.add(g);
   t.gun={fireT:0,mesh:g};
 }
-function aliveTrucks(){return BAST.on?[]:convoy.filter(t=>t.alive);}
+function aliveTrucks(){return (BAST.on||WANDER.on)?[]:convoy.filter(t=>t.alive);}
 function leadTruck(){const a=aliveTrucks();let lead=a[0];for(const t of a)if(t.x>lead.x)lead=t;return lead;}
 /* legacy alias so older systems keep working: 'truck' = the lead truck */
 const truck={get active(){return CAMP.on&&aliveTrucks().length>0&&CAMP.mode==='drive';},
@@ -4374,7 +4376,12 @@ function damagePlayer(d){
   }
 }
 function gameOver(){
-  if(BAST.on){
+  if(WANDER.on){
+    WANDER.on=false;
+    gameOver._bw=Math.floor(WANDER.t/60);
+    $('goTitle').textContent='THE COUNTRY KEEPS YOU';
+    $('goTag').textContent=Math.floor(WANDER.t/60)+' minutes walked · '+G.kills+' put down';
+  }else if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
     if(BAST.wave>bb)localStorage.setItem('tlr_bastion_best',BAST.wave);
     gameOver._bw=BAST.wave;
@@ -4456,6 +4463,7 @@ function startGame(){
 $('startBtn').addEventListener('click',()=>startCampaign());
 $('againBtn').addEventListener('click',()=>{ $('gameover').classList.remove('show');startCampaign(); });
 $('bastBtn').addEventListener('click',startBastion);
+$('wandBtn').addEventListener('click',startWander);
 $('contBtn').addEventListener('click',continueCampaign);
 if(localStorage.getItem('tlr_save'))$('contBtn').style.display='inline-block';
 $('mHow').addEventListener('click',()=>{const b=$('howBox');b.style.display=b.style.display==='none'?'block':'none';});
@@ -4679,6 +4687,20 @@ function interact(){
     else if(want<=0)toast('CARRYING FULL LOAD');
     else toast('DEPOT DRY, WAIT FOR CONVOY');
     return;
+  }
+  if(WANDER.on){
+    for(const L of WANDER.loot){
+      if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){
+        L.taken=true;scene.remove(L.mesh);
+        const roll=Math.random();
+        if(roll<.35){player.reserve=Math.min(player.carryCap,player.reserve+50);toast('CACHE: +50 ROUNDS');}
+        else if(roll<.6){G.items.medkit++;toast('CACHE: A MEDKIT, STILL SEALED');}
+        else if(roll<.8){G.scrap+=45;toast('CACHE: +45 SCRAP');}
+        else{G.items.nade++;G.items.molotov++;toast('CACHE: ORDNANCE, LOVINGLY WRAPPED');}
+        SFX.chime();G.score+=40;
+        return;
+      }
+    }
   }
   if(BAST.on){
     for(const g of BAST.guns){
@@ -5260,6 +5282,7 @@ function drawMap(){
   if(CAMP.cache)dot(CAMP.cache.x,CAMP.cache.z,'#9dff70',3);
   for(const zb of zombies)if(zb.alive)dot(zb.x,zb.z,zb.brute?'#ff5030':'#a3271e',zb.brute?3.4:2);
   if(roadBlockedAt!==null)dot(roadBlockedAt,roadZ(roadBlockedAt),'#e8742c',3.6);
+  if(WANDER.on)for(const L of WANDER.loot)if(!L.taken)dot(L.x,L.z,'#9dff70',2.6);
   if(BAST.on){
     mapC.strokeStyle='#c9bd92';mapC.lineWidth=2;     // the wall
     mapC.beginPath();mapC.moveTo(ox-24*s,oy-54*s);mapC.lineTo(ox-24*s,oy+54*s);mapC.stroke();
@@ -5388,6 +5411,9 @@ function updateHUD(dt){
       if(!pr)for(const d of BAST.drops)if(d.landed&&Math.hypot(player.x-d.x,player.z-d.z)<2.6){pr='<b>E</b> RECOVER THE PACKAGE';break;}
       if(!pr&&Math.hypot(player.x-6,player.z-15)<2.8)pr='<b>E</b> DRAW FROM THE CACHE ('+BAST.cache+')';
       if(!pr&&Math.hypot(player.x,player.z-9.5)<5)pr='<b>E</b> REPAIR THE WALL (30 SCRAP · +100)';
+    }
+    if(!pr&&WANDER.on){
+      for(const L of WANDER.loot)if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){pr='<b>E</b> CRACK THE CACHE';break;}
     }
     if(!pr&&!BAST.on)for(const t of aliveTrucks())
       if(Math.hypot(player.x-t.x,player.z-roadZ(t.x))<4.4){
@@ -5996,6 +6022,66 @@ function strikeBolt(){
   boltGeo.attributes.position.needsUpdate=true;
   boltT=.22;
 }
+/* ============================================================
+   WANDER, the open country: no road, no orders, no one coming
+   ============================================================ */
+const WANDER={on:false,t:0,loot:[],spawnT:6,kills0:0};
+function startWander(){
+  audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
+  CAMP.on=false;BAST.on=false;WANDER.on=true;
+  CAMP.comps=[];CAMP.mode='menu';
+  setSeed((Math.random()*2**31)|0);
+  setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
+  buildWorld((Math.random()*2**31)|0);
+  Object.assign(G,{state:'play',wave:1,kills:0,score:0,scrap:40,dirt:0,
+    items:{nade:1,molotov:1,mine:0,medkit:1,flare:1},
+    dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
+    turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0,
+    depotHp:1000,depotMax:1000,depotAmmo:60,spawnLeft:0,bruteLeft:0,intermission:9});
+  Object.assign(player,{x:0,z:roadZ(0)+2,y:0,vy:0,yaw:Math.PI/2,pitch:-.02,
+    hp:100,maxhp:100,alive:true,reserve:70,carryCap:180,
+    wid:0,owned:[true,false,false,false,false,false],
+    mags:WEAPONS.map(w=>w.magSize),tool:null,buildType:0,healT:0,
+    fireCd:0,reloadT:0,respawnT:0,ads:false,fireHeld:false,ride:null,man:null});
+  zombies.length=0;
+  for(const t of convoy)t.mesh.visible=false;
+  for(const a of allies)scene.remove(a.mesh);allies.length=0;
+  WANDER.t=0;WANDER.spawnT=8;WANDER.loot=[];WANDER.kills0=0;
+  for(const o of WANDER._meshes||[])scene.remove(o);
+  WANDER._meshes=[];
+  for(let i=0;i<11;i++){ // the country keeps its caches far apart
+    const x=srand(-half+15,half-15),z=srand(-half+15,half-15);
+    if(Math.hypot(x,z)<25){i--;continue;}
+    const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
+      new THREE.MeshStandardMaterial({color:0x5d6243,map:woodTex,roughness:.85}));
+    c.position.set(x,heightAt(x,z)+.4,z);c.castShadow=true;
+    scene.add(c);WANDER._meshes.push(c);
+    WANDER.loot.push({x,z,mesh:c,taken:false});
+  }
+  $('start').classList.remove('show');$('gameover').classList.remove('show');
+  $('hud').classList.add('on');
+  initSlots();refreshVM();
+  announce('WANDER · '+BIOME.name.toUpperCase(),'walk. scavenge. the dark gets bolder with every hour.');
+  tryLock();
+}
+function wanderUpdate(dt){
+  WANDER.t+=dt;
+  G.wave=Math.min(14,1+Math.floor(WANDER.t/75));   // the land learns you are here
+  WANDER.spawnT-=dt;
+  if(WANDER.spawnT<=0){
+    WANDER.spawnT=clamp(9-G.wave*.55,2.6,9);
+    const n=Math.random()<.25?2+(Math.random()*G.wave/3|0):1;
+    for(let i=0;i<n;i++){
+      const z=spawnZombie();
+      if(z){const a=rand(TAU),r=rand(55,90);
+        z.x=clamp(player.x+Math.cos(a)*r,-half+6,half-6);
+        z.z=clamp(player.z+Math.sin(a)*r,-half+6,half-6);}
+    }
+  }
+  if(G.kills>=WANDER.kills0+25){WANDER.kills0=G.kills;
+    say('THE COUNTRY','Twenty-five more under the grass. It has noticed.',3200);}
+}
+window.startWander=startWander;
 /* ---------------- main loop ---------------- */
 let last=performance.now(),elapsed=0,stormT=14,flashT=0;
 let frameAvg=16,qTimer=4,lowRes=false;
@@ -6032,7 +6118,7 @@ function frame(now){
   if(paused){composer.render();return;}
   if(inOverlay){composer.render();return;}
 
-  const nf=CAMP.on?clamp(CAMP.nf,0,1):clamp(G.wave/7,0,1);
+  const nf=WANDER.on?(0.5-0.5*Math.cos(WANDER.t/150*TAU)):CAMP.on?clamp(CAMP.nf,0,1):clamp(G.wave/7,0,1);
   updateWeather(dt);
   skyMat.uniforms.nightF.value=nf;
   skyMat.uniforms.flash.value=flashT;
@@ -6103,7 +6189,7 @@ function frame(now){
   for(const tr of tracers){if(tr.t>0){tr.t-=dt;tr.l.material.opacity=Math.max(0,tr.t/.08*.9);}}
   for(const d of decals)if(d.material.opacity>0)d.material.opacity-=dt*.012;
 
-  if(BAST.on)bastionUpdate(dt);else campaignDirector(dt);
+  if(WANDER.on)wanderUpdate(dt);else if(BAST.on)bastionUpdate(dt);else campaignDirector(dt);
   if(toastQueue.length&&toastT<=0)toast(toastQueue.shift());
 
   updateHUD(dt);
