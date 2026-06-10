@@ -5212,7 +5212,7 @@ function interact(){
     }
     if(Math.hypot(player.x,player.z-9.5)<5&&Math.hypot(player.x-6,player.z-15)>=2.8){
       if(G.scrap>=30){G.scrap-=30;G.depotHp=Math.min(G.depotMax,G.depotHp+100);
-        SFX.build();toast('TIMBER AND NAILS: WALL +100 ('+Math.round(G.depotHp)+')');}
+        SFX.build();toast('TIMBER AND NAILS: WALL +100 ('+Math.round(G.depotHp)+')');saveBastion();}
       else{toast('NEED 30 SCRAP FOR REPAIRS');SFX.deny();}
       return;
     }
@@ -6616,7 +6616,7 @@ function bastionRequisition(){
   for(const[l,sub,fn]of opts){
     const d=document.createElement('div');d.className='choice';
     d.innerHTML=l+'<span class="sub">'+sub+'</span>';
-    d.addEventListener('click',()=>{fn();SFX.buy();
+    d.addEventListener('click',()=>{fn();SFX.buy();saveBastion();
       dlg.classList.remove('on');CAMP.mode='menu';tryLock();});
     wrap.appendChild(d);
   }
