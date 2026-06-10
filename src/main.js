@@ -20,6 +20,7 @@ const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
 const $=id=>document.getElementById(id);
 /* ---- the field radio: words arrive like people, not like logs ---- */
 const compassEl=document.createElement('div');compassEl.id='compass';document.body.appendChild(compassEl);
+let horizonBand=null;
 const sayWrap=document.createElement('div');sayWrap.id='sayWrap';document.body.appendChild(sayWrap);
 const sayQueue=[];let sayBusy=0;
 function say(name,text,hold=4200){
@@ -180,6 +181,13 @@ let envRT=null,envBakedNf=-1;
   m.position.y=14;m.renderOrder=-1;
   scene.add(m);
   envScene.add(m.clone()); // the skyline belongs in the reflections too
+  { // the horizon band: dark distant land under the skyline, so the world never shows its edge
+    horizonBand=new THREE.Mesh(
+      new THREE.CylinderGeometry(382,382,110,48,1,true),
+      new THREE.MeshBasicMaterial({color:0x12150d,side:THREE.BackSide,fog:true}));
+    horizonBand.position.y=-44;horizonBand.renderOrder=-2;
+    scene.add(horizonBand);
+  }
 }
 
 function bakeEnv(nf){
@@ -607,6 +615,23 @@ function smoothNoise(x,z){
 const ROAD={a1:10,f1:.026,s1:1,a2:5,f2:.07,s2:1};
 function roadZ(x){return ROAD.a1*Math.sin(x*ROAD.f1)*ROAD.s1+ROAD.a2*Math.sin(x*ROAD.f2)*ROAD.s2;}
 const BIOME={name:'GREYFIELD MARCH',tint:[1,1,1],rugged:1,treeK:1,grassK:1,rockK:1,risk:1,nfBias:0,leafHue:0,grassHue:0,city:0,shore:false};
+let terrainSkirt=null;
+function buildSkirt(){
+  if(terrainSkirt)scene.remove(terrainSkirt);
+  const g=new THREE.RingGeometry(half-2,half+150,40,1);
+  g.rotateX(-Math.PI/2);
+  const pos=g.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i),z=pos.getZ(i);
+    const r=Math.hypot(x,z);
+    const t2=clamp((r-(half-2))/152,0,1);
+    pos.setY(i,r<=half?heightAt(clamp(x,-half+1,half-1),clamp(z,-half+1,half-1)):-t2*t2*34);
+  }
+  g.computeVertexNormals();
+  terrainSkirt=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x202515,roughness:1}));
+  terrainSkirt.receiveShadow=true;
+  scene.add(terrainSkirt);
+}
 function genTerrain(){
   for(let iz=0;iz<VN;iz++)for(let ix=0;ix<VN;ix++){
     const x=-half+ix*cell,z=-half+iz*cell;
@@ -3393,6 +3418,7 @@ function buildWorld(legSeed){
   const pos=tGeo.attributes.position.array;
   for(let v=0;v<VN*VN;v++)pos[v*3+1]=H[v];
   tGeo.attributes.position.needsUpdate=true;
+  buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
   scatterPosts();scatterForest();scatterSetpieces();scatterGrass();scatterCity();
@@ -5553,7 +5579,7 @@ function updateHUD(dt){
     const wi2=bars.querySelector('i');
     wi2.style.width=Math.max(0,G.depotHp/G.depotMax*100)+'%';
     wi2.style.background=G.depotHp<300?'#a3271e':'';
-  }else bars.style.display='';
+  }else bars.style.display=WANDER.on?'none':'';
   if(!BAST.on&&bars.childElementCount!==convoy.length){
     bars.innerHTML='';
     for(const t of convoy){
@@ -5570,7 +5596,10 @@ function updateHUD(dt){
     row.querySelector('.tn').style.color=t.alive?'':'#a3271e';
   });
   const cv=$('convoy');
-  if(BAST.on){cv.textContent='CACHE '+BAST.cache+' RDS · [C] COMMAND NET';cv.className=BAST.cache<60?'alert':'';}
+  if(WANDER.on){cv.textContent=WANDER.quest&&WANDER.quest.taken&&!WANDER.quest.turned
+      ?'WORK FOR '+WANDER.quest.giver+(WANDER.quest.objDone?' · BRING IT BACK':' · FOLLOW THE ♦')
+      :'THE OPEN COUNTRY OWES YOU NOTHING';cv.className='';}
+  else if(BAST.on){cv.textContent='CACHE '+BAST.cache+' RDS · [C] COMMAND NET';cv.className=BAST.cache<60?'alert':'';}
   else if(!aliveTrucks().length){cv.textContent='CONVOY LOST';cv.className='alert';}
   else if(roadBlockedAt!==null){cv.textContent='⚠ ROAD BLOCKED AT '+Math.round(roadBlockedAt)+'m, DIG IT CLEAR';cv.className='alert';}
   else if(CAMP.fixT>0){cv.textContent='⚑ REPAIRS, HOLD '+fmt(CAMP.fixT);cv.className='alert';}
@@ -6761,6 +6790,8 @@ function frame(now){
   depot.userData.flag.rotation.y=Math.sin(elapsed*1.7)*.3;
   // shadow frustum follows the player → crisp shadows where you look
   sun.position.set(player.x-70,80,player.z-40);
+  if(horizonBand){horizonBand.position.x=player.x;horizonBand.position.z=player.z;
+    horizonBand.material.color.copy(scene.fog.color).multiplyScalar(.35);} // distant land wears the air's color, darker
   { // park the disc far along the light direction; night and fog swallow it
     const sd=_dir.set(-70,80,-40).normalize();
     sunDisc.position.copy(camera.position).addScaledVector(sd,520);

@@ -20,7 +20,7 @@ console.log('canvas ok:',gl);
 
 const mode=process.argv[2]||'bast';
 const btn={camp:'#startBtn',bast:'#bastBtn',wand:'#wandBtn'}[mode];
-await page.click(btn);
+await page.$eval(btn,el=>el.click());
 await page.waitForTimeout(2000);
 for(let i=0;i<3;i++){
   const ch=await page.$('.ov.show .choice, #dlg.on .choice');
