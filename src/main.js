@@ -808,10 +808,10 @@ const groundTex=makeTex(d=>{ // albedo: dirt speckle + organic stains
   for(let y=0;y<GS;y++)for(let x=0;x<GS;x++){
     const i=(y*GS+x)*4,h=gHeight[y*GS+x];
     const sp=hash(x*7,y*13);
-    let v=72+h*62+(sp-.5)*46;
+    let v=112+h*70+(sp-.5)*52;
     const stain=fbm2(x*.02+200,y*.02+77,3);
-    v*=.72+stain*.36;
-    d[i]=v*.84;d[i+1]=v;d[i+2]=v*.6;d[i+3]=255;   // mossy cast
+    v*=.78+stain*.3;
+    d[i]=v*.99;d[i+1]=v;d[i+2]=v*.92;d[i+3]=255;  // near-neutral: each biome keeps its own earth colour
   }
 });
 groundTex.colorSpace=THREE.SRGBColorSpace;
@@ -936,7 +936,7 @@ const woodTex=(()=>{ // plank grain for crates / platform
     rg.addColorStop(0,'rgba(50,36,20,.8)');rg.addColorStop(1,'rgba(50,36,20,0)');
     g.fillStyle=rg;g.beginPath();g.arc(x,y,7,0,TAU);g.fill();
   }
-  const t=new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c);woodTex.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -1185,26 +1185,26 @@ let scatterForest=null;
       E.set(srand(-.06,.06),srand(TAU),srand(-.06,.06));Q.setFromEuler(E);
       if(kind<.42*(1-(BIOME.pineBias||0))&&bi<wantB){ // birch + crown (conifers own the cold biomes)
         const sc=srand(.8,1.4);S.set(sc,sc*srand(.85,1.2),sc);
-        P.set(x,h,z);M.compose(P,Q,S);birchT.setMatrixAt(bi++,M);
+        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({m:birchT,i:bi,x,z});birchT.setMatrixAt(bi++,M);
         const top=h+13*S.y;
         const nC=4+(srnd()*2|0);
         for(let cI=0;cI<nC&&lc<leafCards.instanceMatrix.count;cI++){
           E.set(srand(-.5,.5),srand(TAU),srand(-.5,.5));Q.setFromEuler(E);
           S.setScalar(srand(.75,1.4)*sc);
           P.set(x+srand(-2.2,2.2),top-srand(0,5.5),z+srand(-2.2,2.2));
-          M.compose(P,Q,S);leafCards.setMatrixAt(lc,M);
+          M.compose(P,Q,S);DESTRUCT.push({m:leafCards,i:lc,x,z});leafCards.setMatrixAt(lc,M);
           C.setHSL(srand(.22,.30)+BIOME.leafHue,
             srand(.32,.45)*(BIOME.snow?.4:1),
             Math.min(.8,srand(.3,.48)*(BIOME.snow?1.5:1)));leafCards.setColorAt(lc++,C);
         }
       }else if(kind<.8&&fi<wantF){                // fir + needle tiers
         const sc=srand(.9,1.55);S.set(sc,sc*srand(.9,1.15),sc);
-        P.set(x,h,z);M.compose(P,Q,S);firT.setMatrixAt(fi++,M);
+        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({m:firT,i:fi,x,z});firT.setMatrixAt(fi++,M);
         for(let tI=0;tI<4&&pc<pineCards.instanceMatrix.count;tI++){
           E.set(0,srand(TAU),0);Q.setFromEuler(E);
           const ts=(1.5-tI*.28)*sc;S.setScalar(ts);
           P.set(x,h+(3.6+tI*2.7)*sc,z);
-          M.compose(P,Q,S);pineCards.setMatrixAt(pc,M);
+          M.compose(P,Q,S);DESTRUCT.push({m:pineCards,i:pc,x,z});pineCards.setMatrixAt(pc,M);
           C.setHSL(srand(.3,.38)+BIOME.leafHue,
             srand(.28,.42)*(BIOME.snow?.35:1),
             Math.min(.8,srand(.22,.36)*(BIOME.snow?1.7:1)));pineCards.setColorAt(pc++,C); // snow-laden boughs
@@ -1212,7 +1212,7 @@ let scatterForest=null;
       }else if(di<wantD){                         // shell-shattered dead tree
         const sc=srand(.7,1.5);S.setScalar(sc);
         P.set(x,h,z);M.compose(P,Q,S);
-        deadT.setMatrixAt(di,M);deadBranches.setMatrixAt(di++,M);
+        DESTRUCT.push({m:deadT,i:di,x,z});DESTRUCT.push({m:deadBranches,i:di,x,z});deadT.setMatrixAt(di,M);deadBranches.setMatrixAt(di++,M);
       }
     }
     const wantR=Math.round(70*BIOME.rockK);
@@ -1257,9 +1257,11 @@ let grassMesh=null;
     }
   }
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
-  const p1=new THREE.PlaneGeometry(1.5,1.05,1,3);p1.translate(0,.5,0);
+  tex.anisotropy=8;
+  const p1=new THREE.PlaneGeometry(1.5,1.15,1,3);p1.translate(0,.55,0);
   const p2=p1.clone();p2.rotateY(Math.PI/2);
-  const gGeo=mergeGeometries([p1,p2]);
+  const p3=p1.clone();p3.rotateY(Math.PI/4);   // a third card: the clump reads full from every angle
+  const gGeo=mergeGeometries([p1,p2,p3]);
   const gMat=new THREE.MeshStandardMaterial({map:tex,alphaTest:.4,side:THREE.DoubleSide,
     roughness:.92,metalness:0,envMapIntensity:.35});
   gMat.onBeforeCompile=s=>{ // sway ∝ height² so roots stay planted
@@ -1268,9 +1270,9 @@ let grassMesh=null;
       `#include <begin_vertex>
        vec4 gwp=instanceMatrix*vec4(transformed,1.);
        float gsw=sin(uWindT*1.7+gwp.x*.4+gwp.z*.3)+.5*sin(uWindT*3.3+gwp.z*.9);
-       transformed.xz+=gsw*uv.y*uv.y*vec2(.11,.07);`);
+       transformed.xz+=gsw*uv.y*uv.y*vec2(.15,.10);`);
   };
-  const N=9500;
+  const N=11500;
   grassMesh=new THREE.InstancedMesh(gGeo,gMat,N);
   grassMesh.receiveShadow=false;   // shadow sampling on 9.5k alpha cards is pure GPU tax
   scene.add(grassMesh);
@@ -1650,7 +1652,7 @@ const facadeTex=(()=>{
     if(broken>.86){g.fillStyle='rgba(0,0,0,.85)'; // blast scorch above the frame
       g.beginPath();g.ellipse(xx+11,yy-4,15,8,0,0,TAU);g.fill();}
   }
-  const t=new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c);facadeTex.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -1686,7 +1688,7 @@ function scatterCity(){
     S.set(w/9,h,1);
     P.set(x,heightAt(x,z)+5*h-srand(0,.9),z);
     M.compose(P,Q,S);
-    cityWalls.setMatrixAt(wi,M);
+    DESTRUCT.push({m:cityWalls,i:wi,x,z});cityWalls.setMatrixAt(wi,M);
     cityWalls.setColorAt(wi++,C.setHSL(hue,.18+srnd()*.1,.34+srnd()*.14));
     if(wn<44&&srnd()<.2){ // a window where a lamp still burns
       WV.set(srand(-w*.3,w*.3),srand(.5,2.5)*h,.36).applyQuaternion(Q);
@@ -1717,7 +1719,7 @@ function scatterCity(){
           E.set(srand(-.3,.3),srand(TAU),srand(.6,1.1));Q.setFromEuler(E);
           S.set(1,srand(.7,1.2),1);
           P.set(x+srand(-3,3),heightAt(x,cz)+srand(2,4.5)*hh,cz+srand(-3,3));
-          M.compose(P,Q,S);cityBeams.setMatrixAt(bi++,M);
+          M.compose(P,Q,S);DESTRUCT.push({m:cityBeams,i:bi,x,z:cz});cityBeams.setMatrixAt(bi++,M);
         }
         COLLIDERS.push({x,z:cz,r:Math.max(hw,hd)*4.8});
         if(wi>=110)break;
@@ -2026,6 +2028,8 @@ const WEAPONS=[
   ds:'Sets the world on fire. Literally.'},
  {name:'TRENCH KNIFE',    price:0,  magSize:0,  rate:.42, dmg:46,head:70, spread:.018,adsSpread:.012, pellets:1,reload:0,  auto:false,zoom:66,pierce:0,sfx:'slash',  kick:.35,range:3.1, melee:true,
   ds:'No magazine. No mercy. Always on you.'},
+ {name:'M9 BAZOOKA',      price:520,magSize:1,  rate:1.4, dmg:0, head:0,  spread:.006,adsSpread:.002, pellets:0,reload:3.2,auto:false,zoom:50,pierce:0,sfx:'dmr',    kick:2.6,range:220, rocket:true,
+  ds:'The argument that remodels terrain.'},
 ];
 function defaultOwned(){return WEAPONS.map((w,i)=>i===0||!!w.melee);}
 function defaultMags(){return WEAPONS.map(w=>w.melee?0:w.magSize);}
@@ -2226,6 +2230,21 @@ const gunModels=[];
       const fuller=box(.01,.006,.35,dark);fuller.position.set(.035,.005,-.25);g.add(fuller);
       const wrap1=new THREE.Mesh(new THREE.TorusGeometry(.038,.004,6,10),dark);wrap1.position.set(0,-.075,.09);g.add(wrap1);
       const wrap2=wrap1.clone();wrap2.position.z=.2;g.add(wrap2);
+    },
+    g=>{ // M9 BAZOOKA: a stovepipe with opinions
+      const tube=cyl(.062,1.3,dark);tube.rotation.x=Math.PI/2;tube.position.set(.04,.06,-.18);g.add(tube);
+      const bell=new THREE.Mesh(new THREE.CylinderGeometry(.085,.062,.14,10),steel);
+      bell.rotation.x=Math.PI/2;bell.position.set(.04,.06,-.85);g.add(bell);
+      const breech=new THREE.Mesh(new THREE.CylinderGeometry(.07,.085,.12,10),steel);
+      breech.rotation.x=Math.PI/2;breech.position.set(.04,.06,.46);g.add(breech);
+      const grip=box(.05,.16,.06,wood);grip.position.set(.04,-.08,.1);grip.rotation.x=.2;g.add(grip);
+      const grip2=box(.05,.13,.06,wood);grip2.position.set(.04,-.06,-.18);g.add(grip2);
+      const sightF=box(.012,.09,.012,steel);sightF.position.set(.04,.15,-.5);g.add(sightF);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(.045,.008,6,14),brass);
+      ring.position.set(.04,.16,.05);g.add(ring);
+      const strap=box(.02,.005,.9,dark);strap.position.set(-.03,-.02,-.1);strap.rotation.z=.3;g.add(strap);
+      const rocketTip=new THREE.Mesh(new THREE.ConeGeometry(.05,.12,8),brass);
+      rocketTip.rotation.x=-Math.PI/2;rocketTip.position.set(.04,.06,-.93);g.add(rocketTip);
     },
   ];
   for(let i=0;i<WEAPONS.length;i++){
@@ -2831,7 +2850,45 @@ function updateNades(dt){
     if(p.t<=0){m.live=false;m.visible=false;explode(p.x,p.y,p.z);}
   }
 }
+const DESTRUCT=[];
+function wreckEnvironment(x,z,r){
+  const touched=new Set();
+  const M0=new THREE.Matrix4().makeScale(0,0,0);
+  for(let i=DESTRUCT.length-1;i>=0;i--){
+    const d=DESTRUCT[i];
+    if(Math.hypot(d.x-x,d.z-z)>r)continue;
+    d.m.setMatrixAt(d.i,M0);
+    touched.add(d.m);
+    if(Math.random()<.4)burst(d.x,heightAt(d.x,d.z)+1.2,d.z,3,0x6a5a40,2,3);
+    DESTRUCT.splice(i,1);
+  }
+  for(const m2 of touched)m2.instanceMatrix.needsUpdate=true;
+  for(let i=COLLIDERS.length-1;i>=0;i--)
+    if(Math.hypot(COLLIDERS[i].x-x,COLLIDERS[i].z-z)<r)COLLIDERS.splice(i,1);
+}
+const ROCKETS=[];
+function fireRocket(){
+  camera.getWorldDirection(_dir);
+  ROCKETS.push({x:camera.position.x+_dir.x,y:camera.position.y+_dir.y-.2,z:camera.position.z+_dir.z,
+    vx:_dir.x*34,vy:_dir.y*34,vz:_dir.z*34,t:0});
+  SFX.dmr();sNoise(.5,'lowpass',1400,200,.3);
+  vmKick=Math.min(3,vmKick+2.2);camShake=Math.max(camShake,.7);
+}
+function updateRockets(dt){
+  for(let i=ROCKETS.length-1;i>=0;i--){
+    const r=ROCKETS[i];r.t+=dt;
+    r.x+=r.vx*dt;r.y+=r.vy*dt;r.z+=r.vz*dt;
+    if(Math.random()<.85)puffSmoke(_tv.set(r.x,r.y,r.z),false,true);
+    let hit=r.t>6||r.y<=heightAt(r.x,r.z)+.25;
+    if(!hit)for(const zb of zombies)if(zb.alive&&Math.hypot(zb.x-r.x,zb.z-r.z)<1.4&&Math.abs(r.y-heightAt(zb.x,zb.z)-1)<2){hit=true;break;}
+    if(hit){
+      ROCKETS.splice(i,1);
+      explode(r.x,Math.max(r.y,heightAt(r.x,r.z))+.5,r.z,9.5,210,1.7);
+    }
+  }
+}
 function explode(x,y,z,r=8,dmg=150,crater=1.25){
+  wreckEnvironment(x,z,r*.8);
   decal(x,z,2.4);
   modifyTerrain(x,z,crater*3.5,-crater);
   burst(x,y+.6,z,Math.round(r*5.5),0xd08838,r+1,r+2);
@@ -3801,7 +3858,7 @@ const NODE_NOUN=['CAUSEWAY','CROSSING','REACH','MILE','ORCHARD','DITCHES','MARCH
 
 /* ---- world building per leg ---- */
 function buildWorld(legSeed){
-  COLLIDERS.length=0;
+  COLLIDERS.length=0;DESTRUCT.length=0;
   setSeed(legSeed);HSALT=legSeed|0;
   ROAD.a1=srand(6,15);ROAD.f1=srand(.018,.032);ROAD.s1=srnd()<.5?-1:1;
   ROAD.a2=srand(2,7);ROAD.f2=srand(.05,.09);ROAD.s2=srnd()<.5?-1:1;
@@ -4074,7 +4131,7 @@ const BANTER=[
 ];
 /* ---------------- game state / waves ---------------- */
 const G={state:'menu',wave:0,kills:0,score:0,scrap:60,dirt:0,
-  items:{nade:3,molotov:1,mine:1,medkit:1,flare:2},
+  items:{nade:3,molotov:1,mine:1,medkit:1,flare:2,rocket:0},
   dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
   turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,
   shots:0,hits:0,perkDone:false,
@@ -4107,7 +4164,7 @@ function startCampaign(seed){
       mesh:g,lamp:lampL,engine:null,honkT:0,wreckT:0});
   }
   Object.assign(G,{kills:0,score:0,scrap:80,dirt:0,
-    items:{nade:3,molotov:1,mine:1,medkit:1,flare:2},
+    items:{nade:3,molotov:1,mine:1,medkit:1,flare:2,rocket:0},
     dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0});
   Object.assign(player,{hp:100,maxhp:100,alive:true,reserve:120,carryCap:180,
@@ -4961,7 +5018,7 @@ function startGame(){
    tGeo.attributes.position.needsUpdate=true;tGeo.computeVertexNormals();}
   paintAll();mapDirty=true;roadCheck();
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
-    items:{nade:3,molotov:1,mine:1,medkit:1,flare:2},
+    items:{nade:3,molotov:1,mine:1,medkit:1,flare:2,rocket:0},
     dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,
     shots:0,hits:0,perkDone:false,colossusWave:false,
@@ -5069,6 +5126,13 @@ function muzzleFlash(end){
 }
 function fireWeapon(){
   const w=curW();
+  if(w.rocket){
+    if(player.fireCd>0||player.reloadT>0)return;
+    if((G.items.rocket||0)<=0){toast('NO ROCKETS');SFX.deny();player.fireCd=.4;return;}
+    G.items.rocket--;player.fireCd=w.rate;G.shots++;
+    fireRocket();muzzle.intensity=60;flash.visible=true;setTimeout(()=>flash.visible=false,40);
+    return;
+  }
   if(player.reloadT>0)return;
   if(w.melee){fireMelee(w);return;}
   if(player.mags[player.wid]<=0){SFX.dry();startReload();return;}
@@ -5343,7 +5407,9 @@ function interact(){
         if(roll<.35){player.reserve=Math.min(player.carryCap,player.reserve+50*k2);toast('CACHE: +'+(50*k2)+' ROUNDS');}
         else if(roll<.6){G.items.medkit+=k2;toast('CACHE: '+(k2>1?'MEDKITS':'A MEDKIT')+', STILL SEALED');}
         else if(roll<.8){G.scrap+=45*k2;toast('CACHE: +'+(45*k2)+' SCRAP');}
-        else{G.items.nade+=k2;G.items.molotov+=k2;toast('CACHE: ORDNANCE, LOVINGLY WRAPPED');}
+        else if(L.rich&&!player.owned[7]){player.owned[7]=true;G.items.rocket+=2;
+          toast('CACHE: AN M9 BAZOOKA. SOMEBODY LOVED THIS THING.');initSlots();}
+        else{G.items.nade+=k2;G.items.molotov+=k2;if(player.owned[7])G.items.rocket++;toast('CACHE: ORDNANCE, LOVINGLY WRAPPED');}
         SFX.chime();G.score+=40*k2;
         return;
       }
@@ -5831,6 +5897,7 @@ function updatePlayer(dt,t){
   vm.rotation.y=vmYawLag;
   vm.rotation.x=vmKick*.16-vmSwing*1.1+vmYawLag*.15;
   vm.rotation.z=vmSwing*.5-vmYawLag*.5;
+  updateRockets(dt);
   if(player.reloadT>0){
     player.reloadT-=dt;
     vm.rotation.x+=Math.sin(clamp(player.reloadT/(curW().reload*G.reloadMul),0,1)*Math.PI)*.7;
@@ -5882,7 +5949,7 @@ function updatePlayer(dt,t){
 
 /* ---------------- HUD / minimap ---------------- */
 function rankOf(xp){return xp>=45?'VET':xp>=25?'SGT':xp>=12?'CPL':xp>=5?'LCPL':'PVT';}
-const SLOT_TAGS=['RIF','SMG','SHG','DMR','LMG','FLM','KNF'];
+const SLOT_TAGS=['RIF','SMG','SHG','DMR','LMG','FLM','KNF','BZK'];
 function initSlots(){
   const s=$('slots');s.innerHTML='';
   for(let i=0;i<WEAPONS.length;i++){
@@ -6034,7 +6101,7 @@ function updateHUD(dt){
   $('wname').textContent=player.tool==='shovel'?'ENTRENCHING TOOL':
     player.tool==='build'?['TURRET KIT','SANDBAG KIT','BARBED WIRE'][player.buildType]:w.name;
   const magN=player.mags[player.wid],magMax=curW().magSize;
-  $('mag').textContent=player.tool?'-':(w.melee?'READY':player.reloadT>0?'--':magN);
+  $('mag').textContent=curW().rocket?(G.items.rocket||0):player.tool?'-':(w.melee?'READY':player.reloadT>0?'--':magN);
   $('mag').style.color=player.tool||player.reloadT>0||w.melee?'':(magN<=magMax*.25?'#e8742c':'');
   $('reserve').textContent=player.tool==='shovel'?'SPOIL '+G.dirt:
     player.tool==='build'?'SCRAP '+G.scrap:
@@ -6426,7 +6493,7 @@ function startBastion(load){
   setSeed((BAST.runSeed^0x51ed2701)>>>0);   // the fort dresses the same way every time
   buildFort();
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
-    items:{nade:3,molotov:1,mine:2,medkit:1,flare:2},
+    items:{nade:3,molotov:1,mine:2,medkit:1,flare:2,rocket:2},
     dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0,
     depotHp:1000,depotMax:1000,depotAmmo:0,spawnLeft:0,bruteLeft:0,intermission:6});
@@ -6767,7 +6834,7 @@ function bastionRequisition(){
   const wrap=$('dlgC');wrap.innerHTML='';
   const opts=pick([
     [['Six shells for the tubes','BAST.shells',()=>BAST.shells+=6],['A hundred fifty rounds for the cache','cache',()=>BAST.cache+=150]],
-    [['Timber and plate for the fort','+220 wall',()=>G.depotHp=Math.min(G.depotMax,G.depotHp+220)],['Ordnance: mines and bottles','+2 mines · +2 molotovs',()=>{G.items.mine+=2;G.items.molotov+=2;}]],
+    [['Timber and plate for the fort','+220 wall',()=>G.depotHp=Math.min(G.depotMax,G.depotHp+220)],['Ordnance: mines, bottles, rockets','+2 mines · +2 molotovs · +2 rockets',()=>{G.items.mine+=2;G.items.molotov+=2;G.items.rocket=(G.items.rocket||0)+2;}]],
     [['A crate of scrap','+90 scrap',()=>G.scrap+=90],['Medical: kits for the crew','+2 medkits, the wounded stand faster',()=>G.items.medkit+=2]],
   ]);
   for(const[l,sub,fn]of opts){
@@ -6829,7 +6896,7 @@ function startWander(load){
   WANDER.saveRegions=sv?(sv.regions||{}):{};
   Object.assign(G,{state:'play',wave:1,kills:sv?sv.p.kills:0,score:sv?sv.p.score:0,
     scrap:sv?sv.p.scrap:40,dirt:0,
-    items:sv?sv.p.items:{nade:1,molotov:1,mine:0,medkit:1,flare:1},
+    items:sv?sv.p.items:{nade:1,molotov:1,mine:0,medkit:1,flare:1,rocket:0},
     dmgMul:1,reloadMul:1,speedMul:sv?(sv.p.speedMul||1):1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0,
     depotHp:1000,depotMax:1000,depotAmmo:60,spawnLeft:0,bruteLeft:0,intermission:9});
@@ -7163,6 +7230,7 @@ function wanderUpdate(dt){
   }
 }
 window.startWander=startWander;
+window.WANDER=WANDER; // dev: the open country, inspectable
 window.devWorld=name=>{ // dev: preview any biome from the console
   const b=BIOMES.find(b2=>b2.name.toLowerCase().includes(String(name).toLowerCase()));
   if(!b)return BIOMES.map(b2=>b2.name);
