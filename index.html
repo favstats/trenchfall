@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>THE LONG ROAD</title>
+<title>TRENCHFALL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;600;700&family=Special+Elite&display=swap" rel="stylesheet">
 <style>
@@ -461,13 +461,12 @@
 
 <div id="start" class="ov show">
   <div id="bootTag">HOLD THE WALL · WALK THE ROAD WEST</div>
-  <h1 class="stencil" id="bootTitle">THE LONG ROAD</h1>
+  <h1 class="stencil" id="bootTitle">TRENCHFALL</h1>
   <div class="tag2" id="bootSub">every road is different · the dead remember every one</div>
   <div id="menu">
     <div class="mItem" id="contBtn" style="display:none">CONTINUE THE ROAD</div>
     <div class="mItem" id="startBtn">NEW CAMPAIGN<span class="ms">the convoy · permadeath · always different</span></div>
     <div class="mItem" id="bastBtn">THE BASTION<span class="ms" id="bastBest">horde hold · one wall · endless nights</span></div>
-    <div class="mItem" id="mLegacy">LEGACY<span class="ms" id="legacyMs"></span></div>
     <div class="mItem" id="mHow">HOW TO PLAY</div>
     <div class="mItem" onclick="location.href='skirmish.html'" style="font-size:15px;opacity:.75">SKIRMISH<span class="ms">the classic depot defense</span></div>
   </div>
@@ -480,7 +479,6 @@
       <span><b>R</b> / <b>E</b></span><span>reload / speak · ride · interact</span>
     </div>
   </div>
-  <div id="legacyHost" style="display:none"></div>
 
 </div>
 <div id="respawn" class="ov">
@@ -2301,6 +2299,7 @@ let zHats;
 }
 const zombies=[];
 const _M=new THREE.Matrix4(),_Q=new THREE.Quaternion(),_E=new THREE.Euler(),_S=new THREE.Vector3(),_P=new THREE.Vector3();
+_E.order='YXZ';   // yaw first, then the hunch: bodies bend forward, not sideways
 const _C=new THREE.Color();
 const _M2=new THREE.Matrix4(),_M3=new THREE.Matrix4(),_MZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
 function limbTo(mesh,mi,M,ox,oy,oz,ang){
@@ -2425,7 +2424,7 @@ function updateZombies(dt,t){
       zb.deadT+=dt;
       const k=clamp(zb.deadT/.45,0,1);
       _E.set(-1.5*k,zb.face||0,0);_Q.setFromEuler(_E);
-      _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05,zb.z);
+      _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05-Math.min(.45,Math.max(0,zb.deadT-16)*.04),zb.z);
       _S.setScalar(zb.scale);
       _M.compose(_P,_Q,_S);
       writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,-.15,-.2,.12,-.08,true,zb.tint);
@@ -2455,7 +2454,9 @@ function updateZombies(dt,t){
     zb.frenzyT=Math.max(0,zb.frenzyT-dt);
     const tg=zombieTarget(zb);
     const dx=tg.x-zb.x,dz=tg.z-zb.z,d=Math.hypot(dx,dz)||1;
-    zb.face=Math.atan2(dx,dz);
+    {const fw=Math.atan2(dx,dz);
+     let fd=fw-(zb.face??fw);fd=Math.atan2(Math.sin(fd),Math.cos(fd));
+     zb.face=(zb.face??fw)+fd*Math.min(1,dt*5);}
     zb.stagT=Math.max(0,(zb.stagT||0)-dt);
     const spMul=(zb.frenzyT>0?1.5:1)*(wxFrenzy?1.25:1)*(zb.stagT>0?.4:1)*(zb.march&&zb.x<-58?1.85:1);
     const moveWith=(mx,mz,sp)=>{
@@ -3891,43 +3892,6 @@ const BANTER=[
  (c,d)=>d.name.split(' ')[0]+' falls asleep on '+c.name.split(' ')[0]+'\'s shoulder. '+c.name.split(' ')[0]+' does not move for forty minutes.',
  c=>c.name.split(' ')[0]+' ('+c.t1+'): "Quiet leg so far." Everyone in earshot tells them to shut up forever.',
 ];
-/* ---- legacy: what survives between campaigns ---- */
-let LEGACY={pts:0,own:{}};
-try{LEGACY=JSON.parse(localStorage.getItem('tlr_legacy'))||LEGACY;}catch(e){}
-function saveLegacy(){try{localStorage.setItem('tlr_legacy',JSON.stringify(LEGACY));}catch(e){}}
-const LEGACY_SHOP=[
- {id:'vet',  nm:'VETERAN OF THE SOUTH',cost:60, ds:'+25 starting vitality'},
- {id:'crates',nm:'PACKED CRATES',      cost:50, ds:'+5 food · +2 meds at the start'},
- {id:'grease',nm:'AN OLD FRIEND',      cost:80, ds:'begin owning the M3 Grease Gun'},
- {id:'soul', nm:'THE SEVENTH SOUL',    cost:100,ds:'one more companion leaves Greyfield with you'},
- {id:'chest',nm:'WAR CHEST',           cost:40, ds:'+80 starting scrap'},
-];
-function renderLegacy(){
-  let box=$('legacyBox');
-  if(!box){
-    box=document.createElement('div');box.id='legacyBox';
-    box.style.cssText='margin-top:22px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:760px';
-    $('legacyHost').appendChild(box);
-  }
-  box.innerHTML='<div style="width:100%;text-align:center;font-size:13px;letter-spacing:.3em;color:var(--signal);margin-bottom:4px">LEGACY, '+LEGACY.pts+' PTS · EARNED ON EVERY ROAD, KEPT FOREVER</div>';
-  for(const it of LEGACY_SHOP){
-    const owned=LEGACY.own[it.id],poor=LEGACY.pts<it.cost;
-    const d=document.createElement('div');
-    d.style.cssText='border:1px solid rgba(201,189,146,.3);padding:7px 11px;font-size:12.5px;cursor:'+
-      (owned||poor?'default':'pointer')+';opacity:'+(owned?'.45':poor?'.6':'1')+';letter-spacing:.06em';
-    d.innerHTML='<b style="color:var(--khaki)">'+it.nm+'</b> <span style="color:var(--signal)">'+(owned?'OWNED':it.cost)+'</span><br><span style="color:var(--olive)">'+it.ds+'</span>';
-    if(!owned&&!poor)d.addEventListener('click',()=>{LEGACY.pts-=it.cost;LEGACY.own[it.id]=true;saveLegacy();{
-  const bb=+(localStorage.getItem('tlr_bastion_best')||0);
-  if(bb>0)$('bastBest').textContent='horde hold · best: night '+bb;
-  $('legacyMs').textContent=LEGACY.pts+' pts banked';
-}
-renderLegacy();
-$('mLegacy').addEventListener('click',()=>{const b=$('legacyHost');b.style.display=b.style.display==='none'?'block':'none';$('howBox').style.display='none';});
-$('mHow').addEventListener('click',()=>{const b=$('howBox');b.style.display=b.style.display==='none'?'block':'none';$('legacyHost').style.display='none';});SFX.buy&&SFX.buy();});
-    box.appendChild(d);
-  }
-}
-
 /* ---------------- game state / waves ---------------- */
 const G={state:'menu',wave:0,kills:0,score:0,scrap:60,dirt:0,
   items:{nade:3,molotov:1,mine:1,medkit:1,flare:2},
@@ -3969,12 +3933,6 @@ function startCampaign(seed){
     wid:0,owned:[true,false,false,false,false,false],
     mags:WEAPONS.map(w=>w.magSize),tool:null,buildType:0,healT:0,
     fireCd:0,reloadT:0,respawnT:0,ads:false,fireHeld:false});
-  // legacy: what previous roads paid for
-  if(LEGACY.own.vet){player.maxhp=125;player.hp=125;}
-  if(LEGACY.own.crates){CAMP.supplies.food+=5;CAMP.supplies.meds+=2;}
-  if(LEGACY.own.grease)player.owned[1]=true;
-  if(LEGACY.own.soul)CAMP.comps.push(mkComp());
-  if(LEGACY.own.chest)G.scrap+=80;
   beginLeg({name:'GREYFIELD MARCH, THE FIRST MILE',biome:BIOMES[0],
     seed:(CAMP.seed^0x9e3779b9)>>>0,risk:1,reward:null,prologue:true});
   $('start').classList.remove('show');$('gameover').classList.remove('show');
@@ -4631,10 +4589,8 @@ function campaignOver(why){
   showEpilogue('THE ROAD ENDS',lines.join('\n\n'),false);
 }
 function showEpilogue(title,text,won){
-  const earn=CAMP.leg*8+Math.round(G.kills/4)+Math.max(0,CAMP.mercy*4)+(won?40:0);
-  LEGACY.pts+=earn;saveLegacy();renderLegacy();
   $('goTitle').textContent=title;
-  $('goTag').textContent=(won?'verdun holds':'the convoy is lost')+' · +'+earn+' legacy';
+  $('goTag').textContent=won?'verdun holds':'the convoy is lost';
   $('goWave').textContent=CAMP.leg;
   $('goKills').textContent=G.kills;
   $('goScore').textContent=won?compsAlive().length+(CAMP.flags.child===true?1:0):0;
@@ -4757,11 +4713,9 @@ function gameOver(){
   if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
     if(BAST.wave>bb)localStorage.setItem('tlr_bastion_best',BAST.wave);
-    const earn=BAST.wave*6+Math.round(G.kills/5);
-    LEGACY.pts+=earn;saveLegacy();renderLegacy();
     gameOver._bw=BAST.wave;
     $('goTitle').textContent='THE WALL FALLS';
-    $('goTag').textContent='night '+BAST.wave+' · best '+Math.max(BAST.wave,bb)+' · +'+earn+' legacy';
+    $('goTag').textContent='night '+BAST.wave+' · best '+Math.max(BAST.wave,bb);
   }else{gameOver._bw=null;$('goTitle').textContent='THE ROAD ENDS';$('goTag').textContent='the convoy is lost';}
   G.state='over';BAST.on=false;player.man=null;
   if(BAST.rotorG){try{BAST.rotorG.o.stop()}catch(e){};BAST.rotorG=null;}
@@ -4832,7 +4786,7 @@ $('againBtn').addEventListener('click',()=>{ $('gameover').classList.remove('sho
 $('bastBtn').addEventListener('click',startBastion);
 $('contBtn').addEventListener('click',continueCampaign);
 if(localStorage.getItem('tlr_save'))$('contBtn').style.display='inline-block';
-renderLegacy();
+$('mHow').addEventListener('click',()=>{const b=$('howBox');b.style.display=b.style.display==='none'?'block':'none';});
 $('gl').addEventListener('click',()=>{
   if(G.state==='play'&&!locked&&!shopOpen&&!perkOpen&&(BAST.on||CAMP.mode==='drive'))tryLock();
 });

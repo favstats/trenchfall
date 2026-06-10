@@ -1,8 +1,8 @@
-# THE LONG ROAD
+# TRENCHFALL
 
 A single-file browser game. No build, no install, no server code.
 
-**Play:** open `index.html`, or visit the GitHub Pages URL once published.
+**Play:** open `index.html`, or or play the hosted build on GitHub Pages.
 
 ## Modes
 - **New Campaign**, escort the last convoy out of Greyfield across eight hundred
