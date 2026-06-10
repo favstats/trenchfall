@@ -1150,73 +1150,94 @@ stumpGeo.translate(0,.27,0);
 const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   // declared ahead of the first scatterForest() run: every felled thing registers here
 {
   const rockG=new THREE.IcosahedronGeometry(1,1);
-  const rockM=new THREE.MeshStandardMaterial({color:0x55503f});
+  const rockTex=(()=>{ // granite grain: speckle and shadowed pits
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d'),img=g.createImageData(128,128);
+    for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+      const i=(y*128+x)*4;
+      const v=120+fbm2(x*.08,y*.08,4)*80-40+(hash(x*3,y*7)-.5)*44;
+      img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.88;img.data[i+3]=255;
+    }
+    g.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t;
+  })();
+  const rockM=new THREE.MeshStandardMaterial({color:0x8a8268,roughness:.95,
+    map:rockTex,bumpMap:rockTex,bumpScale:.5});
   const rocks=new THREE.InstancedMesh(rockG,rockM,80);
   rocks.castShadow=true;scene.add(rocks);
 
   // bark textures
   const birchBark=(()=>{
-    const c=document.createElement('canvas');c.width=64;c.height=128;
+    const c=document.createElement('canvas');c.width=128;c.height=256;
     const g=c.getContext('2d');
-    g.fillStyle='#cfccc0';g.fillRect(0,0,64,128);
-    for(let i=0;i<300;i++){const v=180+Math.random()*60|0;
-      g.fillStyle=`rgba(${v},${v},${v-10},.4)`;g.fillRect(Math.random()*64,Math.random()*128,2,5);}
-    for(let i=0;i<22;i++){ // the dark birch slashes
+    g.fillStyle='#cfccc0';g.fillRect(0,0,128,256);
+    for(let i=0;i<900;i++){const v=180+Math.random()*60|0;
+      g.fillStyle=`rgba(${v},${v},${v-10},.4)`;g.fillRect(Math.random()*128,Math.random()*256,3,8);}
+    for(let i=0;i<44;i++){ // the dark birch slashes
       g.fillStyle='rgba(30,26,22,'+rand(.5,.9)+')';
-      const y=Math.random()*128,w=rand(5,22);
-      g.fillRect(Math.random()*64-4,y,w,rand(1.5,3.5));
+      const y=Math.random()*256,w=rand(9,40);
+      g.fillRect(Math.random()*128-8,y,w,rand(2.5,6));
     }
-    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    for(let i=0;i<70;i++){ // lenticels: the fine horizontal ticks birch is known by
+      g.fillStyle='rgba(60,54,46,'+rand(.25,.5)+')';
+      g.fillRect(Math.random()*128,Math.random()*256,rand(4,10),1.4);
+    }
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;
     t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   const firBark=(()=>{
-    const c=document.createElement('canvas');c.width=64;c.height=128;
+    const c=document.createElement('canvas');c.width=128;c.height=256;
     const g=c.getContext('2d');
-    g.fillStyle='#3a3128';g.fillRect(0,0,64,128);
-    for(let x=0;x<64;x+=3){g.fillStyle=`rgba(${15+Math.random()*30|0},${12+Math.random()*22|0},10,.55)`;
-      g.fillRect(x+Math.random()*2,0,rand(1,2.4),128);}
-    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    g.fillStyle='#3a3128';g.fillRect(0,0,128,256);
+    for(let x=0;x<128;x+=3){g.fillStyle=`rgba(${15+Math.random()*30|0},${12+Math.random()*22|0},10,.55)`;
+      g.fillRect(x+Math.random()*2,0,rand(1,2.6),256);}
+    for(let i=0;i<260;i++){ // plate cracks across the ridges
+      g.fillStyle='rgba(10,8,6,'+rand(.3,.6)+')';
+      g.fillRect(Math.random()*128,Math.random()*256,rand(2,5),rand(2,7));
+    }
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;
     t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   // foliage sprites
   const leafTex=(()=>{ // broadleaf clumps
-    const c=document.createElement('canvas');c.width=c.height=128;
+    const c=document.createElement('canvas');c.width=c.height=256;
     const g=c.getContext('2d');
-    for(let i=0;i<300;i++){
-      const a=Math.random()*TAU,r=Math.pow(Math.random(),.6)*52;
-      const x=64+Math.cos(a)*r,y=64+Math.sin(a)*r*.8;
+    for(let i=0;i<900;i++){
+      const a=Math.random()*TAU,r=Math.pow(Math.random(),.6)*104;
+      const x=128+Math.cos(a)*r,y=128+Math.sin(a)*r*.8;
       // the sun lives up and to the right: leaves shade darker low-left, brighter high-right
-      const lit=clamp(.62+(x-64)/64*.22-(y-64)/64*.3+Math.random()*.3,.3,1.25);
+      const lit=clamp(.62+(x-128)/128*.22-(y-128)/128*.3+Math.random()*.3,.3,1.25);
       const gr=(48+Math.random()*70)*lit|0;
       g.fillStyle=`rgba(${gr*.55|0},${gr},${gr*.4|0},${rand(.5,.95)})`;
-      g.beginPath();g.ellipse(x,y,rand(2.5,7),rand(1.8,4.5),Math.random()*TAU,0,TAU);g.fill();
+      g.beginPath();g.ellipse(x,y,rand(4,12),rand(3,8),Math.random()*TAU,0,TAU);g.fill();
     }
-    for(let i=0;i<26;i++){ // sky gaps: a real crown is full of holes
-      const a=Math.random()*TAU,r=Math.pow(Math.random(),.5)*50;
+    for(let i=0;i<60;i++){ // sky gaps: a real crown is full of holes
+      const a=Math.random()*TAU,r=Math.pow(Math.random(),.5)*100;
       g.save();g.globalCompositeOperation='destination-out';
-      g.beginPath();g.ellipse(64+Math.cos(a)*r,64+Math.sin(a)*r*.8,rand(2,5),rand(1.5,3.5),Math.random()*TAU,0,TAU);
+      g.beginPath();g.ellipse(128+Math.cos(a)*r,128+Math.sin(a)*r*.8,rand(4,10),rand(3,7),Math.random()*TAU,0,TAU);
       g.fill();g.restore();
     }
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
   })();
   const pineTex=(()=>{ // drooping needle fronds
-    const c=document.createElement('canvas');c.width=c.height=128;
+    const c=document.createElement('canvas');c.width=c.height=256;
     const g=c.getContext('2d');
-    for(let i=0;i<85;i++){
-      const x0=64,y0=6+Math.random()*34;
-      const a=rand(-1,1)*1.35, len=rand(42,64);
+    for(let i=0;i<170;i++){
+      const x0=128,y0=12+Math.random()*68;
+      const a=rand(-1,1)*1.35, len=rand(84,128);
       const x1=x0+Math.sin(a)*len,y1=y0+Math.cos(a*.5)*len*rand(.7,1);
-      const gr=(36+Math.random()*48)*(1.25-y0/40*.5)|0;  // crown-lit: upper fronds catch the sky
+      const gr=(36+Math.random()*48)*(1.25-y0/80*.5)|0;  // crown-lit: upper fronds catch the sky
       g.strokeStyle=`rgba(${gr*.5|0},${gr},${gr*.45|0},${rand(.55,.95)})`;
-      g.lineWidth=rand(1.4,3);
+      g.lineWidth=rand(2,4.5);
       g.beginPath();g.moveTo(x0,y0);
       g.quadraticCurveTo(x0+Math.sin(a)*len*.5,y0+len*.35,x1,y1);g.stroke();
-      for(let n=0;n<14;n++){const k=n/14;
+      for(let n=0;n<22;n++){const k=n/22;
         const nx=x0+(x1-x0)*k,ny=y0+(y1-y0)*k;
-        g.strokeStyle=`rgba(${gr*.5|0},${gr},${gr*.45|0},.7)`;g.lineWidth=.8;
-        g.beginPath();g.moveTo(nx,ny);g.lineTo(nx+rand(-7,7),ny+rand(2,9));g.stroke();}
+        g.strokeStyle=`rgba(${gr*.5|0},${gr},${gr*.45|0},.7)`;g.lineWidth=1.2;
+        g.beginPath();g.moveTo(nx,ny);g.lineTo(nx+rand(-12,12),ny+rand(4,16));g.stroke();}
     }
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
   })();
   const swayLeaf=m=>{m.onBeforeCompile=s=>{
     s.uniforms.uWindT=WindU;
@@ -1233,11 +1254,11 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
     emissive:0x121a0b,emissiveMap:pineTex,emissiveIntensity:.8});
   swayLeaf(leafM);swayLeaf(pineM);
   // geometries: trunk bases at y=0
-  const mkTrunk=(r0,r1,h)=>{const g=new THREE.CylinderGeometry(r0,r1,h,7);g.translate(0,h/2,0);return g;};
+  const mkTrunk=(r0,r1,h)=>{const g=new THREE.CylinderGeometry(r0,r1,h,11);g.translate(0,h/2,0);return g;};
   const birchT=new THREE.InstancedMesh(mkTrunk(.13,.34,14),
-    new THREE.MeshStandardMaterial({map:birchBark,roughness:.8}),520);
+    new THREE.MeshStandardMaterial({map:birchBark,roughness:.8,bumpMap:birchBark,bumpScale:.25}),520);
   const firT=new THREE.InstancedMesh(mkTrunk(.16,.42,13),
-    new THREE.MeshStandardMaterial({map:firBark,roughness:.95}),440);
+    new THREE.MeshStandardMaterial({map:firBark,roughness:.95,bumpMap:firBark,bumpScale:.4}),440);
   const deadT=new THREE.InstancedMesh(mkTrunk(.14,.34,5.5),
     new THREE.MeshStandardMaterial({color:0x2c2620,roughness:1}),140);
   const cardG=(()=>{const p1=new THREE.PlaneGeometry(5.6,4.2);
@@ -2613,16 +2634,29 @@ const gunModels=[];
 }
 const vmShovel=new THREE.Group();
 {
-  const handle=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.8),new THREE.MeshStandardMaterial({color:0x57422c}));
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.8),
+    new THREE.MeshStandardMaterial({color:0x57422c,map:woodTex,bumpMap:woodTex,bumpScale:.06,roughness:.8}));
   handle.rotation.x=1.1;handle.position.z=-.15;
-  const blade=new THREE.Mesh(new THREE.BoxGeometry(.16,.22,.02),new THREE.MeshStandardMaterial({color:0x6a6a60}));
-  blade.position.set(0,.33,-.49);blade.rotation.x=-.45;
-  vmShovel.add(handle,blade);
+  const steel=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:.38,metalness:.7,
+    envMapIntensity:1.1,side:THREE.DoubleSide});
+  const blade=new THREE.Mesh(new THREE.CylinderGeometry(.085,.1,.24,12,1,true,0,Math.PI),steel);
+  blade.position.set(0,.33,-.49);blade.rotation.x=Math.PI/2-.45;blade.rotation.z=Math.PI;  // a curved spade, dirt-polished
+  const collar=new THREE.Mesh(new THREE.CylinderGeometry(.028,.034,.07,10),steel);
+  collar.position.set(0,.21,-.43);collar.rotation.x=-.45;
+  vmShovel.add(handle,blade,collar);
 }
 const vmKit=new THREE.Group();
 {
-  const box=new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.3),new THREE.MeshStandardMaterial({color:0x6b6f4a}));
-  vmKit.add(box);
+  const cloth=new THREE.MeshStandardMaterial({color:0x6b6f4a,roughness:.9,
+    map:burlapTex,bumpMap:burlapTex,bumpScale:.2});
+  const box=new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.3),cloth);
+  const white=new THREE.MeshStandardMaterial({color:0xe8e0d0,roughness:.7});
+  const c1=new THREE.Mesh(new THREE.BoxGeometry(.14,.04,.012),white);c1.position.set(0,.04,.151);
+  const c2=new THREE.Mesh(new THREE.BoxGeometry(.04,.14,.012),white);c2.position.set(0,.04,.151);
+  const strap=new THREE.Mesh(new THREE.BoxGeometry(.31,.03,.31),
+    new THREE.MeshStandardMaterial({color:0x46341f,roughness:.55}));
+  strap.position.y=.05;
+  vmKit.add(box,c1,c2,strap);
 }
 vm.add(vmShovel,vmKit);
 vm.position.set(.32,-.3,-.55);
