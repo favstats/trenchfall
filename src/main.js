@@ -1072,12 +1072,20 @@ let scatterForest=null;
   const leafTex=(()=>{ // broadleaf clumps
     const c=document.createElement('canvas');c.width=c.height=128;
     const g=c.getContext('2d');
-    for(let i=0;i<240;i++){
+    for(let i=0;i<300;i++){
       const a=Math.random()*TAU,r=Math.pow(Math.random(),.6)*52;
       const x=64+Math.cos(a)*r,y=64+Math.sin(a)*r*.8;
-      const gr=55+Math.random()*85|0;
+      // the sun lives up and to the right: leaves shade darker low-left, brighter high-right
+      const lit=clamp(.62+(x-64)/64*.22-(y-64)/64*.3+Math.random()*.3,.3,1.25);
+      const gr=(48+Math.random()*70)*lit|0;
       g.fillStyle=`rgba(${gr*.55|0},${gr},${gr*.4|0},${rand(.5,.95)})`;
-      g.beginPath();g.ellipse(x,y,rand(3,8),rand(2,5),Math.random()*TAU,0,TAU);g.fill();
+      g.beginPath();g.ellipse(x,y,rand(2.5,7),rand(1.8,4.5),Math.random()*TAU,0,TAU);g.fill();
+    }
+    for(let i=0;i<26;i++){ // sky gaps: a real crown is full of holes
+      const a=Math.random()*TAU,r=Math.pow(Math.random(),.5)*50;
+      g.save();g.globalCompositeOperation='destination-out';
+      g.beginPath();g.ellipse(64+Math.cos(a)*r,64+Math.sin(a)*r*.8,rand(2,5),rand(1.5,3.5),Math.random()*TAU,0,TAU);
+      g.fill();g.restore();
     }
     const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
@@ -1088,7 +1096,7 @@ let scatterForest=null;
       const x0=64,y0=6+Math.random()*34;
       const a=rand(-1,1)*1.35, len=rand(42,64);
       const x1=x0+Math.sin(a)*len,y1=y0+Math.cos(a*.5)*len*rand(.7,1);
-      const gr=42+Math.random()*55|0;
+      const gr=(36+Math.random()*48)*(1.25-y0/40*.5)|0;  // crown-lit: upper fronds catch the sky
       g.strokeStyle=`rgba(${gr*.5|0},${gr},${gr*.45|0},${rand(.55,.95)})`;
       g.lineWidth=rand(1.4,3);
       g.beginPath();g.moveTo(x0,y0);
@@ -1218,14 +1226,21 @@ let grassMesh=null;
 {
   const c=document.createElement('canvas');c.width=64;c.height=128;
   const g=c.getContext('2d');
-  for(let i=0;i<34;i++){ // a fan of meadow blades
+  for(let i=0;i<48;i++){ // a fan of meadow blades: dark at the root, sun-bleached at the tip
     const bx=6+Math.random()*52,top=Math.random()*38,lean=(bx-32)*.55+rand(-9,9);
     const grd=g.createLinearGradient(0,128,0,top);
-    const hue=pick(['52,86,38','70,102,44','92,112,52','116,118,60']);
-    grd.addColorStop(0,`rgba(${hue},1)`);grd.addColorStop(1,`rgba(${hue},.22)`);
-    g.strokeStyle=grd;g.lineWidth=rand(1.6,3.6);
+    const[base,tip]=pick([['30,52,20','96,128,52'],['44,68,26','118,138,58'],
+      ['58,76,30','142,148,72'],['74,84,36','158,150,84']]);
+    grd.addColorStop(0,`rgba(${base},1)`);
+    grd.addColorStop(.7,`rgba(${tip},.85)`);
+    grd.addColorStop(1,`rgba(${tip},.25)`);
+    g.strokeStyle=grd;g.lineWidth=rand(1.4,3.4);
     g.beginPath();g.moveTo(bx,128);
     g.quadraticCurveTo(bx+lean*.4,80,bx+lean,top);g.stroke();
+    if(Math.random()<.22){ // a few blades carry seed heads
+      g.fillStyle='rgba(172,152,92,.85)';
+      g.beginPath();g.ellipse(bx+lean,top+2,1.6,4.5,lean*.02,0,TAU);g.fill();
+    }
   }
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
   const p1=new THREE.PlaneGeometry(1.5,1.05,1,3);p1.translate(0,.5,0);
@@ -1254,9 +1269,12 @@ function scatterGrass(){
   let gi=0;
   const want=Math.min(N,Math.round(N*BIOME.grassK));
   const tall=BIOME.grassK>1.5?1.45:1;   // the steppe carries its grass waist-high
-  for(let i=0;i<N*3&&gi<want;i++){
+  for(let i=0;i<N*4&&gi<want;i++){
     const x=srand(-half+4,half-4),z=srand(-half+4,half-4);
     if(isRoad(x,z)||Math.hypot(x,z)<11)continue;
+    // grass grows where grass grows: clumped meadows and bald earth, not confetti
+    const cl=smoothNoise((x+half)/cell*.13+31,(z+half)/cell*.13+17);
+    if(cl<.42&&srnd()>.22)continue;
     const h=heightAt(x,z);
     E.set(0,srand(TAU),srand(-.1,.1));Q.setFromEuler(E);
     const sc=srand(.6,1.5)*tall;S.set(sc,sc*srand(.8,1.35),sc);
