@@ -5146,7 +5146,7 @@ function fireWeapon(){
     if(player.fireCd>0||player.reloadT>0)return;
     if((G.items.rocket||0)<=0){toast('NO ROCKETS');SFX.deny();player.fireCd=.4;return;}
     G.items.rocket--;player.fireCd=w.rate;G.shots++;
-    fireRocket();muzzle.intensity=60;flash.visible=true;setTimeout(()=>flash.visible=false,40);
+    fireRocket();muzzle.intensity=60;
     return;
   }
   if(player.reloadT>0)return;
@@ -6482,7 +6482,7 @@ function cleanupModes(){ // no mode inherits another's furniture
   for(const w of wires)scene.remove(w.mesh);wires.length=0;
   for(const t of turrets)scene.remove(t.mesh);turrets.length=0;
   for(const f of firePool){f.live=false;f.material.opacity=0;}
-  zombies.length=0;player.man=null;player.ride=null;
+  zombies.length=0;player.man=null;player.ride=null;ROCKETS.length=0;
   mortarRing.visible=false;beacon.visible=false;
 }
 function saveBastion(){
