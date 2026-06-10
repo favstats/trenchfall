@@ -1190,7 +1190,7 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
       E.set(srand(-.06,.06),srand(TAU),srand(-.06,.06));Q.setFromEuler(E);
       if(kind<.42*(1-(BIOME.pineBias||0))&&bi<wantB){ // birch + crown (conifers own the cold biomes)
         const sc=srand(.8,1.4);S.set(sc,sc*srand(.85,1.2),sc);
-        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({m:birchT,i:bi,x,z});birchT.setMatrixAt(bi++,M);
+        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({tree:1,m:birchT,i:bi,x,z});birchT.setMatrixAt(bi++,M);
         const top=h+13*S.y;
         const nC=4+(srnd()*2|0);
         for(let cI=0;cI<nC&&lc<leafCards.instanceMatrix.count;cI++){
@@ -1204,7 +1204,7 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
         }
       }else if(kind<.8&&fi<wantF){                // fir + needle tiers
         const sc=srand(.9,1.55);S.set(sc,sc*srand(.9,1.15),sc);
-        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({m:firT,i:fi,x,z});firT.setMatrixAt(fi++,M);
+        P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({tree:1,m:firT,i:fi,x,z});firT.setMatrixAt(fi++,M);
         for(let tI=0;tI<4&&pc<pineCards.instanceMatrix.count;tI++){
           E.set(0,srand(TAU),0);Q.setFromEuler(E);
           const ts=(1.5-tI*.28)*sc;S.setScalar(ts);
@@ -1217,7 +1217,7 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
       }else if(di<wantD){                         // shell-shattered dead tree
         const sc=srand(.7,1.5);S.setScalar(sc);
         P.set(x,h,z);M.compose(P,Q,S);
-        DESTRUCT.push({m:deadT,i:di,x,z});DESTRUCT.push({m:deadBranches,i:di,x,z});deadT.setMatrixAt(di,M);deadBranches.setMatrixAt(di++,M);
+        DESTRUCT.push({tree:1,m:deadT,i:di,x,z});DESTRUCT.push({m:deadBranches,i:di,x,z});deadT.setMatrixAt(di,M);deadBranches.setMatrixAt(di++,M);
       }
     }
     const wantR=Math.round(70*BIOME.rockK);
@@ -1283,7 +1283,7 @@ let grassMesh=null;
   scene.add(grassMesh);
 }
 function scatterGrass(){
-  const N=9500;
+  const N=11500;
   const M=new THREE.Matrix4(),Q=new THREE.Quaternion(),S=new THREE.Vector3(),P=new THREE.Vector3(),E=new THREE.Euler();
   const C=new THREE.Color();
   grassData.length=0;
@@ -2864,7 +2864,7 @@ function wreckEnvironment(x,z,r){
     d.m.setMatrixAt(d.i,M0);
     touched.add(d.m);
     if(Math.random()<.4)burst(d.x,heightAt(d.x,d.z)+1.2,d.z,3,0x6a5a40,2,3);
-    if((d.m===birchT||d.m===firT||d.m===deadT)&&stumps.length<46){
+    if(d.tree&&stumps.length<46){
       const st=new THREE.Mesh(stumpGeo,stumpMat);
       st.position.set(d.x,heightAt(d.x,d.z),d.z);
       st.rotation.y=rand(TAU);st.scale.setScalar(rand(.7,1.15));
