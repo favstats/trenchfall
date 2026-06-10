@@ -1482,6 +1482,48 @@ function scatterDeer(){
   }
 }
 function updateWildlife(dt,t,nf){
+  { // tumbleweeds roll wherever the country is dry enough to let go of things
+    const dry=BIOME.desert||BIOME.grassK>1.5||BIOME.name==='SALT FLATS';
+    for(const w of WEEDS){
+      w.active=dry&&G.state==='play';
+      w.mesh.visible=w.active;
+      if(!w.active)continue;
+      if(!w.init||Math.hypot(w.x-player.x,w.z-player.z)>85){ // recycle upwind of the player
+        w.init=true;
+        w.x=player.x+rand(-70,-40);w.z=player.z+rand(-60,60);
+      }
+      const sp=3.2+Math.sin(t*.5+w.ph)*1.1;     // the wind comes in long breaths
+      w.x+=sp*dt;w.z+=Math.sin(t*.33+w.ph)*dt*.9;
+      const h=heightAt(w.x,w.z);
+      const bounce=Math.abs(Math.sin(t*2.2+w.ph))*.5*Math.min(1,sp/3);
+      w.mesh.position.set(w.x,h+w.r+bounce*.6,w.z);
+      w.mesh.rotation.z-=sp*dt/w.r;             // rolling, not sliding
+      w.mesh.rotation.y=Math.sin(t*.4+w.ph)*.3;
+    }
+  }
+  { // geese: every few minutes a V crosses, and the war means nothing to it
+    geeseT-=dt;
+    if(geeseT<=0&&!geese&&nf<.6&&!BIOME.ash&&G.state==='play'){
+      geeseT=rand(110,220);
+      const a=rand(TAU);
+      geese={a,x:player.x-Math.cos(a)*180,z:player.z-Math.sin(a)*180,t:0};
+      sTone('sawtooth',rand(420,520),rand(300,360),.16,.03);
+      setTimeout(()=>sTone('sawtooth',rand(400,500),320,.14,.025),350);
+    }
+    if(geese){
+      geese.t+=dt;
+      geese.x+=Math.cos(geese.a)*16*dt;geese.z+=Math.sin(geese.a)*16*dt;
+      const px2=-Math.sin(geese.a),pz2=Math.cos(geese.a);
+      for(let i=0;i<GEESE.length;i++){
+        const row=Math.ceil(i/2),side=i%2?1:-1; // the V
+        const gx=geese.x-Math.cos(geese.a)*row*2.4+px2*side*row*2.2,
+              gz=geese.z-Math.sin(geese.a)*row*2.4+pz2*side*row*2.2;
+        GEESE[i].visible=true;
+        GEESE[i].position.set(gx,heightAt(gx,gz)+34+Math.sin(t*1.8+i)*1.2,gz);
+      }
+      if(geese.t>26){geese=null;for(const s of GEESE)s.visible=false;}
+    }else for(const s of GEESE)s.visible=false;
+  }
   // somewhere out past the treeline, the wolves keep their own count
   if(nf>.6&&!BAST.on&&G.state==='play'){
     wolfT-=dt;
