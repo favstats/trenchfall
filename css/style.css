@@ -374,6 +374,12 @@
 
   /* boot: the title arrives like a stamp, the menu like a memory */
   #start{justify-content:center}
+  #start::before{content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse 70% 60% at 50% 42%,rgba(5,5,3,.55),transparent 75%)}
+  #start>*{position:relative}
+  #start::after{content:'favstats.github.io/trenchfall · made with three.js · all sound CC0';
+    position:absolute;bottom:18px;left:0;right:0;text-align:center;
+    font-family:'Special Elite',monospace;font-size:10.5px;letter-spacing:.28em;color:#4a4a3c}
   #bootTag{font-size:12px;letter-spacing:.6em;color:var(--olive);font-family:"Special Elite",monospace;
     text-transform:uppercase}
   #bootTitle{font-size:clamp(44px,7vw,92px) !important}

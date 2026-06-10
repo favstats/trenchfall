@@ -4464,6 +4464,12 @@ $('startBtn').addEventListener('click',()=>startCampaign());
 $('againBtn').addEventListener('click',()=>{ $('gameover').classList.remove('show');startCampaign(); });
 $('bastBtn').addEventListener('click',startBastion);
 $('wandBtn').addEventListener('click',startWander);
+for(const it of document.querySelectorAll('.mItem'))
+  it.addEventListener('mouseenter',()=>{if(AU.ctx&&!AU.muted)sTone('sine',1450,1430,.04,.02);});
+try{
+  const sv=JSON.parse(localStorage.getItem('tlr_save'));
+  if(sv&&sv.leg)$('contBtn').innerHTML='CONTINUE THE ROAD<span class="ms">leg '+sv.leg+' of 9 · '+(sv.comps?sv.comps.filter(c=>c.alive).length:'?')+' souls still walking</span>';
+}catch(e){}
 $('contBtn').addEventListener('click',continueCampaign);
 if(localStorage.getItem('tlr_save'))$('contBtn').style.display='inline-block';
 $('mHow').addEventListener('click',()=>{const b=$('howBox');b.style.display=b.style.display==='none'?'block':'none';});
@@ -5309,15 +5315,19 @@ function updateHUD(dt){
       ?'wave '+CAMP.siegeWave+' of 3 · hostiles: '+(alive+G.spawnLeft)
       :CAMP.nodeName+' · '+Math.round(prog)+'% · hostiles: '+alive;
   }else{
-    $('waveTxt').textContent=BAST.on?(BAST.wave>0?'NIGHT '+BAST.wave:'STAND TO'):(G.wave>0?'WAVE '+G.wave:'PREPARE');
-    $('waveSub').textContent=G.spawnLeft+alive>0?'hostiles: '+(alive+G.spawnLeft+(G.bruteLeft||0)):'next assault '+Math.ceil(BAST.on?BAST.interT:G.intermission)+'s';
+    const wnf=WANDER.on?(0.5-0.5*Math.cos(WANDER.t/150*TAU)):0;
+    $('waveTxt').textContent=WANDER.on?(wnf<.25?'MORNING':wnf<.5?'AFTERNOON':wnf<.75?'NIGHTFALL':'DEAD OF NIGHT')
+      :BAST.on?(BAST.wave>0?'NIGHT '+BAST.wave:'STAND TO'):(G.wave>0?'WAVE '+G.wave:'PREPARE');
+    $('waveSub').textContent=WANDER.on
+      ?Math.floor(WANDER.t/60)+'m walked · '+WANDER.loot.filter(L=>!L.taken).length+' caches left · hostiles '+alive
+      :G.spawnLeft+alive>0?'hostiles: '+(alive+G.spawnLeft+(G.bruteLeft||0)):'next assault '+Math.ceil(BAST.on?BAST.interT:G.intermission)+'s';
   }
   if(chainT>0){chainT-=dt;if(chainT<=0)chain=0;}
   const ct=$('chainTag');
   ct.style.display=chain>=3?'block':'none';
   if(chain>=3)ct.textContent='CHAIN ×'+chain;
-  $('depotLbl').textContent=BAST.on?'THE WALL':'CONVOY';
-  $('depotPct').textContent=BAST.on?('FORT '+Math.round(G.depotHp/G.depotMax*100)+'% · SHELLS '+BAST.shells):(CAMP.supplies?('F'+CAMP.supplies.food+' · M'+CAMP.supplies.meds+' · MOR '+Math.round(CAMP.morale)):'');
+  $('depotLbl').textContent=WANDER.on?'THE COUNTRY':BAST.on?'THE WALL':'CONVOY';
+  $('depotPct').textContent=WANDER.on?('SCORE '+G.score):BAST.on?('FORT '+Math.round(G.depotHp/G.depotMax*100)+'% · SHELLS '+BAST.shells):(CAMP.supplies?('F'+CAMP.supplies.food+' · M'+CAMP.supplies.meds+' · MOR '+Math.round(CAMP.morale)):'');
   const bars=$('convoyBars');
   if(BAST.on){
     bars.style.display='';
