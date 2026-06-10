@@ -1986,7 +1986,7 @@ addEventListener('keydown',e=>{
   if(e.code==='Tab'){e.preventDefault();if(!BAST.on){updateRoster();$('roster').classList.toggle('on');}}
   if(e.code==='KeyI'&&G.state==='play')toggleInv();
   if(e.code==='KeyC'&&BAST.on&&G.state==='play'&&!shopOpen&&!perkOpen&&!invOpen)cmdUI(!cmdOpen);
-  if(cmdOpen){const dg=/^Digit([1-4])$/.exec(e.code);if(dg)giveOrder(+dg[1]);}
+  if(cmdOpen){const dg=/^Digit([1-5])$/.exec(e.code);if(dg)giveOrder(+dg[1]);}
   if(e.code==='KeyM'){AU.muted=!AU.muted;if(AU.master)AU.master.gain.value=AU.muted?0:.5;}
   if(G.state!=='play')return;
   if(e.code==='KeyB'){toggleShop();return;}
@@ -3156,6 +3156,7 @@ function updateAllies(dt,t){
           else{ax=tx2;az=tz2;rr=[0,1.5];}
         };
         if(a.duty==='follow'){ax=player.x;az=player.z;rr=[2,4];}
+        else if(a.duty==='gate')viaRoad(-21.5,roadZ(-24));
         else if(a.duty==='mortar'&&mortar)viaRoad(mortar.x+1.2,mortar.z);
         else if((a.ammo??1)<=0)viaRoad(6,15);
         else if(a.post)viaRoad(a.post.x,a.post.z);
@@ -3238,6 +3239,14 @@ function updateAllies(dt,t){
       if(BAST.cache>=30){BAST.cache-=30;a.ammo=60;a.wanderT=0;
         if(a.duty==='resupply')a.duty='post';
         say(a.name,'Topped off. Back to the wall.',2600);}
+    }
+    if(BAST.on&&a.duty==='gate'&&Math.hypot(a.x+22,a.z-roadZ(-24))<4){
+      a.gateT=(a.gateT??2.5)-dt;
+      if(a.gateT<=0){a.gateT=3;
+        const slot=[-2.2,0,2.2].find(off=>!bags.some(b=>Math.hypot(b.x+24,b.z-(roadZ(-24)+off))<1.2));
+        if(slot===undefined){a.duty='post';a.wanderT=0;say(a.name,'Gate stands. Back to my post.',2600);}
+        else{placeBag(-24,roadZ(-24)+slot,Math.PI/2);SFX.build();}
+      }
     }
     if(BAST.on&&a.duty==='mortar'){
       const mg=BAST.guns.find(g2=>g2.type==='mortar');
@@ -5029,6 +5038,12 @@ function interact(){
         return;
       }
     }
+    if(Math.hypot(player.x,player.z-9.5)<5&&Math.hypot(player.x-6,player.z-15)>=2.8){
+      if(G.scrap>=30){G.scrap-=30;G.depotHp=Math.min(G.depotMax,G.depotHp+100);
+        SFX.build();toast('TIMBER AND NAILS: WALL +100 ('+Math.round(G.depotHp)+')');}
+      else{toast('NEED 30 SCRAP FOR REPAIRS');SFX.deny();}
+      return;
+    }
     if(Math.hypot(player.x-6,player.z-15)<2.8){
       if(BAST.cache<=0){toast('CACHE DRY, WAIT FOR SPARROW');SFX.deny();return;}
       const take=Math.min(60,BAST.cache,player.carryCap-player.reserve);
@@ -5614,8 +5629,17 @@ function updateHUD(dt){
   $('depotLbl').textContent=BAST.on?'THE WALL':'CONVOY';
   $('depotPct').textContent=BAST.on?('FORT '+Math.round(G.depotHp/G.depotMax*100)+'% · SHELLS '+BAST.shells):(CAMP.supplies?('F'+CAMP.supplies.food+' · M'+CAMP.supplies.meds+' · MOR '+Math.round(CAMP.morale)):'');
   const bars=$('convoyBars');
-  bars.style.display=BAST.on?'none':'';
-  if(bars.childElementCount!==convoy.length){
+  if(BAST.on){
+    bars.style.display='';
+    if(bars.childElementCount!==1){bars.innerHTML='';
+      const d=document.createElement('div');d.className='tbar';
+      d.innerHTML='<span class="tn">THE WALL</span><div class="bar depot"><i style="width:100%"></i></div>';
+      bars.appendChild(d);}
+    const wi2=bars.querySelector('i');
+    wi2.style.width=Math.max(0,G.depotHp/G.depotMax*100)+'%';
+    wi2.style.background=G.depotHp<300?'#a3271e':'';
+  }else bars.style.display='';
+  if(!BAST.on&&bars.childElementCount!==convoy.length){
     bars.innerHTML='';
     for(const t of convoy){
       const d=document.createElement('div');d.className='tbar';
@@ -5696,6 +5720,7 @@ function updateHUD(dt){
         pr=player.man===g?'<b>E</b> STEP OFF':'<b>E</b> MAN THE '+g.type.toUpperCase();break;}
       if(!pr)for(const d of BAST.drops)if(d.landed&&Math.hypot(player.x-d.x,player.z-d.z)<2.6){pr='<b>E</b> RECOVER THE PACKAGE';break;}
       if(!pr&&Math.hypot(player.x-6,player.z-15)<2.8)pr='<b>E</b> DRAW FROM THE CACHE ('+BAST.cache+')';
+      if(!pr&&Math.hypot(player.x,player.z-9.5)<5)pr='<b>E</b> REPAIR THE WALL (30 SCRAP · +100)';
     }
     if(!pr&&!BAST.on)for(const t of aliveTrucks())
       if(Math.hypot(player.x-t.x,player.z-roadZ(t.x))<4.4){
@@ -6205,6 +6230,7 @@ function cmdUI(show){
       '<b>2</b> CREW THE MORTAR<br>'+
       '<b>3</b> ON ME<br>'+
       '<b>4</b> GO RESUPPLY<br>'+
+      '<b>5</b> REBUILD THE GATE<br>'+
       '<span style="color:#7a7d55">[C] CLOSE · orders go to the nearest rifleman</span>';
     cmdEl.style.display='block';
   }else cmdEl.style.display='none';
@@ -6223,6 +6249,7 @@ function giveOrder(n){
     else{a.duty='mortar';a.wanderT=0;say(a.name,'Moving to the mortar. Call the rounds, I\'ll send them.',2800);}}
   if(n===3){a.duty='follow';a.wanderT=0;say(a.name,'On you.',1800);}
   if(n===4){a.duty='resupply';a.ammo=0;a.wanderT=0;say(a.name,'Running the cache road. Cover the gap!',2600);}
+  if(n===5){a.duty='gate';a.wanderT=0;say(a.name,'On the gate. Bags going up, keep them off my back.',2800);}
   SFX.beep();cmdUI(false);
 }
 function bastionRequisition(){
