@@ -2304,6 +2304,8 @@ function damageZombie(zb,dmg,hitPos,isHead){
   if(zb.hp<=0){
     zb.alive=false;zb.deadT=0;
     G.kills++;chain++;chainT=3;
+    if(zb.questTarget&&WANDER.quest){WANDER.quest.objDone=true;
+      say('YOU','The coat stops walking here.',3200);saveWander();}
     { const ch=$('crosshair');ch.classList.remove('kill');void ch.offsetWidth;ch.classList.add('kill');
       setTimeout(()=>ch.classList.remove('kill'),240);
       const sp=document.createElement('div');sp.className='scorePop';
@@ -4486,6 +4488,7 @@ function gameOver(){
     $('goTitle').textContent='THE COUNTRY KEEPS YOU';
     $('goTag').textContent=WANDER.region+' regions · '+Math.floor(WANDER.t/60)+' minutes · '+G.kills+' put down';
     WANDER.story.push('Fell in region '+WANDER.region+', '+Math.floor(WANDER.t/60)+' minutes out. The crows know the rest.');
+    localStorage.removeItem('tlr_wander');
     gameOver._story='YOUR STORY: '+WANDER.story.join(' ');
   }else if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
@@ -4570,7 +4573,12 @@ function startGame(){
 $('startBtn').addEventListener('click',()=>startCampaign());
 $('againBtn').addEventListener('click',()=>{ $('gameover').classList.remove('show');startCampaign(); });
 $('bastBtn').addEventListener('click',startBastion);
-$('wandBtn').addEventListener('click',startWander);
+$('wandBtn').addEventListener('click',()=>startWander(false));
+$('contW').addEventListener('click',()=>startWander(true));
+try{const wsv=JSON.parse(localStorage.getItem('tlr_wander'));
+  if(wsv&&wsv.runSeed){$('contW').style.display='';
+    $('contWms').textContent='region '+wsv.region+' · '+Math.floor(wsv.t/60)+' minutes walked · the country remembers';}
+}catch(e){}
 for(const it of document.querySelectorAll('.mItem'))
   it.addEventListener('mouseenter',()=>{if(AU.ctx&&!AU.muted)sTone('sine',1450,1430,.04,.02);});
 try{
@@ -4802,8 +4810,56 @@ function interact(){
     return;
   }
   if(WANDER.on){
+    const lm=WANDER.landmark;
+    if(lm&&lm.kind==='bell'&&!lm.rung&&Math.hypot(player.x-lm.x,player.z-lm.z)<4.5){
+      lm.rung=true;
+      SFX.chime();setTimeout(SFX.chime,500);setTimeout(SFX.chime,1100);
+      for(let i=0;i<8;i++){const z=spawnZombie();
+        if(z){const a2=rand(TAU);z.x=player.x+Math.cos(a2)*rand(45,70);
+          z.z=player.z+Math.sin(a2)*rand(45,70);z.rise=rand(.5,2);}}
+      say('THE COUNTRY','You rang it. Of course you rang it. Everything heard.',4600);
+      WANDER.story.push('Rang the bell in region '+WANDER.region+'. Regretted it shortly after.');
+      G.score+=120;saveWander();
+      return;
+    }
+    const q=WANDER.quest;
+    if(q&&q.taken&&!q.objDone&&q.type==='fetch'&&Math.hypot(player.x-q.x,player.z-q.z)<3){
+      q.objDone=true;SFX.chime();
+      say('YOU','Got it. Now to carry it back across all that open ground.',3600);
+      WANDER.story.push('Found what '+q.giver.toLowerCase()+' asked for.');
+      saveWander();
+      return;
+    }
     for(const s of WANDER.sites){
       if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
+        if(s.kind==='quester'){
+          const q2=WANDER.quest;
+          if(!q2)return;
+          if(q2.turned){say(q2.giver,'Square, you and me. The country is watching someone else now.',3200);return;}
+          if(!q2.taken){
+            wanderTalk(q2.giver,'they look at you like the last page of a book',
+              q2.type==='fetch'
+                ?'My brother walked out toward the far hills and never walked back. Something of his is still lying out there. Bring it home and I will make it worth the boots you wear out.'
+                :'A big one wears my husband\'s coat. Took it off his back, took him with it. I want the coat to stop walking. Can you make that happen?',
+              [['Take the work','the marker goes on your compass',()=>{
+                  q2.taken=true;
+                  if(q2.type==='hunt')spawnQuestBrute();
+                  WANDER.story.push('Took work from '+q2.giver.toLowerCase()+'.');saveWander();}],
+               ['Walk on','some debts are not yours',null]]);
+            return;
+          }
+          if(q2.taken&&!q2.objDone){say(q2.giver,q2.type==='fetch'?'Still out there. The compass knows the way.':'It still walks. I still wait.',3200);return;}
+          if(q2.objDone&&!q2.turned){
+            q2.turned=true;G.score+=250;
+            if(q2.type==='fetch'){G.scrap+=70;G.items.medkit++;
+              say(q2.giver,'That\'s his. That\'s... thank you. Take this, all of it. He\'d laugh at what it\'s worth now.',5200);}
+            else{player.maxhp+=10;player.hp=Math.min(player.maxhp,player.hp+30);
+              say(q2.giver,'It\'s done walking. Sit, eat something warm. You look like you carry more than most. Now you can carry a little more.',5200);}
+            WANDER.story.push('Settled '+q2.giver.toLowerCase()+'\'s debt in region '+WANDER.region+'.');
+            SFX.chime();saveWander();
+            return;
+          }
+        }
         if(s.kind==='hermit'){
           const met=+(localStorage.getItem('tlr_hermit')||0)+1;
           localStorage.setItem('tlr_hermit',met);
@@ -5581,7 +5637,15 @@ function updateHUD(dt){
       if(WANDER.den&&!WANDER.den.woken)
         put(Math.atan2(WANDER.den.x-player.x,WANDER.den.z-player.z),'☠','cpsPoi','#a3271e');
       for(const s2 of WANDER.sites)if(!s2.used)
-        put(Math.atan2(s2.x-player.x,s2.z-player.z),s2.kind==='hermit'?'⌂':'!','cpsPoi',s2.kind==='hermit'?'#e8c050':'#7fa0c8');
+        put(Math.atan2(s2.x-player.x,s2.z-player.z),s2.kind==='hermit'?'⌂':s2.kind==='quester'?'?':'!','cpsPoi',
+          s2.kind==='hermit'?'#e8c050':s2.kind==='quester'?'#d8c878':'#7fa0c8');
+      const q3=WANDER.quest;
+      if(q3&&q3.taken&&!q3.turned){
+        const qx=q3.objDone?q3.gx:q3.x,qz=q3.objDone?q3.gz:q3.z;
+        put(Math.atan2(qx-player.x,qz-player.z),'♦','cpsPoi','#ffd060');
+      }
+      if(WANDER.landmark&&!WANDER.landmark.found)
+        put(Math.atan2(WANDER.landmark.x-player.x,WANDER.landmark.z-player.z),'✦','cpsPoi','#9fb4d8');
       compassEl.innerHTML=html;
     }
   }
@@ -5608,7 +5672,12 @@ function updateHUD(dt){
     }
     if(!pr&&WANDER.on){
       for(const s of WANDER.sites)if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
-        pr=s.kind==='hermit'?'<b>E</b> SIT AT THE HERMIT\'S FIRE':'<b>E</b> REACH THEM IN TIME';break;}
+        pr=s.kind==='hermit'?'<b>E</b> SIT AT THE HERMIT\'S FIRE':
+           s.kind==='quester'?'<b>E</b> HEAR THEM OUT':'<b>E</b> REACH THEM IN TIME';break;}
+      if(!pr&&WANDER.quest&&WANDER.quest.taken&&!WANDER.quest.objDone&&WANDER.quest.type==='fetch'
+        &&Math.hypot(player.x-WANDER.quest.x,player.z-WANDER.quest.z)<3)pr='<b>E</b> TAKE WHAT THEY ASKED FOR';
+      if(!pr&&WANDER.landmark&&WANDER.landmark.kind==='bell'&&!WANDER.landmark.rung
+        &&Math.hypot(player.x-WANDER.landmark.x,player.z-WANDER.landmark.z)<4.5)pr='<b>E</b> RING IT. GO ON.';
       if(!pr)for(const L of WANDER.loot)if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){pr='<b>E</b> CRACK THE CACHE';break;}
     }
     if(!pr&&!BAST.on)for(const t of aliveTrucks())
@@ -6255,72 +6324,176 @@ function strikeBolt(){
    WANDER, the open country: no road, no orders, no one coming
    ============================================================ */
 
-function startWander(){
+function startWander(load){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   cleanupModes();
   CAMP.on=false;BAST.on=false;WANDER.on=true;
-  WANDER.road=Math.random()<.55;   // some country still remembers its roads
   CAMP.comps=[];CAMP.mode='menu';
-  setSeed((Math.random()*2**31)|0);
-  setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
-  buildWorld((Math.random()*2**31)|0);
-  Object.assign(G,{state:'play',wave:1,kills:0,score:0,scrap:40,dirt:0,
-    items:{nade:1,molotov:1,mine:0,medkit:1,flare:1},
-    dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
+  let sv=null;
+  if(load){try{sv=JSON.parse(localStorage.getItem('tlr_wander'));}catch(e){}}
+  WANDER.runSeed=sv?sv.runSeed:((Math.random()*2**31)|0);
+  WANDER.region=sv?sv.region:1;
+  WANDER.saveRegions=sv?(sv.regions||{}):{};
+  Object.assign(G,{state:'play',wave:1,kills:sv?sv.p.kills:0,score:sv?sv.p.score:0,
+    scrap:sv?sv.p.scrap:40,dirt:0,
+    items:sv?sv.p.items:{nade:1,molotov:1,mine:0,medkit:1,flare:1},
+    dmgMul:1,reloadMul:1,speedMul:sv?(sv.p.speedMul||1):1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0,
     depotHp:1000,depotMax:1000,depotAmmo:60,spawnLeft:0,bruteLeft:0,intermission:9});
-  Object.assign(player,{x:0,z:roadZ(0)+2,y:0,vy:0,yaw:Math.PI/2,pitch:-.02,
-    hp:100,maxhp:100,alive:true,reserve:70,carryCap:180,
-    wid:0,owned:[true,false,false,false,false,false],
-    mags:WEAPONS.map(w=>w.magSize),tool:null,buildType:0,healT:0,
+  Object.assign(player,{x:sv?sv.p.x:0,z:sv?sv.p.z:2,y:0,vy:0,yaw:Math.PI/2,pitch:-.02,
+    hp:sv?sv.p.hp:100,maxhp:sv?sv.p.maxhp:100,alive:true,reserve:sv?sv.p.reserve:70,carryCap:180,
+    wid:sv?sv.p.wid:0,owned:sv?sv.p.owned:[true,false,false,false,false,false],
+    mags:sv?sv.p.mags:WEAPONS.map(w=>w.magSize),tool:null,buildType:0,healT:0,
     fireCd:0,reloadT:0,respawnT:0,ads:false,fireHeld:false,ride:null,man:null});
   zombies.length=0;
   for(const t of convoy)t.mesh.visible=false;
   for(const a of allies)scene.remove(a.mesh);allies.length=0;
-  WANDER.t=0;WANDER.spawnT=8;WANDER.loot=[];WANDER.kills0=0;WANDER.survivor=null;WANDER.sites=[];
+  WANDER.t=sv?sv.t:0;WANDER.spawnT=8;WANDER.kills0=G.kills;WANDER.survivor=null;
+  WANDER.sites=[];WANDER.colT=null;WANDER.saveT=30;
+  WANDER.story=sv?sv.story:[];
+  buildWanderRegion(WANDER.region);
+  applyRegionState(WANDER.saveRegions[WANDER.region]);
+  if(sv&&sv.survivor){
+    const a=spawnAlly(player.x+2,player.z+2);
+    if(a){a.name=sv.survivor.name;a.xp=sv.survivor.xp;a.ammo=sv.survivor.ammo;
+      a.dmgMul=sv.survivor.dmgMul;WANDER.survivor=a;}
+  }
+  if(!sv)WANDER.story.push('Set out alone into '+BIOME.name.toLowerCase()+'.');
+  $('start').classList.remove('show');$('gameover').classList.remove('show');
+  $('hud').classList.add('on');
+  initSlots();refreshVM();
+  announce(load?'REGION '+WANDER.region+' · '+BIOME.name.toUpperCase():'WANDER · '+BIOME.name.toUpperCase(),
+    load?'the country kept your place. it keeps everything.':
+    WANDER.road?'an old road still crosses this country. walk it, or don\'t.':'no roads out here. walk. scavenge. the dark gets bolder.');
+  tryLock();
+}
+const QN1=['MOTHER','ODD','SAINT','LITTLE','DEAF','LUCKY','SALT','HOLLOW','PATIENT','CROOKED'];
+const QN2=['KESTREL','MARTIN','WREN','BRIAR','MOSS','TALLOW','CROW','FENWICK','JUNE','ASH'];
+function regionSeed(idx){return (WANDER.runSeed^Math.imul(idx+1,2654435761))>>>0;}
+function captureRegionState(){
+  return {
+    loot:WANDER.loot.map(L=>L.taken?1:0),
+    den:!!(WANDER.den&&WANDER.den.woken),
+    sites:WANDER.sites.map(s=>s.used?1:0),
+    quest:WANDER.quest?{taken:WANDER.quest.taken,objDone:WANDER.quest.objDone,turned:WANDER.quest.turned}:null,
+    lm:!!(WANDER.landmark&&WANDER.landmark.found),
+    rung:!!(WANDER.landmark&&WANDER.landmark.rung),
+  };
+}
+function saveWander(){
+  if(!WANDER.on)return;
+  WANDER.saveRegions[WANDER.region]=captureRegionState();
+  try{localStorage.setItem('tlr_wander',JSON.stringify({v:1,
+    runSeed:WANDER.runSeed,region:WANDER.region,t:WANDER.t,story:WANDER.story,
+    regions:WANDER.saveRegions,
+    survivor:WANDER.survivor&&allies.includes(WANDER.survivor)
+      ?{name:WANDER.survivor.name,xp:WANDER.survivor.xp||0,ammo:WANDER.survivor.ammo??60,dmgMul:WANDER.survivor.dmgMul||1}:null,
+    p:{x:player.x,z:player.z,hp:player.hp,maxhp:player.maxhp,reserve:player.reserve,
+       wid:player.wid,owned:player.owned,mags:player.mags,scrap:G.scrap,score:G.score,
+       kills:G.kills,items:G.items,speedMul:G.speedMul},
+  }));}catch(e){}
+}
+function buildWanderRegion(idx){
+  const seed=regionSeed(idx);
+  setSeed(seed);
+  setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
+  WANDER.road=srnd()<.55;
   for(const o of WANDER._meshes||[])scene.remove(o);
-  WANDER._meshes=[];
-  for(let i=0;i<11;i++){ // the country keeps its caches far apart
+  WANDER._meshes=[];WANDER.loot=[];WANDER.quest=null;WANDER.landmark=null;
+  for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);}
+  WANDER.sites=[];
+  zombies.length=0;
+  for(const f of firePool){f.live=false;f.material.opacity=0;}
+  buildWorld((seed^0x9e3779b9)>>>0);
+  setSeed((seed^0x51ed2701)>>>0);   // content chain, independent of worldgen draws
+  for(let i=0;i<11;i++){ // caches: deterministic, region-fixed
     const x=srand(-half+15,half-15),z=srand(-half+15,half-15);
-    if(Math.hypot(x,z)<25){i--;continue;}
+    if(Math.hypot(x,z)<25)continue;
     const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
       new THREE.MeshStandardMaterial({color:0x5d6243,map:woodTex,roughness:.85}));
     c.position.set(x,heightAt(x,z)+.4,z);c.castShadow=true;
     scene.add(c);WANDER._meshes.push(c);
     WANDER.loot.push({x,z,mesh:c,taken:false});
   }
-  WANDER.region=1;WANDER.story=['Set out alone into '+BIOME.name.toLowerCase()+'.'];
-  wanderPopulate();
-  { // the den: somewhere out there, the dead sleep on a hoard
-    const a=rand(TAU),r=rand(half*.5,half*.8);
+  { // the den
+    const a=srand(TAU),r=srand(half*.5,half*.8);
     WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
     for(let i=0;i<3;i++){
       const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
         new THREE.MeshStandardMaterial({color:0x4a3e33,map:woodTex,roughness:.85}));
-      c.position.set(WANDER.den.x+rand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+rand(-2,2));
+      c.position.set(WANDER.den.x+srand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+srand(-2,2));
       c.castShadow=true;scene.add(c);WANDER._meshes.push(c);
       WANDER.loot.push({x:c.position.x,z:c.position.z,mesh:c,taken:false,rich:true});
     }
-    for(let i=0;i<7;i++){ // the sleepers, face-down around their hoard
-      const z=spawnZombie(i===0?'brute':null);
-      if(z){z.x=WANDER.den.x+rand(-9,9);z.z=WANDER.den.z+rand(-9,9);
-        z.rise=999;z.sleeping=true;}   // they do not rise until woken
-    }
   }
-  $('start').classList.remove('show');$('gameover').classList.remove('show');
-  $('hud').classList.add('on');
-  initSlots();refreshVM();
-  announce('WANDER · '+BIOME.name.toUpperCase(),WANDER.road?'an old road still crosses this country. walk it, or don\'t.':'no roads out here. walk. scavenge. the dark gets bolder.');
-  tryLock();
+  wanderPopulate();
+  buildLandmark();
+}
+function applyRegionState(st){
+  if(!st)return;
+  st.loot.forEach((tk,i)=>{const L=WANDER.loot[i];
+    if(L&&tk){L.taken=true;scene.remove(L.mesh);}});
+  if(st.den&&WANDER.den)WANDER.den.woken=true;
+  st.sites.forEach((u,i)=>{const s=WANDER.sites[i];
+    if(s&&u){s.used=true;if(s.kind==='stranded')scene.remove(s.mesh);}});
+  if(st.quest&&WANDER.quest)Object.assign(WANDER.quest,st.quest);
+  if(WANDER.landmark){WANDER.landmark.found=!!st.lm;WANDER.landmark.rung=!!st.rung;}
+  if(!(WANDER.den&&WANDER.den.woken)){ // sleepers only if the den never woke
+    for(let i=0;i<7;i++){const z=spawnZombie(i===0?'brute':null);
+      if(z){z.x=WANDER.den.x+rand(-9,9);z.z=WANDER.den.z+rand(-9,9);z.rise=999;z.sleeping=true;}}
+  }
+  if(WANDER.quest&&WANDER.quest.taken&&!WANDER.quest.objDone&&WANDER.quest.type==='hunt')spawnQuestBrute();
+}
+function spawnQuestBrute(){
+  const q=WANDER.quest,z=spawnZombie('brute');
+  if(z){z.x=q.x;z.z=q.z;z.rise=rand(.5,1.5);z.questTarget=true;z.cloth=0x5a3526;}
+}
+function buildLandmark(){
+  const kind=spick(['bell','giant','church']);
+  const a=srand(TAU),r=srand(half*.3,half*.65);
+  const x=clamp(Math.cos(a)*r,-half+20,half-20),z=clamp(Math.sin(a)*r,-half+20,half-20);
+  const gy=heightAt(x,z);
+  const g=new THREE.Group();
+  const stone=new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95});
+  let name='';
+  if(kind==='bell'){
+    name='THE BELL TOWER';
+    const t2=new THREE.Mesh(new THREE.CylinderGeometry(1.5,2,11,7),stone);t2.position.y=5.5;g.add(t2);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(2.2,2,7),stone);cap.position.y=12;g.add(cap);
+    const bell=new THREE.Mesh(new THREE.SphereGeometry(.7,8,6),
+      new THREE.MeshStandardMaterial({color:0x8a7340,metalness:.7,roughness:.4}));
+    bell.position.y=10.2;bell.scale.y=1.2;g.add(bell);
+    COLLIDERS.push({x,z,r:2.2});
+  }else if(kind==='giant'){
+    name='THE STONE GIANT';
+    const sizes=[[2.6,0],[2.1,3.4],[1.5,6.2],[.9,8.2]];
+    for(const[s2,y2]of sizes){const b=new THREE.Mesh(new THREE.SphereGeometry(s2,7,6),stone);
+      b.position.set(srand(-.3,.3),y2+s2*.7,srand(-.3,.3));b.scale.y=.85;g.add(b);}
+    COLLIDERS.push({x,z,r:3});
+  }else{
+    name='THE SUNKEN CHURCH';
+    const brick=new THREE.MeshStandardMaterial({color:0x5d4b3e,roughness:.95});
+    for(const[ox,oz,w2,ry]of[[0,-4,9,0],[4.5,0,8,Math.PI/2],[-4.5,0,8,Math.PI/2]]){
+      const w3=new THREE.Mesh(new THREE.BoxGeometry(w2,4,.6),brick);
+      w3.position.set(ox,.6,oz);w3.rotation.y=ry;g.add(w3);   // half-buried: the land is eating it
+    }
+    const c1=new THREE.Mesh(new THREE.BoxGeometry(.3,3,.3),stone);c1.position.set(0,4,-4);g.add(c1);
+    const c2=new THREE.Mesh(new THREE.BoxGeometry(1.6,.3,.3),stone);c2.position.set(0,4.6,-4);g.add(c2);
+    COLLIDERS.push({x,z:z-4,r:4.6});
+  }
+  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  g.position.set(x,gy,z);
+  scene.add(g);WANDER._meshes.push(g);
+  WANDER.landmark={kind,name,x,z,found:false,rung:false};
 }
 function wanderPopulate(){
   // sites: the country is inhabited, barely
   for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);if(s.fire)s.fire.live=false;}
   WANDER.sites=[];
-  // THE HERMIT: a fire, a kettle, a man who remembers
-  if(Math.random()<.6){
-    const a=rand(TAU),r=rand(half*.35,half*.7);
-    const x=clamp(Math.cos(a)*r,-half+15,half-15),z=clamp(Math.sin(a)*r,-half+15,half-15);
+  // determinism rule: ALWAYS draw the dice, conditionally use them
+  const hr=srnd(),ha=srand(TAU),hd=srand(half*.35,half*.7);
+  if(hr<.6){ // THE HERMIT: a fire, a kettle, a man who remembers
+    const x=clamp(Math.cos(ha)*hd,-half+15,half-15),z=clamp(Math.sin(ha)*hd,-half+15,half-15);
     const mesh=buildAllyMesh(null,true);
     mesh.position.set(x,heightAt(x,z),z);
     scene.add(mesh);
@@ -6328,16 +6501,28 @@ function wanderPopulate(){
     COLLIDERS.push({x:x+1.4,z,r:.8});
     WANDER.sites.push({kind:'hermit',x,z,mesh,used:false});
   }
-  // THE STRANDED: someone alive, for now, with the dead closing
-  if(Math.random()<.55&&!WANDER.survivor){
-    const a=rand(TAU),r=rand(half*.4,half*.75);
-    const x=clamp(Math.cos(a)*r,-half+15,half-15),z=clamp(Math.sin(a)*r,-half+15,half-15);
+  const sr=srnd(),sa=srand(TAU),sd=srand(half*.4,half*.75);
+  if(sr<.55&&!WANDER.survivor){ // THE STRANDED: alive, for now
+    const x=clamp(Math.cos(sa)*sd,-half+15,half-15),z=clamp(Math.sin(sa)*sd,-half+15,half-15);
     const mesh=buildAllyMesh(null,true);
     mesh.position.set(x,heightAt(x,z),z);
     scene.add(mesh);
     WANDER.sites.push({kind:'stranded',x,z,mesh,used:false});
     for(let i=0;i<5;i++){const zb=spawnZombie();
       if(zb){zb.x=x+rand(-14,14);zb.z=z+rand(-14,14);zb.rise=rand(2,5);}}
+  }
+  // THE ONE WHO ASKS: every country has somebody who wants something
+  const qr=srnd(),qa=srand(TAU),qd=srand(half*.3,half*.6),
+    qn=spick(QN1)+' '+spick(QN2),qt=srnd()<.5?'fetch':'hunt',
+    qa2=srand(TAU),qd2=srand(half*.55,half*.85);
+  if(qr<.7){
+    const x=clamp(Math.cos(qa)*qd,-half+15,half-15),z=clamp(Math.sin(qa)*qd,-half+15,half-15);
+    const tx=clamp(Math.cos(qa2)*qd2,-half+12,half-12),tz=clamp(Math.sin(qa2)*qd2,-half+12,half-12);
+    const mesh=buildAllyMesh(null,true);
+    mesh.position.set(x,heightAt(x,z),z);
+    scene.add(mesh);
+    WANDER.sites.push({kind:'quester',x,z,mesh,used:false});
+    WANDER.quest={type:qt,giver:qn,gx:x,gz:z,x:tx,z:tz,taken:false,objDone:false,turned:false};
   }
 }
 let fadeEl=null;
@@ -6352,46 +6537,17 @@ function fadeBlink(){
 }
 function travelRegion(){
   fadeBlink();
+  WANDER.saveRegions[WANDER.region]=captureRegionState();
   WANDER.region++;
   const heading=Math.abs(player.x)>Math.abs(player.z)?(player.x>0?'east':'west'):(player.z>0?'south':'north');
-  setSeed((Math.random()*2**31)|0);
-  setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
-  WANDER.road=Math.random()<.55;
-  for(const o of WANDER._meshes||[])scene.remove(o);
-  WANDER._meshes=[];WANDER.loot=[];
-  for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);}
-  WANDER.sites=[];
-  zombies.length=0;
-  for(const f of firePool){f.live=false;f.material.opacity=0;}
-  buildWorld((Math.random()*2**31)|0);
-  // step through the treeline into the next country
   player.x=-player.x*.88;player.z=-player.z*.88;
+  buildWanderRegion(WANDER.region);
+  applyRegionState(WANDER.saveRegions[WANDER.region]);
   for(const al of allies){al.x=player.x+rand(-4,4);al.z=player.z+rand(-4,4);al.tx=al.x;al.tz=al.z;}
-  for(let i=0;i<11;i++){
-    const x=srand(-half+15,half-15),z=srand(-half+15,half-15);
-    if(Math.hypot(x-player.x,z-player.z)<25){i--;continue;}
-    const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
-      new THREE.MeshStandardMaterial({color:0x5d6243,map:woodTex,roughness:.85}));
-    c.position.set(x,heightAt(x,z)+.4,z);c.castShadow=true;
-    scene.add(c);WANDER._meshes.push(c);
-    WANDER.loot.push({x,z,mesh:c,taken:false});
-  }
-  { const a=rand(TAU),r=rand(half*.5,half*.8);
-    WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
-    for(let i=0;i<3;i++){
-      const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
-        new THREE.MeshStandardMaterial({color:0x4a3e33,map:woodTex,roughness:.85}));
-      c.position.set(WANDER.den.x+rand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+rand(-2,2));
-      c.castShadow=true;scene.add(c);WANDER._meshes.push(c);
-      WANDER.loot.push({x:c.position.x,z:c.position.z,mesh:c,taken:false,rich:true});
-    }
-    for(let i=0;i<7;i++){const z=spawnZombie(i===0?'brute':null);
-      if(z){z.x=WANDER.den.x+rand(-9,9);z.z=WANDER.den.z+rand(-9,9);z.rise=999;z.sleeping=true;}}
-  }
-  wanderPopulate();
   WANDER.story.push('Walked '+heading+' into '+BIOME.name.toLowerCase()+'. Region '+WANDER.region+'.');
   G.score+=100;
   announce('REGION '+WANDER.region+' · '+BIOME.name.toUpperCase(),'the country goes on. so do you.');
+  saveWander();
 }
 function wanderTalk(title,who,text,opts){
   CAMP._back=CAMP.mode;CAMP.mode='talk';
@@ -6487,6 +6643,17 @@ function wanderUpdate(dt){
       WANDER.story.push('Watched a column of the dead cross region '+WANDER.region+'.');
     }
   }
+  const lm2=WANDER.landmark;
+  if(lm2&&!lm2.found&&Math.hypot(player.x-lm2.x,player.z-lm2.z)<24){
+    lm2.found=true;G.score+=80;
+    announce(lm2.name,{bell:'someone built it to be heard. nobody dared since.',
+      giant:'stacked stone, taller than hope. older than the dead.',
+      church:'the land is eating it slowly. the cross goes last.'}[lm2.kind]);
+    WANDER.story.push('Found '+lm2.name.toLowerCase()+' in region '+WANDER.region+'.');
+    saveWander();
+  }
+  WANDER.saveT=(WANDER.saveT??30)-dt;
+  if(WANDER.saveT<=0){WANDER.saveT=30;saveWander();}
   if(Math.abs(player.x)>half-5||Math.abs(player.z)>half-5)travelRegion();
   // the stranded die if you dawdle
   for(const s of WANDER.sites){
