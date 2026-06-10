@@ -26,9 +26,14 @@
   /* ---------- HUD: riveted gunmetal plates ---------- */
   #hud{position:fixed;inset:0;pointer-events:none;z-index:5;display:none}
   #hud.on{display:block}
-  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
-  #crosshair .dot{width:4px;height:4px;background:var(--khaki);border-radius:50%;margin:0 auto;box-shadow:0 0 3px #000}
-  #crosshair.hit .dot{background:var(--signal)}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:0;height:0}
+  #crosshair .dot{position:absolute;left:-2px;top:-2px;width:4px;height:4px;background:var(--khaki);border-radius:50%;box-shadow:0 0 3px #000}
+  #crosshair .arm{position:absolute;background:var(--khaki);box-shadow:0 0 3px #000;transition:background .1s}
+  #crosshair .a1{left:-1px;top:calc(-9px - var(--g,4px));width:2px;height:8px}
+  #crosshair .a2{left:-1px;top:calc(1px + var(--g,4px));width:2px;height:8px}
+  #crosshair .a3{top:-1px;left:calc(-9px - var(--g,4px));height:2px;width:8px}
+  #crosshair .a4{top:-1px;left:calc(1px + var(--g,4px));height:2px;width:8px}
+  #crosshair.hit .dot,#crosshair.hit .arm{background:var(--signal)}
 
   .panel{position:relative;background:var(--panel);border:1px solid rgba(201,189,146,.28);
     padding:8px 12px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 0 26px rgba(0,0,0,.5),0 4px 18px rgba(0,0,0,.45)}
@@ -423,7 +428,7 @@
 <div id="acidFx"></div>
 
 <div id="hud">
-  <div id="crosshair"><div class="dot"></div></div>
+  <div id="crosshair"><div class="dot"></div><div class="arm a1"></div><div class="arm a2"></div><div class="arm a3"></div><div class="arm a4"></div></div>
   <div id="waveBox" class="panel">
     <div class="big stencil" id="waveTxt">WAVE 1</div>
     <div class="sub" id="waveSub">hostiles: 0</div>
@@ -5547,6 +5552,12 @@ function updatePlayer(dt,t){
   if(player.tool!=='build')ghost.visible=false;
 
   muzzle.intensity=Math.max(0,muzzle.intensity-dt*900);
+  { // crosshair breathes with the weapon's truth
+    const w2=curW();
+    const sp2=(player.ads?w2.adsSpread:w2.spread)*G.steadyMul*(player.crouch?.62:1);
+    const g2=clamp(sp2*900+vmKick*9+(player.sprint?7:0),2,26);
+    $('crosshair').style.setProperty('--g',g2.toFixed(1)+'px');
+  }
 }
 
 /* ---------------- HUD / minimap ---------------- */
