@@ -1326,6 +1326,12 @@ const cityRubble=new THREE.InstancedMesh(
   new THREE.IcosahedronGeometry(1,1),
   new THREE.MeshStandardMaterial({color:0x4e463c,roughness:.95}),90);
 cityRubble.castShadow=true;
+const cityWins=new THREE.InstancedMesh(
+  new THREE.PlaneGeometry(.5,.7),
+  new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.9,side:THREE.DoubleSide}),44);
+cityWins.material.color.setRGB(3.4,2.0,.8);   // someone still pays for lamp oil
+cityWins.visible=false;
+scene.add(cityWins);
 const cityBeams=new THREE.InstancedMesh(
   new THREE.CylinderGeometry(.09,.13,7,5),
   new THREE.MeshStandardMaterial({color:0x17130e,roughness:1}),58);
@@ -1336,6 +1342,8 @@ function scatterCity(){
   const C=new THREE.Color();
   let wi=0,ri=0,bi=0;
   const k=BIOME.city||0;
+  const WV=new THREE.Vector3();
+  let wn=0;
   const wall=(x,z,ry,w,h,hue)=>{
     if(wi>=118)return;
     E.set(0,ry,srnd()<.1?srand(-.05,.05):0);Q.setFromEuler(E);
@@ -1344,6 +1352,12 @@ function scatterCity(){
     M.compose(P,Q,S);
     cityWalls.setMatrixAt(wi,M);
     cityWalls.setColorAt(wi++,C.setHSL(hue,.18+srnd()*.1,.34+srnd()*.14));
+    if(wn<44&&srnd()<.2){ // a window where a lamp still burns
+      WV.set(srand(-w*.3,w*.3),srand(.5,2.5)*h,.36).applyQuaternion(Q);
+      const M2=new THREE.Matrix4();
+      M2.compose(WV.add(P),Q,new THREE.Vector3(1,1,1));
+      cityWins.setMatrixAt(wn++,M2);
+    }
   };
   if(k>0){
     // whole houses: a box of walls, some of them stolen by the war
@@ -1383,7 +1397,8 @@ function scatterCity(){
       M.compose(P,Q,S);cityRubble.setMatrixAt(ri++,M);
     }
   }
-  cityWalls.count=wi;cityRubble.count=ri;cityBeams.count=bi;
+  cityWalls.count=wi;cityRubble.count=ri;cityBeams.count=bi;cityWins.count=wn;
+  cityWins.instanceMatrix.needsUpdate=true;cityWins.computeBoundingSphere();
   cityWalls.instanceMatrix.needsUpdate=true;
   if(cityWalls.instanceColor)cityWalls.instanceColor.needsUpdate=true;
   cityRubble.instanceMatrix.needsUpdate=true;
@@ -6523,6 +6538,8 @@ function frame(now){
   updateCrows(dt,elapsed);
   bakeEnv(nf);
   updateGodrays(nf,flashT);
+  cityWins.visible=cityWins.count>0&&nf>.42;
+  if(cityWins.visible)cityWins.material.opacity=Math.min(.95,(nf-.42)*2.4);
   flashSpr.material.opacity=Math.max(0,flashSpr.material.opacity-dt*16);
   updateMolotovs(dt);
   updateFires(dt,elapsed);
