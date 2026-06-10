@@ -5023,8 +5023,9 @@ function interact(){
     for(let i=BAST.drops.length-1;i>=0;i--){const d=BAST.drops[i];
       if(d.landed&&Math.hypot(player.x-d.x,player.z-d.z)<2.6){
         scene.remove(d.mesh);BAST.drops.splice(i,1);
-        BAST.cache+=120;BAST.shells+=5;SFX.chime();
-        toast('SPARROW PACKAGE: +120 CACHE · +5 SHELLS');
+        BAST.cache+=d.salvage?260:120;BAST.shells+=d.salvage?10:5;SFX.chime();
+        if(d.salvage)say('THE WALL','Her whole load, carried back on one pair of shoulders. Sparrow 4 takes the route tomorrow. She flies higher.',6000);
+        toast(d.salvage?'SPARROW\'S LAST LOAD: +260 CACHE · +10 SHELLS':'SPARROW PACKAGE: +120 CACHE · +5 SHELLS');
         return;
       }
     }
@@ -6032,6 +6033,37 @@ function bastionUpdate(dt){
   }
   // the helicopter
   BAST.heliT-=dt;
+  if(BAST.heliT<=0&&!BAST.heli.visible&&!BAST.sparrowDown&&BAST.wave>=6&&BAST.wave<=9&&Math.random()<.5){
+    // one run, the sky answers back
+    BAST.sparrowDown=true;BAST.heli.visible=true;BAST.heli.userData.dying=true;
+    BAST.heli.position.set(-6,30,-150);
+    say('SPARROW 3','Sparrow inbound... wait. Tracking fire? Who is shooting, who is...',5200);
+  }
+  if(BAST.heli.visible&&BAST.heli.userData.dying){
+    BAST.heli.position.z+=30*dt;
+    BAST.heli.position.y-=7.5*dt;
+    BAST.heli.position.x-=9*dt;
+    BAST.heli.userData.rotor.rotation.y+=dt*16;
+    if(Math.random()<dt*18)puffSmoke(BAST.heli.position.clone(),true);
+    if(BAST.heli.position.y<=heightAt(BAST.heli.position.x,BAST.heli.position.z)+1.5){
+      const cx=BAST.heli.position.x,cz2=BAST.heli.position.z;
+      BAST.heli.visible=false;BAST.heli.userData.dying=false;BAST.heliT=70;
+      explode(cx,heightAt(cx,cz2)+1,cz2,7,80,1.2);
+      addFirePatch(cx,cz2,2.6,9999);
+      const crate=new THREE.Mesh(new THREE.BoxGeometry(1.2,.9,1.2),
+        new THREE.MeshStandardMaterial({color:0x6b6f4a,map:woodTex}));
+      crate.position.set(cx+rand(-3,3),heightAt(cx,cz2)+.45,cz2+rand(-3,3));
+      crate.castShadow=true;scene.add(crate);
+      const flare=new THREE.Mesh(new THREE.CylinderGeometry(.25,.45,10,7,1,true),
+        new THREE.MeshBasicMaterial({color:0xff8050,transparent:true,opacity:.18,
+          blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+      flare.position.y=5;crate.add(flare);
+      BAST.drops.push({mesh:crate,x:crate.position.x,z:crate.position.z,vy:0,landed:true,salvage:true});
+      announce('SPARROW IS DOWN','her whole load survived the fall. it lies in the open, west of the wall.');
+      if(AU.ctx&&BAST.rotorG){try{BAST.rotorG.o.stop()}catch(e){};BAST.rotorG=null;}
+    }
+    return;
+  }
   if(BAST.heliT<=0&&!BAST.heli.visible){
     BAST.heli.visible=true;BAST.heli.position.set(-6,30,-150);
     say('SPARROW 3','Sparrow inbound from the south. Watch for the chute.');
