@@ -1,3 +1,4 @@
 node_modules/
 dist/
 .DS_Store
+.boot-smoke-tmp.mjs

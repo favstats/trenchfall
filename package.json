@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "check": "node --check src/main.js && node scripts/check-order.mjs"
+    "check": "node --check src/main.js && node scripts/check-order.mjs && node scripts/boot-smoke.mjs",
+    "ship": "npm run check && node scripts/stamp.mjs"
   },
   "dependencies": {
     "three": "0.160.0"

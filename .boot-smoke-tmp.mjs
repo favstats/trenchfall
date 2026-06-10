@@ -1,6 +1,7 @@
-globalThis.__rstub=()=>{const r={domElement:{addEventListener(){},style:{}},shadowMap:{},capabilities:{getMaxAnisotropy:()=>8},
-  setSize(){},setPixelRatio(){},render(){},setClearColor(){},dispose(){},getContext:()=>null};
-  return r;};
+globalThis.__rstub=()=>{const fixed={domElement:{addEventListener(){},style:{}},shadowMap:{},
+  capabilities:{getMaxAnisotropy:()=>8,isWebGL2:true},
+  getPixelRatio:()=>1,getSize:(v)=>v?v.set(1280,720):{width:1280,height:720}};
+  return new Proxy(fixed,{get:(t,p)=>p in t?t[p]:(typeof p==='string'?()=>null:undefined),set:()=>true});};
 const __glstub=()=>new Proxy(function(){},{get:(t,p)=>p===Symbol.toPrimitive?()=>0:__glstub(),apply:()=>__glstub(),construct:()=>__glstub(),set:()=>true});
 const EffectComposer=__glstub(),RenderPass=__glstub(),UnrealBloomPass=__glstub(),ShaderPass=__glstub(),OutputPass=__glstub(),GTAOPass=__glstub();
 import * as THREE from 'three';
@@ -11,7 +12,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
 
 
-import {SFX_ASSETS} from './audio/sfxManifest.js';
+const SFX_ASSETS={};
 
 /* ============================================================
    TRENCHFALL, first-person trench-defense
@@ -54,7 +55,7 @@ let HSALT=0;   // world salt: re-rolls the terrain noise field per leg
 const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0,region:1,story:[],sites:[],hermit:null,survivor:null}; // declared early: worldgen consults it at boot
 
 /* ---------------- renderer / scene ---------------- */
-const renderer=(globalThis.__rstub()),antialias:true});
+const renderer=(globalThis.__rstub());
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
