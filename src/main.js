@@ -46,7 +46,7 @@ function srnd(){let t=SEED+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(
 const srand=(a=1,b)=>b===undefined?srnd()*a:a+srnd()*(b-a);
 const spick=arr=>arr[Math.floor(srnd()*arr.length)];
 let HSALT=0;   // world salt: re-rolls the terrain noise field per leg
-const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0,region:1,story:[],sites:[],hermit:null,survivor:null}; // declared early: worldgen consults it at boot
+const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0,region:1,story:[],sites:[],hermit:null}; // declared early: worldgen consults it at boot
 
 /* ---------------- renderer / scene ---------------- */
 const renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:true});
@@ -3595,6 +3595,13 @@ function allyLine(a){
       ()=>'When I signed on as '+c.role.toLowerCase()+' nobody mentioned the walking. Or the dead. Mostly the walking.',
     ])();
   }
+  if(WANDER.on)return pick([
+    ()=>'Region '+WANDER.region+'. The country doesn\'t end, it just changes its mind.',
+    ()=>'I count my steps some days. The number stopped meaning anything back in the thousands.',
+    ()=>'You sleep, I\'ll watch. You watch, I\'ll sleep. That\'s the whole economy.',
+    ()=>'When this is over I\'m going to sit in a chair. A real one. For a year.',
+    ()=>'We walk until the walking means something. I read that somewhere. Probably a gravestone.',
+  ])();
   return pick([
     ()=>'Quiet today. I hate quiet.',
     ()=>'You dig, I shoot. That\'s the whole friendship, and it\'s a good one.',
@@ -3616,10 +3623,10 @@ function damageAlly(a,d){
     }
     scene.remove(a.mesh);allies.splice(allies.indexOf(a),1);
     decal(a.x,a.z,1.2);
-    if(WANDER.survivor===a){
-      WANDER.survivor=null;
-      WANDER.story.push('Lost '+a.name+' in region '+WANDER.region+'. Walked on alone.');
+    if(WANDER.on){
+      WANDER.story.push('Lost '+a.name+' in region '+WANDER.region+'. '+(allies.length?'The rest kept walking.':'Walked on alone.'));
       say('THE COUNTRY',a.name+' stays here now. You do not.',4200);
+      saveWander();
     }else toast('RIFLEMAN DOWN');
     sTone('sawtooth',300,80,.5,.25);
   }
@@ -5715,9 +5722,31 @@ function interact(){
           s.used=true;scene.remove(s.mesh);
           WANDER.story.push('Pulled a stranger out of the teeth in region '+WANDER.region+'.');
           const a=spawnAlly(player.x+2,player.z+2);
-          if(a){a.name=pick(ALLY_NAMES);WANDER.survivor=a;a.dmgMul=1.2;
+          if(a){a.name=pick(ALLY_NAMES);a.dmgMul=1.2;
             say(a.name,'You came. Nobody comes. I\'m with you now, wherever it goes.',4200);}
-          G.score+=200;SFX.chime();
+          G.score+=200;SFX.chime();saveWander();
+          return;
+        }
+        if(s.kind==='drifter'){
+          wanderTalk(s.name.toUpperCase(),'a rifle across the knees, a fire that doesn\'t smoke',
+            'Heard you coming a mile off. You walk loud for somebody still breathing. Sit if you want. I\'ve got a fire, a rifle, and no appointments.',
+            [['Walk with me','40 scrap · they fight beside you',()=>{
+                if(allies.length>=3){say(s.name,'You\'ve got people enough. Keep them breathing.',3400);return;}
+                if(G.scrap<40){SFX.deny();say(s.name,'Goodwill doesn\'t load a rifle. Forty scrap says you mean it.',3800);return;}
+                G.scrap-=40;s.used=true;scene.remove(s.mesh);
+                const a=spawnAlly(s.x+1.5,s.z+1.5);
+                if(a){a.name=s.name;a.dmgMul=1.15;
+                  say(a.name,'Settled, then. I shoot whatever looks at you wrong.',3800);}
+                WANDER.story.push(s.name+' joined the walk in region '+WANDER.region+'.');
+                G.score+=150;SFX.chime();saveWander();}],
+             ['Ask what they\'ve seen','the country, read aloud',()=>{
+                if(s.told){say(s.name,'Told you what I know. The rest you walk yourself.',3000);return;}
+                s.told=true;G.score+=40;
+                const lm3=WANDER.landmark;
+                say(s.name,lm3&&!lm3.found
+                  ?'There\'s '+lm3.name.toLowerCase()+' out that way, if old maps mean anything. Worth seeing before the grass takes it.'
+                  :'Columns moving at night, more every week. Sleep high, cook small, ring nothing.',5200);}],
+             ['Walk on','two fires is one too many',null]]);
           return;
         }
       }
@@ -5836,7 +5865,7 @@ function driverTalk(t){
   setTimeout(()=>dlg.classList.add('on'),300);
 }
 function talkTo(a){
-  if(!BAST.on&&!['drive','fall','siege'].includes(CAMP.mode))return;
+  if(!BAST.on&&!WANDER.on&&!['drive','fall','siege'].includes(CAMP.mode))return;
   CAMP._back=CAMP.mode;CAMP.mode='talk';
   document.exitPointerLock&&document.exitPointerLock();
   document.body.classList.add('cine');
@@ -6328,7 +6357,7 @@ function drawMap(){
   if(WANDER.on){
     for(const L of WANDER.loot)if(!L.taken)dot(L.x,L.z,L.rich?'#e8742c':'#9dff70',2.6);
     for(const s of WANDER.sites)if(!s.used)
-      dot(s.x,s.z,s.kind==='hermit'?'#e8c050':s.kind==='quester'?'#d8c878':'#7fa0c8',3);
+      dot(s.x,s.z,s.kind==='hermit'?'#e8c050':s.kind==='quester'?'#d8c878':s.kind==='drifter'?'#9dd8a8':'#7fa0c8',3);
     const q=WANDER.quest;
     if(q&&q.taken&&!q.turned)dot(q.objDone?q.gx:q.x,q.objDone?q.gz:q.z,'#ffd060',3.4);
     if(WANDER.landmark&&!WANDER.landmark.found)dot(WANDER.landmark.x,WANDER.landmark.z,'#9fb4d8',3);
@@ -6474,8 +6503,9 @@ function updateHUD(dt){
       if(WANDER.den&&!WANDER.den.woken)
         put(Math.atan2(WANDER.den.x-player.x,WANDER.den.z-player.z),'☠','cpsPoi','#a3271e');
       for(const s2 of WANDER.sites)if(!s2.used)
-        put(Math.atan2(s2.x-player.x,s2.z-player.z),s2.kind==='hermit'?'⌂':s2.kind==='quester'?'?':'!','cpsPoi',
-          s2.kind==='hermit'?'#e8c050':s2.kind==='quester'?'#d8c878':'#7fa0c8');
+        put(Math.atan2(s2.x-player.x,s2.z-player.z),
+          s2.kind==='hermit'?'⌂':s2.kind==='quester'?'?':s2.kind==='drifter'?'+':'!','cpsPoi',
+          s2.kind==='hermit'?'#e8c050':s2.kind==='quester'?'#d8c878':s2.kind==='drifter'?'#9dd8a8':'#7fa0c8');
       const q3=WANDER.quest;
       if(q3&&q3.taken&&!q3.turned){
         const qx=q3.objDone?q3.gx:q3.x,qz=q3.objDone?q3.gz:q3.z;
@@ -6510,7 +6540,8 @@ function updateHUD(dt){
     if(!pr&&WANDER.on){
       for(const s of WANDER.sites)if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
         pr=s.kind==='hermit'?'<b>E</b> SIT AT THE HERMIT\'S FIRE':
-           s.kind==='quester'?'<b>E</b> HEAR THEM OUT':'<b>E</b> REACH THEM IN TIME';break;}
+           s.kind==='quester'?'<b>E</b> HEAR THEM OUT':
+           s.kind==='drifter'?'<b>E</b> SHARE THE DRIFTER\'S FIRE':'<b>E</b> REACH THEM IN TIME';break;}
       if(!pr&&WANDER.quest&&WANDER.quest.taken&&!WANDER.quest.objDone&&WANDER.quest.type==='fetch'
         &&Math.hypot(player.x-WANDER.quest.x,player.z-WANDER.quest.z)<3)pr='<b>E</b> TAKE WHAT THEY ASKED FOR';
       if(!pr&&WANDER.landmark&&WANDER.landmark.kind==='bell'&&!WANDER.landmark.rung
@@ -7234,15 +7265,15 @@ function startWander(load){
   zombies.length=0;
   for(const t of convoy)t.mesh.visible=false;
   for(const a of allies)scene.remove(a.mesh);allies.length=0;
-  WANDER.t=sv?sv.t:0;WANDER.spawnT=8;WANDER.kills0=G.kills;WANDER.survivor=null;
+  WANDER.t=sv?sv.t:0;WANDER.spawnT=8;WANDER.kills0=G.kills;
   WANDER.sites=[];WANDER.colT=null;WANDER.saveT=30;
   WANDER.story=sv?sv.story:[];
   buildWanderRegion(WANDER.region);
   applyRegionState(WANDER.saveRegions[WANDER.region]);
-  if(sv&&sv.survivor){
-    const a=spawnAlly(player.x+2,player.z+2);
-    if(a){a.name=sv.survivor.name;a.xp=sv.survivor.xp;a.ammo=sv.survivor.ammo;
-      a.dmgMul=sv.survivor.dmgMul;WANDER.survivor=a;}
+  const party=sv?(sv.party||(sv.survivor?[sv.survivor]:[])):[]; // legacy saves carried one
+  for(const ps of party){
+    const a=spawnAlly(player.x+rand(-3,3),player.z+rand(2,4));
+    if(a){a.name=ps.name;a.xp=ps.xp||0;a.ammo=ps.ammo??60;a.dmgMul=ps.dmgMul||1;}
   }
   if(!sv)WANDER.story.push('Set out alone into '+BIOME.name.toLowerCase()+'.');
   $('start').classList.remove('show');$('gameover').classList.remove('show');
@@ -7272,8 +7303,7 @@ function saveWander(){
   try{localStorage.setItem('tlr_wander',JSON.stringify({v:1,
     runSeed:WANDER.runSeed,region:WANDER.region,t:WANDER.t,story:WANDER.story,
     regions:WANDER.saveRegions,
-    survivor:WANDER.survivor&&allies.includes(WANDER.survivor)
-      ?{name:WANDER.survivor.name,xp:WANDER.survivor.xp||0,ammo:WANDER.survivor.ammo??60,dmgMul:WANDER.survivor.dmgMul||1}:null,
+    party:allies.map(a=>({name:a.name,xp:a.xp||0,ammo:a.ammo??60,dmgMul:a.dmgMul||1})),
     p:{x:player.x,z:player.z,hp:player.hp,maxhp:player.maxhp,reserve:player.reserve,
        wid:player.wid,owned:player.owned,mags:player.mags,scrap:G.scrap,score:G.score,
        kills:G.kills,items:G.items,speedMul:G.speedMul},
@@ -7323,7 +7353,7 @@ function applyRegionState(st){
   for(const e of st.sites){
     if(typeof e==='number'||!e.u)continue;    // pre-v1 saves: skip safely
     const s=WANDER.sites.find(s2=>s2.kind===e.k&&!s2.used); // one site per kind per region
-    if(s){s.used=true;if(s.kind==='stranded')scene.remove(s.mesh);}
+    if(s){s.used=true;if(s.kind==='stranded'||s.kind==='drifter')scene.remove(s.mesh);}
   }
   if(st.quest&&WANDER.quest)Object.assign(WANDER.quest,st.quest);
   if(WANDER.landmark){WANDER.landmark.found=!!st.lm;WANDER.landmark.rung=!!st.rung;}
@@ -7391,7 +7421,7 @@ function wanderPopulate(){
     WANDER.sites.push({kind:'hermit',x,z,mesh,used:false});
   }
   const sr=srnd(),sa=srand(TAU),sd=srand(half*.4,half*.75);
-  if(sr<.55&&!WANDER.survivor){ // THE STRANDED: alive, for now
+  if(sr<.55&&allies.length<3){ // THE STRANDED: alive, for now
     const x=clamp(Math.cos(sa)*sd,-half+15,half-15),z=clamp(Math.sin(sa)*sd,-half+15,half-15);
     const mesh=buildAllyMesh(null,true);
     mesh.position.set(x,heightAt(x,z),z);
@@ -7412,6 +7442,17 @@ function wanderPopulate(){
     scene.add(mesh);
     WANDER.sites.push({kind:'quester',x,z,mesh,used:false});
     WANDER.quest={type:qt,giver:qn,gx:x,gz:z,x:tx,z:tz,taken:false,objDone:false,turned:false};
+  }
+  // THE DRIFTER: armed, fed, unhurried. could be talked into company
+  const dr=srnd(),da2=srand(TAU),dd2=srand(half*.35,half*.7),dn=spick(ALLY_NAMES);
+  if(dr<.5){
+    const x=clamp(Math.cos(da2)*dd2,-half+15,half-15),z=clamp(Math.sin(da2)*dd2,-half+15,half-15);
+    const mesh=buildAllyMesh();
+    mesh.position.set(x,heightAt(x,z),z);
+    scene.add(mesh);
+    addFirePatch(x+1.3,z+.5,.8,9999);
+    COLLIDERS.push({x:x+1.3,z:z+.5,r:.7});
+    WANDER.sites.push({kind:'drifter',name:dn,x,z,mesh,used:false});
   }
 }
 let fadeEl=null;
@@ -7481,14 +7522,15 @@ function wanderUpdate(dt){
     G.score+=150;
     announce('DAWN','you watched the night through. the country counts it.');
     SFX.chime();
-    if(WANDER.survivor&&allies.includes(WANDER.survivor)){
-      WANDER.survivor.dmgMul=(WANDER.survivor.dmgMul||1)+.05;
-      say(WANDER.survivor.name,pick([
-        'Another dawn. That\'s two of us who saw it.',
+    if(allies.length){
+      for(const al of allies)al.dmgMul=(al.dmgMul||1)+.05;
+      const al=pick(allies);
+      say(al.name,pick([
+        'Another dawn. That\'s '+(allies.length+1)+' of us who saw it.',
         'I used to count nights alone. I like this arithmetic better.',
         'You watch east, I\'ll watch west. That\'s the whole constitution of our country.'])
         ,4200);
-      WANDER.story.push('Watched a dawn with '+WANDER.survivor.name+'.');
+      WANDER.story.push('Watched a dawn with '+allies.map(a2=>a2.name).join(' and ')+'.');
     }
     if(WANDER.story.length>40)WANDER.story.splice(1,WANDER.story.length-40);
   }
