@@ -5528,7 +5528,9 @@ function updateHUD(dt){
       if(!pr&&Math.hypot(player.x,player.z-9.5)<5)pr='<b>E</b> REPAIR THE WALL (30 SCRAP · +100)';
     }
     if(!pr&&WANDER.on){
-      for(const L of WANDER.loot)if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){pr='<b>E</b> CRACK THE CACHE';break;}
+      for(const s of WANDER.sites)if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
+        pr=s.kind==='hermit'?'<b>E</b> SIT AT THE HERMIT\'S FIRE':'<b>E</b> REACH THEM IN TIME';break;}
+      if(!pr)for(const L of WANDER.loot)if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){pr='<b>E</b> CRACK THE CACHE';break;}
     }
     if(!pr&&!BAST.on)for(const t of aliveTrucks())
       if(Math.hypot(player.x-t.x,player.z-roadZ(t.x))<4.4){
@@ -6319,6 +6321,17 @@ function wanderTalk(title,who,text,opts){
 function wanderUpdate(dt){
   WANDER.t+=dt;
   const wnf=0.5-0.5*Math.cos(WANDER.t/150*TAU);
+  if(wnf>.65&&Math.random()<dt*.08){ // a star lets go of the sky
+    const tr=tracers.find(t2=>t2.t<=0);
+    if(tr){
+      const sx=player.x+rand(-200,200),sz=player.z+rand(-200,200),sy=rand(120,180);
+      const p=tr.l.geometry.attributes.position.array;
+      p[0]=sx;p[1]=sy;p[2]=sz;
+      p[3]=sx+rand(-40,40);p[4]=sy-rand(8,20);p[5]=sz+rand(-40,40);
+      tr.l.geometry.attributes.position.needsUpdate=true;
+      tr.t=.9;tr.l.material.opacity=.7;
+    }
+  }
   if(wnf>.75&&!WANDER.nightSaid){WANDER.nightSaid=true;
     say('THE COUNTRY','Dead of night. They move faster when nothing watches.',3600);}
   if(wnf<.5)WANDER.nightSaid=false;
