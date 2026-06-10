@@ -304,9 +304,13 @@ function audioInit(){
   }
   // rain hiss
   const rs=C.createBufferSource();rs.buffer=buf;rs.loop=true;
-  const rf=C.createBiquadFilter();rf.type='highpass';rf.frequency.value=2400;
+  const rf=C.createBiquadFilter();rf.type='bandpass';rf.frequency.value=1050;rf.Q.value=.45;
+  const rf2=C.createBiquadFilter();rf2.type='lowpass';rf2.frequency.value=2400;
   AU.rainG=C.createGain();AU.rainG.gain.value=0;
-  rs.connect(rf);rf.connect(AU.rainG);AU.rainG.connect(AU.master);rs.start();
+  const rlfo=C.createOscillator();rlfo.frequency.value=.21;   // rain breathes in sheets
+  const rlg=C.createGain();rlg.gain.value=.0035;
+  rlfo.connect(rlg);rlg.connect(AU.rainG.gain);rlfo.start();
+  rs.connect(rf);rf.connect(rf2);rf2.connect(AU.rainG);AU.rainG.connect(AU.master);rs.start();
   loadAudioAssets();
 }
 async function loadAudioAssets(){
@@ -1381,7 +1385,7 @@ for(let i=0;i<RAIN_N;i++){rainDrops[i*3]=rand(-40,40);rainDrops[i*3+1]=rand(0,25
 function updateRain(dt,nf){
   const k=clamp((nf-.45)*2.2,0,1);
   rainMat.opacity=k*.32;
-  if(AU.rainG)AU.rainG.gain.value=k*.022;
+  if(AU.rainG)AU.rainG.gain.value=k*.009;
   if(k<=0)return;
   const pos=rainGeo.attributes.position.array;
   for(let i=0;i<RAIN_N;i++){
