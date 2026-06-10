@@ -2087,6 +2087,11 @@ function zombieTarget(zb){
     if(l)return{x:l.x,z:roadZ(l.x),kind:'truck',range:2.8,ref:l};
     return{x:player.x,z:player.z,kind:'player',range:1.5};}
   if(WANDER.on){
+    if(zb.migrate){
+      if(Math.hypot(player.x-zb.x,player.z-zb.z)<9)zb.migrate=null;   // you made it about you
+      else if(Math.hypot(zb.migrate.x-zb.x,zb.migrate.z-zb.z)<5)zb.migrate=null;
+      else return{x:zb.migrate.x,z:zb.migrate.z,kind:'waypoint',range:1.4};
+    }
     for(const s of WANDER.sites)
       if(s.kind==='stranded'&&!s.used&&Math.hypot(zb.x-s.x,zb.z-s.z)<26)
         return{x:s.x,z:s.z,kind:'waypoint',range:.9};
@@ -6453,6 +6458,26 @@ function wanderUpdate(dt){
   }
   if(G.kills>=WANDER.kills0+25){WANDER.kills0=G.kills;
     say('THE COUNTRY','Twenty-five more under the grass. It has noticed.',3200);}
+  WANDER.colT=(WANDER.colT??rand(70,120))-dt;
+  if(WANDER.colT<=0){
+    WANDER.colT=rand(110,180);
+    const a=rand(TAU),sx=player.x+Math.cos(a)*rand(60,90),sz=player.z+Math.sin(a)*rand(60,90);
+    const ha=rand(TAU),ex=clamp(sx+Math.cos(ha)*200,-half+10,half-10),ez=clamp(sz+Math.sin(ha)*200,-half+10,half-10);
+    const px=-Math.sin(ha),pz=Math.cos(ha);
+    let placed=0;
+    for(let i=0;i<12;i++){
+      const z=spawnZombie(i===0&&Math.random()<.3?'brute':null);
+      if(z){placed++;
+        z.x=clamp(sx+px*rand(-7,7)+Math.cos(ha)*i*2.2,-half+6,half-6);
+        z.z=clamp(sz+pz*rand(-7,7)+Math.sin(ha)*i*2.2,-half+6,half-6);
+        z.rise=rand(.2,1.2);z.migrate={x:ex,z:ez};
+      }
+    }
+    if(placed>6){
+      say('THE COUNTRY','A column is moving through. Not for you, unless you make it about you.',4200);
+      WANDER.story.push('Watched a column of the dead cross region '+WANDER.region+'.');
+    }
+  }
   if(Math.abs(player.x)>half-5||Math.abs(player.z)>half-5)travelRegion();
   // the stranded die if you dawdle
   for(const s of WANDER.sites){
