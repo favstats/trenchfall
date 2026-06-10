@@ -19,6 +19,7 @@ const rand=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
 const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
 const $=id=>document.getElementById(id);
 /* ---- the field radio: words arrive like people, not like logs ---- */
+const compassEl=document.createElement('div');compassEl.id='compass';document.body.appendChild(compassEl);
 const sayWrap=document.createElement('div');sayWrap.id='sayWrap';document.body.appendChild(sayWrap);
 const sayQueue=[];let sayBusy=0;
 function say(name,text,hold=4200){
@@ -5429,6 +5430,26 @@ function updateHUD(dt){
         const am=a.ammo??60;
         row.querySelector('.sb>i').style.width=clamp(am/75*100,0,100)+'%';
         row.className='sqRow'+(a.down?' dry':am<=0?' dry':'');});
+    }
+  }
+  { // the compass: only the wanderer needs to know which way is away
+    compassEl.className=WANDER.on?'on':'';
+    if(WANDER.on){
+      const wrap2=a2=>{let d=a2;while(d>Math.PI)d-=TAU;while(d<-Math.PI)d+=TAU;return d;};
+      const heading=player.yaw+Math.PI;
+      let html='';
+      const put=(ang,label,cls,col)=>{
+        const d=wrap2(ang-heading);
+        if(Math.abs(d)>1.05)return;
+        html+='<div class="'+cls+'" style="left:'+(170+d*-155)+'px;color:'+col+'">'+label+'</div>';
+      };
+      put(Math.PI,'N','cpsMark','#c9bd92');put(Math.PI/2,'E','cpsMark','#8a8068');
+      put(0,'S','cpsMark','#8a8068');put(-Math.PI/2,'W','cpsMark','#8a8068');
+      for(const L of WANDER.loot)if(!L.taken)
+        put(Math.atan2(L.x-player.x,L.z-player.z),'▾','cpsPoi',L.rich?'#e8742c':'#9dff70');
+      if(WANDER.den&&!WANDER.den.woken)
+        put(Math.atan2(WANDER.den.x-player.x,WANDER.den.z-player.z),'☠','cpsPoi','#a3271e');
+      compassEl.innerHTML=html;
     }
   }
   $('tTorch').classList.toggle('sel',lampOn);
