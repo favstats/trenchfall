@@ -749,6 +749,10 @@ function vertColor(v,out){
     const s=Math.abs(H[v+1]-H[v-1])+Math.abs(H[v+VN]-H[v-VN]);
     const sf=clamp((s-.8)/2.2,0,1);
     r=lerp(r,.26,sf);g=lerp(g,.18,sf);b=lerp(b,.11,sf);
+    if(BIOME.alpine){ // the snowline: high ground goes white, steep faces shrug it off
+      const sl=clamp((H[v]-3.6)*.7,0,1)*(1-sf*.7);
+      r=lerp(r,.78,sl);g=lerp(g,.82,sl);b=lerp(b,.9,sl);
+    }
   }
   r*=BIOME.tint[0];g*=BIOME.tint[1];b*=BIOME.tint[2];
   // baked AO: concave ground (trench floors, craters) falls into shadow
@@ -1719,13 +1723,16 @@ const snowPts=new THREE.Points(snowGeo,new THREE.PointsMaterial({color:0xe8eef8,
   map:softDot,transparent:true,opacity:0,depthWrite:false,sizeAttenuation:true}));
 snowPts.frustumCulled=false;scene.add(snowPts);
 function updateSnow(dt,t){
-  const want=BIOME.snow&&G.state==='play'?.8:0;
+  const falling=BIOME.snow||BIOME.ash;
+  const want=falling&&G.state==='play'?(BIOME.ash?.6:.8):0;
   snowPts.material.opacity+=(want-snowPts.material.opacity)*Math.min(1,dt*1.5);
+  if(falling)snowPts.material.color.setHex(BIOME.ash?0x9a948c:0xe8eef8); // snow, or what passes for it
   if(snowPts.material.opacity<.02){snowPts.visible=false;return;}
   snowPts.visible=true;
   snowPts.position.set(player.x,player.y,player.z);
+  const fall=BIOME.ash?.65:1.4;                  // ash hangs in the air longer
   for(let i=0;i<SNOW_N;i++){
-    let y=snowPos[i*3+1]-dt*(1.4+(i%5)*.22);    // each flake falls at its own pace
+    let y=snowPos[i*3+1]-dt*(fall+(i%5)*.22);    // each flake falls at its own pace
     snowPos[i*3]+=Math.sin(t*.8+snowPh[i])*dt*.8;
     snowPos[i*3+2]+=Math.cos(t*.66+snowPh[i])*dt*.65;
     if(y<-2)y+=18;
@@ -3702,6 +3709,12 @@ const BIOMES=[
  {name:'RED HARDPAN',tint:[1.12,.98,.84],rugged:.85,treeK:.06,grassK:.12,rockK:2.4,risk:1.3,nfBias:.06,leafHue:-.07,grassHue:-.09,
   desert:true,ground:[.46,.30,.16],grassS:.5,grassL:1.1,
   ds:'Cracked red earth and rust-coloured dust. Water was the first thing this country forgot.'},
+ {name:'THE TEETH',tint:[.94,.97,1.06],rugged:3.6,treeK:.4,grassK:.4,rockK:3,risk:1.35,nfBias:.08,leafHue:.02,grassHue:0,
+  pineBias:.75,alpine:true,
+  ds:'Stone shoulders and knife ridges, snow on the high ground. The road is a rumour up here.'},
+ {name:'ASHFALL',tint:[1.0,.94,.9],rugged:1.05,treeK:.2,grassK:.2,rockK:1.5,risk:1.5,nfBias:.22,leafHue:-.08,grassHue:-.08,
+  ash:true,ground:[.16,.15,.15],grassS:.3,grassL:.7,
+  ds:'Grey snow that isn\'t snow. Somewhere upwind, something is still burning.'},
 ];
 const NODE_ADJ=['RAVENS\'','PALE','BROKEN','LAST','SAINT EDDA\'S','THE COLONEL\'S','WIDOW\'S','HOLLOW','SUNKEN','IRON','THE LONG','BLACKBIRD'];
 const NODE_NOUN=['CAUSEWAY','CROSSING','REACH','MILE','ORCHARD','DITCHES','MARCH','GATE','FIELDS','BEND','REST','PASSAGE'];
@@ -3728,6 +3741,7 @@ function buildWorld(legSeed){
 function setBiome(b){BIOME.city=0;BIOME.shore=false;
   BIOME.snow=false;BIOME.desert=false;BIOME.ground=null;
   BIOME.grassS=1;BIOME.grassL=1;BIOME.pineBias=0;
+  BIOME.alpine=false;BIOME.ash=false;
   Object.assign(BIOME,b);}
 
 /* ---- route generation: the map is drawn fresh every campaign ---- */
@@ -7134,7 +7148,7 @@ function frame(now){
     m.position.z=u.bz+Math.cos(elapsed*.016*u.sp*wind+u.ph)*12;
     m.material.opacity=.065+nf*.05+wxParam('cover',nf)*.04;
   }
-  updateRain(dt,wxParam('rain',nf)*(BIOME.snow?0:1));  // too cold to rain in the waste
+  updateRain(dt,wxParam('rain',nf)*(BIOME.snow||BIOME.ash?0:1));  // the waste is too cold, the ashfall too dry
   updateSnow(dt,elapsed);
   updateSmokes(dt);
   updateShells(dt);
