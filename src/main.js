@@ -91,6 +91,16 @@ const sunHalo=new THREE.Sprite(new THREE.SpriteMaterial({
 sunHalo.material.color.setRGB(3.2,2.1,1.1);
 sunHalo.scale.setScalar(95);
 scene.add(sunDisc);scene.add(sunHalo);
+const moonDisc=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:softDot,transparent:true,opacity:0,fog:false,depthWrite:false}));
+moonDisc.material.color.setRGB(2.1,2.25,2.6);
+moonDisc.scale.setScalar(17);
+const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:softDot,transparent:true,opacity:0,fog:false,depthWrite:false,
+  blending:THREE.AdditiveBlending}));
+moonHalo.material.color.setRGB(.5,.58,.8);
+moonHalo.scale.setScalar(55);
+scene.add(moonDisc);scene.add(moonHalo);
 const rim=new THREE.DirectionalLight(0x7a93c8,.45);   // cool back-light for silhouettes
 rim.position.set(60,40,70);scene.add(rim);
 const DUSK={fog:new THREE.Color(0x70755c),sun:new THREE.Color(0xffb070),sunI:3.1,hemiI:.45};
@@ -7153,6 +7163,12 @@ function wanderUpdate(dt){
   }
 }
 window.startWander=startWander;
+window.devWorld=name=>{ // dev: preview any biome from the console
+  const b=BIOMES.find(b2=>b2.name.toLowerCase().includes(String(name).toLowerCase()));
+  if(!b)return BIOMES.map(b2=>b2.name);
+  setBiome(b);buildWorld((Math.random()*2**31)|0);
+  return b.name;
+};
 /* ---------------- main loop ---------------- */
 let last=performance.now(),elapsed=0,stormT=14,flashT=0;
 const _flashCol=new THREE.Color(.62,.68,.95);
@@ -7252,6 +7268,15 @@ function frame(now){
     const vis=Math.max(0,1-nf*1.15);
     sunDisc.material.opacity=.9*vis;
     sunHalo.material.opacity=.32*vis;
+    const md=_dir.set(64,58,38).normalize();   // the moon keeps the opposite watch
+    moonDisc.position.copy(camera.position).addScaledVector(md,520);
+    moonHalo.position.copy(moonDisc.position);
+    const mvis=clamp((nf-.45)*2.2,0,1);
+    const hunting=BAST.on&&BAST.mod==='moon';
+    moonDisc.material.color.setRGB(hunting?3.1:2.1,hunting?2.1:2.25,hunting?1.7:2.6);
+    moonDisc.scale.setScalar(hunting?24:17);
+    moonDisc.material.opacity=.85*mvis;
+    moonHalo.material.opacity=.2*mvis*(hunting?1.6:1);
   }
   sun.target.position.set(player.x,0,player.z);
   rim.intensity=.35+nf*.4;
