@@ -58,7 +58,13 @@
   @keyframes blink{50%{opacity:.35}}
   #mapWrap{position:absolute;top:18px;right:18px;border:1px solid rgba(201,189,146,.3);background:var(--panel);
     box-shadow:0 4px 18px rgba(0,0,0,.45)}
-  #map{display:block}
+  #map{display:block;border-radius:3px}
+  #mapWrap{border-color:rgba(201,189,146,.4);padding:3px;
+    background:rgba(10,11,7,.72);box-shadow:inset 0 0 18px rgba(0,0,0,.8),2px 3px 8px rgba(0,0,0,.5)}
+  #mapWrap::before,#mapWrap::after{content:'';position:absolute;width:5px;height:5px;
+    border-radius:50%;background:radial-gradient(circle at 35% 35%,#cfc49a,#5d5036);}
+  #mapWrap::before{left:2px;top:2px}
+  #mapWrap::after{right:2px;bottom:2px}
   #mapWrap .tag{font-size:10px;letter-spacing:.3em;color:var(--olive);text-align:center;padding:3px 0 4px}
   #vitals{position:absolute;left:18px;bottom:18px;min-width:250px}
   #vitals .row{display:flex;gap:16px;margin-top:8px;font-size:15px;letter-spacing:.1em}
@@ -87,8 +93,16 @@
     font-family:"Special Elite","Courier New",monospace;text-shadow:0 1px 3px #000}
 
   /* cinematic letterbox + announce */
-  #announce{position:absolute;left:50%;top:24%;transform:translateX(-50%);text-align:center;
-    font-size:50px;letter-spacing:.12em;opacity:0;transition:opacity .4s;text-shadow:0 2px 12px #000}
+  #announce{position:absolute;left:50%;top:24%;transform:translateX(-50%) translateY(14px) scale(.97);
+    text-align:center;font-size:50px;letter-spacing:.12em;opacity:0;text-shadow:0 2px 12px #000;
+    transition:opacity .4s,transform .55s cubic-bezier(.16,1,.3,1);
+    padding:10px 38px 14px;
+    background:linear-gradient(180deg,rgba(10,11,7,0),rgba(10,11,7,.55) 18%,rgba(10,11,7,.55) 82%,rgba(10,11,7,0))}
+  #announce.on{transform:translateX(-50%) translateY(0) scale(1)}
+  #announce::before,#announce::after{content:'';position:absolute;left:12%;right:12%;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(201,189,146,.55),transparent)}
+  #announce::before{top:4px}
+  #announce::after{bottom:4px}
   #announce .s2{font-size:15px;letter-spacing:.5em;color:var(--signal);margin-top:6px;
     font-family:"Special Elite",monospace;text-transform:uppercase}
   .lbox{position:fixed;left:0;right:0;height:0;background:#050503;z-index:5;pointer-events:none;

@@ -4556,7 +4556,7 @@ $('gl').addEventListener('click',()=>{
 let annT=0;
 function announce(main,sub){
   $('annMain').textContent=main;$('annSub').textContent=sub;
-  $('announce').style.opacity=1;annT=2.6;
+  $('announce').style.opacity=1;$('announce').classList.add('on');annT=2.6;
   document.body.classList.add('cine');   // letterbox in: the war pauses for a title card
 }
 let toastT=0;
@@ -5606,7 +5606,7 @@ function updateHUD(dt){
       ]:HINTS;
       $('hint').textContent=pool[G.hintI%pool.length];G.hintI++;}
   }
-  if(annT>0){annT-=dt;if(annT<=0){$('announce').style.opacity=0;document.body.classList.remove('cine');}}
+  if(annT>0){annT-=dt;if(annT<=0){$('announce').style.opacity=0;$('announce').classList.remove('on');document.body.classList.remove('cine');}}
 }
 
 /* ============================================================
