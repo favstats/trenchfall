@@ -4428,7 +4428,7 @@ function gameOver(){
     $('goTitle').textContent='THE COUNTRY KEEPS YOU';
     $('goTag').textContent=WANDER.region+' regions · '+Math.floor(WANDER.t/60)+' minutes · '+G.kills+' put down';
     WANDER.story.push('Fell in region '+WANDER.region+', '+Math.floor(WANDER.t/60)+' minutes out. The crows know the rest.');
-    $('goBest').textContent='YOUR STORY: '+WANDER.story.join(' ');
+    gameOver._story='YOUR STORY: '+WANDER.story.join(' ');
   }else if(BAST.on){
     const bb=+(localStorage.getItem('tlr_bastion_best')||0);
     if(BAST.wave>bb)localStorage.setItem('tlr_bastion_best',BAST.wave);
@@ -4448,7 +4448,8 @@ function gameOver(){
   $('shop').classList.remove('show');$('perks').classList.remove('show');
   const nb=G.score>best;
   if(nb){best=G.score;localStorage.setItem('trenchfall_best',best);}
-  $('goBest').textContent=nb?'NEW RECORD, previous best beaten':'best: '+best.toLocaleString();
+  $('goBest').textContent=gameOver._story||(nb?'NEW RECORD, previous best beaten':'best: '+best.toLocaleString());
+  gameOver._story=null;
   document.exitPointerLock&&document.exitPointerLock();
   $('resume').classList.remove('show');
   const finish=()=>{
