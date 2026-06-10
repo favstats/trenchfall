@@ -450,18 +450,25 @@ const SFX={
     }
     sNoise(.08,'lowpass',900,200,.28);sTone('sine',220,90,.07,.14);
   },
-  groan(vol,p){sTone('sawtooth',p,p*.6,.9,vol*.25);sTone('sine',p*.5,p*.3,.9,vol*.2);},
-  scream(vol){sTone('sawtooth',rand(520,720),190,.55,.2*vol);sTone('square',rand(780,1050),300,.4,.1*vol);},
+  groan(vol,p){
+    sNoise(.85,'lowpass',Math.max(120,p*1.6),70,vol*.16);   // the breath
+    sTone('sine',p*.55,p*.32,.8,vol*.12);                    // the chest under it
+  },
+  scream(vol){
+    sNoise(.4,'bandpass',rand(1300,1800),420,.14*vol);
+    sTone('sine',rand(640,820),230,.45,.1*vol);
+    sTone('triangle',rand(900,1150),320,.3,.05*vol);
+  },
   spit(){
-    playBank('smallHit',{vol:.08,pitch:1.45,pitchVar:.08,filter:{type:'bandpass',freq:1300,q:1.2},verb:.04});
-    sNoise(.18,'bandpass',900,300,.16);sTone('sine',420,180,.15,.06);
+    if(playBank('smallHit',{vol:.1,pitch:1.45,pitchVar:.08,filter:{type:'bandpass',freq:1300,q:1.2},verb:.04}))return;
+    sNoise(.18,'bandpass',900,300,.1);
   },
   acidHit(){
-    playBanks([
-      ['flesh',{vol:.18,pitch:.62,pitchVar:.05,filter:{type:'lowpass',freq:950},verb:.16}],
+    if(playBanks([
+      ['flesh',{vol:.2,pitch:.62,pitchVar:.05,filter:{type:'lowpass',freq:950},verb:.16}],
       ['smallHit',{vol:.10,pitch:.85,pitchVar:.06,delay:.04,filter:{type:'bandpass',freq:800,q:.9},verb:.1}],
-    ]);
-    sNoise(.22,'lowpass',800,150,.18);sTone('sine',300,80,.2,.08);
+    ]))return;
+    sNoise(.22,'lowpass',800,150,.14);
   },
   boom(){
     playBanks([
@@ -481,8 +488,10 @@ const SFX={
   thunder(){sNoise(2.4,'lowpass',900,55,.4);sTone('sine',70,24,2,.3);},
   heartbeat(){sTone('sine',55,38,.14,.5);setTimeout(()=>sTone('sine',50,34,.12,.4),180);},
   hurt(){
-    playBank('flesh',{vol:.18,pitch:.68,pitchVar:.08,filter:{type:'lowpass',freq:950},verb:.14});
-    sTone('sawtooth',180,50,.3,.22);sNoise(.22,'lowpass',1100,150,.18);
+    if(playBank('flesh',{vol:.22,pitch:.68,pitchVar:.08,filter:{type:'lowpass',freq:950},verb:.14})){
+      sNoise(.16,'lowpass',700,150,.08);return;
+    }
+    sNoise(.26,'lowpass',900,140,.2);sTone('sine',160,55,.28,.16);
   },
   dash(){
     if(playBank('cloth',{vol:.18,pitch:1.28,pitchVar:.09,filter:{type:'highpass',freq:600},verb:.03}))return;
@@ -506,13 +515,19 @@ const SFX={
     sNoise(.1,'lowpass',700,200,.2);sTone('sine',140,90,.09,.15);
     setTimeout(()=>{sNoise(.08,'lowpass',900,300,.16);sTone('sine',170,110,.08,.12);},180);
     setTimeout(()=>sNoise(.12,'highpass',1800,700,.08),360);},
-  horn(){sTone('sawtooth',196,196,.45,.22);sTone('sawtooth',147,147,.45,.22);},
+  horn(){
+    sTone('triangle',196,194,.5,.16);sTone('triangle',147,146,.5,.14);
+    sTone('sine',98,97,.55,.12);sNoise(.4,'lowpass',500,200,.05);
+  },
   chime(){
     if(playBank('uiConfirm',{vol:.22,pitch:1.05,pitchVar:.03,verb:.18}))return;
     const t0=AU.ctx?AU.ctx.currentTime:0;
     [[392,1.4,.12],[587.3,1.1,.06],[989,.7,.03]].forEach(([f,d,v])=>sTone('sine',f,f*.997,d,v,t0));
     sNoise(.06,'highpass',3400,2000,.04,t0);},
-  waveHorn(){sTone('sawtooth',98,82,1.6,.3);sTone('sawtooth',73,65,1.8,.26);},
+  waveHorn(){
+    sTone('triangle',98,82,1.6,.2);sTone('triangle',73,65,1.8,.18);
+    sTone('sine',49,41,1.9,.16);sNoise(1.2,'lowpass',420,140,.06);
+  },
   thud(){
     if(playBank('flesh',{vol:.24,pitch:.55,pitchVar:.06,filter:{type:'lowpass',freq:800},verb:.16}))return;
     sTone('sine',90,40,.18,.35);
