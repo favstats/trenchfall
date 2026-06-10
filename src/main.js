@@ -4788,6 +4788,20 @@ function interact(){
                 else SFX.deny();}],
              ['Sit a while','rest by a fire the dead avoid',()=>{
                 player.hp=Math.min(player.maxhp,player.hp+30);G.score+=50;SFX.chime();}],
+             ['Sleep by the fire','wake at the next dusk or dawn. the fire keeps most things away',()=>{
+                const wnf2=0.5-0.5*Math.cos(WANDER.t/150*TAU);
+                const toDawn=wnf2>.5;
+                const period=300,ph=WANDER.t%period;
+                WANDER.t+=toDawn?(period-ph)+2:(150-ph+(ph>150?period:0))+2;
+                fadeBlink();
+                player.hp=Math.min(player.maxhp,player.hp+15);
+                WANDER.story.push('Slept at the hermit\'s fire until '+(toDawn?'dawn':'dark')+'.');
+                if(Math.random()<.35){
+                  for(let i2=0;i2<6;i2++){const z2=spawnZombie();
+                    if(z2){const a2=rand(TAU);z2.x=player.x+Math.cos(a2)*rand(24,34);
+                      z2.z=player.z+Math.sin(a2)*rand(24,34);z2.rise=rand(1.5,4);}}
+                  setTimeout(()=>say('THE HERMIT','Up. UP. The fire kept most of them away. Most.',4200),2300);
+                }else SFX.chime();}],
              met===3?['Take the walker\'s charm','+10% speed, forever this run',()=>{
                 G.speedMul*=1.1;WANDER.story.push('The hermit gave up his charm. Family, by walker\'s law.');SFX.chime();}]
               :['Leave quietly','the silence as you found it',null]]);
