@@ -988,6 +988,49 @@ const woodTex=(()=>{ // plank grain for crates / platform
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
+const burlapTex=(()=>{ // hessian weave for the bags on every parapet
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d'),img=g.createImageData(128,128);
+  for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+    const i=(y*128+x)*4;
+    const weave=Math.sin(x*TAU/8)*Math.sin(y*TAU/8);   // over-under threads
+    const v=150+weave*38+(hash(x*5,y*9)-.5)*36+fbm2(x*.06,y*.06,3)*30-15;
+    img.data[i]=v;img.data[i+1]=v*.92;img.data[i+2]=v*.72;img.data[i+3]=255;
+  }
+  g.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+})();
+const bagGeo=(()=>{ // one sewn sack, reused everywhere bags get stacked
+  const geo=new THREE.CapsuleGeometry(.21,.4,4,12);
+  geo.rotateZ(Math.PI/2);geo.scale(1,.74,1.3);
+  return geo;
+})();
+const bagMat=new THREE.MeshStandardMaterial({color:0xb5a87f,roughness:.95,
+  map:burlapTex,bumpMap:burlapTex,bumpScale:.3});
+const brickTex=(()=>{ // running bond for every ruin still arguing with gravity
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');
+  g.fillStyle='#5a5048';g.fillRect(0,0,256,256);     // mortar
+  const bw=32,bh=16;
+  for(let row=0;row<16;row++){
+    const off=(row%2)*bw/2;
+    for(let col=-1;col<9;col++){
+      const x=col*bw+off,y=row*bh;
+      const v=95+Math.random()*50;
+      g.fillStyle=`rgb(${v|0},${v*.72|0},${v*.58|0})`;
+      g.fillRect(x+1.5,y+1.5,bw-3,bh-3);
+      if(Math.random()<.18){                          // soot-darkened or chipped
+        g.fillStyle='rgba(20,16,12,'+(.2+Math.random()*.4)+')';
+        g.fillRect(x+1.5,y+1.5,bw-3,bh-3);
+      }
+    }
+  }
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+})();
 const roadPosts=new THREE.InstancedMesh(
   new THREE.BoxGeometry(.18,.9,.18),
   new THREE.MeshStandardMaterial({color:0x8a8270}),96);
@@ -1825,6 +1868,10 @@ function scatterSetpieces(){
     for(const s of[-1,1]){
       const tr=new THREE.Mesh(new THREE.BoxGeometry(6.4,1.1,.7),rustD);
       tr.position.set(0,.55,s*1.75);tank.add(tr);
+      for(let wx2=-2.2;wx2<=2.2;wx2+=1.1){ // road wheels sunk in the tread line
+        const wh=new THREE.Mesh(new THREE.CylinderGeometry(.52,.52,.24,14),rust);
+        wh.rotation.x=Math.PI/2;wh.position.set(wx2,.52,s*1.95);tank.add(wh);
+      }
     }
     tank.add(hull,tur,gun);
     const tx=srand(-half+30,half-30),tz=srand(-half+30,half-30);
@@ -1832,7 +1879,8 @@ function scatterSetpieces(){
     tank.rotation.y=srand(TAU);tank.rotation.z=.06;
     setpieces.add(tank);
   }
-  const brick=new THREE.MeshStandardMaterial({color:0x6a5648,roughness:.9});
+  const brick=new THREE.MeshStandardMaterial({color:0xc4b5a4,roughness:.9,
+    map:brickTex,bumpMap:brickTex,bumpScale:.35});
   const nWalls=2+(srnd()*3|0);
   for(let wI=0;wI<nWalls;wI++){
     const wx=srand(-half+14,half-14),wz=srand(-half+14,half-14);
@@ -1874,7 +1922,8 @@ const facadeTex=(()=>{
 })();
 const cityWalls=new THREE.InstancedMesh(
   new THREE.BoxGeometry(9,10,.6),
-  new THREE.MeshStandardMaterial({map:facadeTex,roughness:.92,color:0xd0c2ae,envMapIntensity:.5}),120);
+  new THREE.MeshStandardMaterial({map:facadeTex,roughness:.92,color:0xd0c2ae,envMapIntensity:.5,
+    bumpMap:facadeTex,bumpScale:.55}),120);
 cityWalls.castShadow=cityWalls.receiveShadow=true;
 const cityRubble=new THREE.InstancedMesh(
   new THREE.IcosahedronGeometry(1,1),
@@ -2406,7 +2455,8 @@ const vm=new THREE.Group();camera.add(vm);scene.add(camera);
 const gunModels=[];
 {
   const dark=new THREE.MeshStandardMaterial({color:0x2e2e26,roughness:.42,metalness:.65,envMapIntensity:1.1});
-  const wood=new THREE.MeshStandardMaterial({color:0x6b4f30,map:woodTex,roughness:.72,envMapIntensity:.6});
+  const wood=new THREE.MeshStandardMaterial({color:0x6b4f30,map:woodTex,roughness:.72,envMapIntensity:.6,
+    bumpMap:woodTex,bumpScale:.08}); // grain you can almost feel at arm's length
   const steel=new THREE.MeshStandardMaterial({color:0x55554e,roughness:.28,metalness:.88,envMapIntensity:1.4});
   const tank=new THREE.MeshStandardMaterial({color:0x7a2a1c,roughness:.45,metalness:.5,envMapIntensity:1});
   const box=(w,h,d,m)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
@@ -3418,10 +3468,10 @@ function useMedkit(){
 const bags=[],wires=[];
 function placeBag(x,z,yaw){
   const grp=new THREE.Group();
-  const m=new THREE.MeshStandardMaterial({color:0x8a8060,roughness:.95});
-  for(const[ox,oy]of[[-.6,.22],[0,.22],[.6,.22],[-.3,.62],[.3,.62]]){
-    const b=new THREE.Mesh(new THREE.BoxGeometry(.62,.42,.7),m);
-    b.position.set(ox,oy,0);b.rotation.y=rand(-.1,.1);b.castShadow=true;grp.add(b);
+  for(const[ox,oy]of[[-.6,.16],[0,.16],[.6,.16],[-.3,.45],[.3,.45]]){
+    const b=new THREE.Mesh(bagGeo,bagMat);
+    b.scale.set(.8,1,1);                       // nestled, not floating
+    b.position.set(ox,oy,0);b.rotation.y=rand(-.12,.12);b.castShadow=true;grp.add(b);
   }
   grp.position.set(x,heightAt(x,z),z);grp.rotation.y=yaw;
   scene.add(grp);
@@ -3772,7 +3822,7 @@ function buildTurretMesh(){
   const g=new THREE.Group();
   const m=new THREE.MeshStandardMaterial({color:0x5b5f45});
   const md=new THREE.MeshStandardMaterial({color:0x3a3d2c});
-  const base=new THREE.Mesh(new THREE.CylinderGeometry(.75,1,.9,8),md);base.position.y=.45;base.castShadow=true;
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(.75,1,.9,14),md);base.position.y=.45;base.castShadow=true;
   const head=new THREE.Group();head.position.y=1.25;
   const hb=new THREE.Mesh(new THREE.BoxGeometry(.8,.5,1),m);hb.castShadow=true;
   const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,1.2),md);
@@ -3797,7 +3847,7 @@ function placeTurret(x,z){
     const slit=new THREE.Mesh(new THREE.BoxGeometry(.34,.07,.06),
       new THREE.MeshBasicMaterial({color:0x0a0a08}));
     slit.position.set(0,.18,-.56);head.add(slit);
-    const drum=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.22,9),mm);
+    const drum=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.22,14),mm);
     drum.rotation.z=Math.PI/2;drum.position.set(.42,-.05,0);head.add(drum);
     for(const sx of[-1,1]){const grip=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.16,6),
       new THREE.MeshStandardMaterial({color:0x46341f,roughness:.6}));
@@ -6591,8 +6641,8 @@ function buildGunMesh(type){
   const g=new THREE.Group();
   const iron=new THREE.MeshStandardMaterial({color:0x2c2e26,roughness:.35,metalness:.75,envMapIntensity:1.2});
   if(type==='mortar'){
-    const plate=new THREE.Mesh(new THREE.CylinderGeometry(.55,.65,.16,9),iron);plate.position.y=.08;g.add(plate);
-    const tube=new THREE.Mesh(new THREE.CylinderGeometry(.13,.16,1.5,8),iron);
+    const plate=new THREE.Mesh(new THREE.CylinderGeometry(.55,.65,.16,16),iron);plate.position.y=.08;g.add(plate);
+    const tube=new THREE.Mesh(new THREE.CylinderGeometry(.13,.16,1.5,14),iron);
     tube.rotation.x=-.9;tube.position.set(0,.75,-.25);g.add(tube);
     const leg=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.1,5),iron);
     leg.rotation.x=.7;leg.position.set(0,.55,.4);g.add(leg);
@@ -6602,7 +6652,7 @@ function buildGunMesh(type){
         new THREE.MeshStandardMaterial({color:0x4a3a26,map:woodTex,roughness:.9}));
       wheel.rotation.z=Math.PI/2;wheel.position.set(sx*.65,.6,0);g.add(wheel);
     }
-    const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.11,.17,2.3,9),iron);
+    const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.11,.17,2.3,14),iron);
     barrel.rotation.x=Math.PI/2-.06;barrel.position.set(0,.85,-.6);g.add(barrel);
     const carriage=new THREE.Mesh(new THREE.BoxGeometry(.5,.25,1.6),
       new THREE.MeshStandardMaterial({color:0x4a3a26,map:woodTex,roughness:.85}));
@@ -6623,11 +6673,11 @@ function buildFort(){
       modifyTerrain(-33,z,4.5,-.6);
     }
   // crest bags
-  const bagM2=new THREE.MeshStandardMaterial({color:0x6f6448,roughness:1,map:woodTex});
   for(let z=-54;z<=54;z+=2.6){
     if(Math.abs(z-roadZ(-24))<4.5)continue;       // the gate stays open
-    const b=new THREE.Mesh(new THREE.BoxGeometry(1.1,.42,.55),bagM2);
-    b.position.set(-24+rand(-.4,.4),heightAt(-24,z)+.25,z);
+    const b=new THREE.Mesh(bagGeo,bagMat);
+    b.scale.set(1.35,1,.8);
+    b.position.set(-24+rand(-.4,.4),heightAt(-24,z)+.18,z);
     b.rotation.y=rand(-.2,.2);b.castShadow=true;
     setpieces.add(b);
   }
@@ -6665,9 +6715,9 @@ function buildFort(){
   { // sparrow 2: the drop that did not make it home
     const wreckM=new THREE.MeshStandardMaterial({color:0x1a1d16,roughness:.9,metalness:.3});
     const w2=new THREE.Group();
-    const body2=new THREE.Mesh(new THREE.CylinderGeometry(.85,.6,4.2,8),wreckM);
+    const body2=new THREE.Mesh(new THREE.CylinderGeometry(.85,.6,4.2,14),wreckM);
     body2.rotation.x=Math.PI/2;body2.rotation.z=.5;w2.add(body2);
-    const tail2=new THREE.Mesh(new THREE.CylinderGeometry(.16,.3,3,6),wreckM);
+    const tail2=new THREE.Mesh(new THREE.CylinderGeometry(.16,.3,3,10),wreckM);
     tail2.rotation.x=Math.PI/2-.4;tail2.position.set(.6,1,3);w2.add(tail2);
     const blade=new THREE.Mesh(new THREE.BoxGeometry(.3,7,.06),wreckM);
     blade.rotation.z=.4;blade.position.set(-1.4,2.4,-.5);w2.add(blade);  // one blade planted in the earth
@@ -6680,7 +6730,8 @@ function buildFort(){
     addFirePatch(sx2+1.5,sz2,0.8,9999);
   }
   { // a farmhouse shell mid-field: the horde splits around it, riflemen love it
-    const brick2=new THREE.MeshStandardMaterial({color:0x5d4b3e,roughness:.95});
+    const brick2=new THREE.MeshStandardMaterial({color:0xa89684,roughness:.95,
+      map:brickTex,bumpMap:brickTex,bumpScale:.35});
     const rx=srand(-75,-58),rz=srand(-38,38);
     if(Math.abs(rz-roadZ(rx))>10){
       for(const[ox,oz,w3,ry2]of[[0,0,7,0],[3.6,3,6,Math.PI/2],[-3.6,2,4,Math.PI/2]]){
@@ -7411,7 +7462,8 @@ function buildLandmark(){
     COLLIDERS.push({x,z,r:3});
   }else{
     name='THE SUNKEN CHURCH';
-    const brick=new THREE.MeshStandardMaterial({color:0x5d4b3e,roughness:.95});
+    const brick=new THREE.MeshStandardMaterial({color:0xa89684,roughness:.95,
+      map:brickTex,bumpMap:brickTex,bumpScale:.35});
     for(const[ox,oz,w2,ry]of[[0,-4,9,0],[4.5,0,8,Math.PI/2],[-4.5,0,8,Math.PI/2]]){
       const w3=new THREE.Mesh(new THREE.BoxGeometry(w2,4,.6),brick);
       w3.position.set(ox,.6,oz);w3.rotation.y=ry;g.add(w3);   // half-buried: the land is eating it
