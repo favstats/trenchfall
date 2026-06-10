@@ -1,8 +1,24 @@
 # TRENCHFALL
 
-A single-file browser game. No build, no install, no server code.
+Browser FPS trench defense, now structured as a small Vite/Three.js project.
 
-**Play:** open `index.html`, or or play the hosted build on GitHub Pages.
+## Development
+
+```sh
+npm install
+npm run dev
+```
+
+Then open the localhost URL Vite prints.
+
+## Build
+
+```sh
+npm run build
+npm run preview
+```
+
+The production site is emitted to `dist/`.
 
 ## Modes
 - **New Campaign**, escort the last convoy out of Greyfield across eight hundred
@@ -12,14 +28,22 @@ A single-file browser game. No build, no install, no server code.
   helicopter resupply, casualties you can still save.
 - **Legacy** persists between every run, both modes feed it.
 
-`skirmish.html` is the original wave-defense mode, kept playable.
-`index-classic.html` is the first build, kept as a museum piece.
+`campaign.html`, `skirmish.html`, and `index-classic.html` are preserved static legacy files.
 
-## Tech
-Hand-rolled on three.js (CDN): GTAO, PMREM sky lighting, god rays, procedural
-terrain/forests/cities, deformable ground, fully synthesized Web Audio.
-Everything in one HTML file per mode.
+## Project Layout
+
+- `index.html` is the DOM shell.
+- `src/main.js` contains the game runtime.
+- `src/styles/trenchfall.css` contains the game UI and HUD styling.
+- `src/audio/sfxManifest.js` maps logical SFX banks to audio assets.
+- `public/audio/kenney/` contains a curated CC0 Kenney audio subset.
+
+## Audio
+
+Gunshots remain synthesized because they fit the game well. Footsteps, UI actions,
+reload handling, knife sounds, physical impacts, digging, and build sounds use decoded
+Web Audio buffers from the Kenney CC0 packs in `public/audio/kenney/`.
 
 ## Hosting
-Any static host works. For GitHub Pages: push this folder, then enable
-Pages on the main branch root. The `.nojekyll` file is already in place.
+Run `npm run build` and host the `dist/` folder on any static host. For GitHub Pages,
+publish `dist/` rather than the repository root.
