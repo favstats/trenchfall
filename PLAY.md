@@ -5,7 +5,7 @@ Two self-contained games, no build step, no install:
 | File | What it is |
 |---|---|
 | `index.html` | **THE LONG ROAD**, the main game (campaign + The Bastion). Canonical file. |
-| `index.html` | **SKIRMISH** , the arcade wave-defense mode at the depot. |
+| `skirmish.html` | **SKIRMISH**, the arcade wave-defense mode at the depot. |
 | `index-classic.html` | The original pre-overhaul build, kept as a museum piece. |
 
 ## How to play
