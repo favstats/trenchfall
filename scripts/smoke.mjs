@@ -10,7 +10,7 @@ page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text());})
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
 const shot=p=>page.screenshot({path:p,timeout:120000}).catch(e=>console.log('shot failed:',p));
 
-await page.goto('http://127.0.0.1:5179/',{waitUntil:'load',timeout:60000});
+await page.goto('http://127.0.0.1:5179/',{waitUntil:'domcontentloaded',timeout:60000});
 await page.waitForSelector('#startBtn',{timeout:60000});
 await page.waitForTimeout(4000);
 await shot('/tmp/tf-menu.png');

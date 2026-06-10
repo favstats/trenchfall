@@ -5369,8 +5369,11 @@ function updatePlayer(dt,t){
 
   const prevBob=Math.sin(player.bob);
   player.bob+=dt*(ml>0?(player.sprint?11:7.5):0);
-  if(ml>0&&player.grounded&&prevBob>=0&&Math.sin(player.bob)<0)SFX.step();
-  if(ml>0&&player.grounded&&prevBob<0&&Math.sin(player.bob)>=0)SFX.step();
+  const stepped=ml>0&&player.grounded&&((prevBob>=0&&Math.sin(player.bob)<0)||(prevBob<0&&Math.sin(player.bob)>=0));
+  if(stepped){
+    SFX.step();
+    if(player.sprint)puffSmoke(_tv.set(player.x+rand(-.2,.2),player.y+heightAt(player.x,player.z)+.25,player.z+rand(-.2,.2)),false,true); // boots kick the dry ground
+  }
   player.eyeH=lerp(player.eyeH??1.68,player.crouch?.98:1.68,1-Math.pow(.0001,dt));
   const eye=player.y+player.eyeH+Math.sin(player.bob)*.045*(ml>0?1:0);
   camera.position.set(
