@@ -1052,7 +1052,11 @@ scene.add(depot);
 }
 /* ---------------- the forest: birches, firs, and the dead ones ---------------- */
 let scatterForest=null;
-const DESTRUCT=[];   // declared ahead of the first scatterForest() run: every felled thing registers here
+const DESTRUCT=[];
+const stumps=[];
+const stumpGeo=new THREE.CylinderGeometry(.16,.24,.55,7);
+stumpGeo.translate(0,.27,0);
+const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   // declared ahead of the first scatterForest() run: every felled thing registers here
 {
   const rockG=new THREE.IcosahedronGeometry(1,1);
   const rockM=new THREE.MeshStandardMaterial({color:0x55503f});
@@ -2860,6 +2864,12 @@ function wreckEnvironment(x,z,r){
     d.m.setMatrixAt(d.i,M0);
     touched.add(d.m);
     if(Math.random()<.4)burst(d.x,heightAt(d.x,d.z)+1.2,d.z,3,0x6a5a40,2,3);
+    if((d.m===birchT||d.m===firT||d.m===deadT)&&stumps.length<46){
+      const st=new THREE.Mesh(stumpGeo,stumpMat);
+      st.position.set(d.x,heightAt(d.x,d.z),d.z);
+      st.rotation.y=rand(TAU);st.scale.setScalar(rand(.7,1.15));
+      st.castShadow=true;scene.add(st);stumps.push(st);
+    }
     DESTRUCT.splice(i,1);
   }
   for(const m2 of touched)m2.instanceMatrix.needsUpdate=true;
@@ -2872,6 +2882,10 @@ function fireRocket(){
   ROCKETS.push({x:camera.position.x+_dir.x,y:camera.position.y+_dir.y-.2,z:camera.position.z+_dir.z,
     vx:_dir.x*34,vy:_dir.y*34,vz:_dir.z*34,t:0});
   SFX.dmr();sNoise(.5,'lowpass',1400,200,.3);
+  for(let i=0;i<4;i++)puffSmoke(_tv.set(
+    camera.position.x-_dir.x*(1.5+i*.7)+rand(-.3,.3),
+    camera.position.y-.3+rand(-.2,.2),
+    camera.position.z-_dir.z*(1.5+i*.7)+rand(-.3,.3)),false,true);
   vmKick=Math.min(3,vmKick+2.2);camShake=Math.max(camShake,.7);
 }
 function updateRockets(dt){
@@ -3859,6 +3873,7 @@ const NODE_NOUN=['CAUSEWAY','CROSSING','REACH','MILE','ORCHARD','DITCHES','MARCH
 /* ---- world building per leg ---- */
 function buildWorld(legSeed){
   COLLIDERS.length=0;DESTRUCT.length=0;
+  for(const st of stumps)scene.remove(st);stumps.length=0;
   setSeed(legSeed);HSALT=legSeed|0;
   ROAD.a1=srand(6,15);ROAD.f1=srand(.018,.032);ROAD.s1=srnd()<.5?-1:1;
   ROAD.a2=srand(2,7);ROAD.f2=srand(.05,.09);ROAD.s2=srnd()<.5?-1:1;
@@ -5631,7 +5646,8 @@ function renderInv(){
         molotov:['MOLOTOV','Eight seconds of burning ground. Thrown with [V].',null],
         mine:['AP MINE','Armed in a second. They never look down. Placed with [X].',null],
         medkit:['FIELD MEDKIT','Sixty vitality over four slow breaths. [H], or use it here.',()=>{useMedkit();renderInv();}],
-        flare:['DECOY FLARE','The dead chase the light for twelve seconds. [Z].',null]}[sel.i];
+        flare:['DECOY FLARE','The dead chase the light for twelve seconds. [Z].',null],
+        rocket:['M9 ROCKET','High explosive, shaped for regret. Fired from the tube on slot 8.',null]}[sel.i];
       dn.textContent=M[0];dd.textContent=M[1]+'  Carrying ×'+G.items[sel.i]+'.';
       if(M[2]&&G.items[sel.i]>0&&player.hp<player.maxhp){
         const act=document.createElement('div');act.className='act';act.textContent='USE NOW';
@@ -5660,8 +5676,8 @@ function renderInv(){
       ()=>{renderInv.sel={k:'w',i};sel=renderInv.sel;showDetail();});
   });
   sec('POCKETS · RESERVE '+player.reserve+' RDS · SCRAP '+G.scrap);
-  for(const k of['nade','molotov','mine','medkit','flare'])
-    item({nade:'FRAG',molotov:'MOLOTOV',mine:'AP MINE',medkit:'MEDKIT',flare:'FLARE'}[k],
+  for(const k of['nade','molotov','mine','medkit','flare','rocket'])
+    item({nade:'FRAG',molotov:'MOLOTOV',mine:'AP MINE',medkit:'MEDKIT',flare:'FLARE',rocket:'ROCKET'}[k],
       '×'+G.items[k],'',false,
       ()=>{renderInv.sel={k:'c',i:k};sel=renderInv.sel;showDetail();});
   if(!BAST.on){
@@ -5725,7 +5741,9 @@ function renderShop(){
     d.addEventListener('click',()=>{
       if(owned||poor||!can){SFX.deny();return;}
       G.scrap-=pr;
-      if(it.t==='w'){player.owned[it.i]=true;player.mags[it.i]=WEAPONS[it.i].magSize;toast(WEAPONS[it.i].name+', PRESS '+(it.i+1));}
+      if(it.t==='w'){player.owned[it.i]=true;player.mags[it.i]=WEAPONS[it.i].magSize;
+        if(WEAPONS[it.i].rocket)G.items.rocket=(G.items.rocket||0)+3;
+        toast(WEAPONS[it.i].name+', PRESS '+(it.i+1));}
       else if(it.t==='ammo')player.reserve=Math.min(player.carryCap,player.reserve+100);
       else G.items[it.k]++;
       SFX.buy();renderShop();
