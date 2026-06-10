@@ -44,6 +44,7 @@ function srnd(){let t=SEED+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(
 const srand=(a=1,b)=>b===undefined?srnd()*a:a+srnd()*(b-a);
 const spick=arr=>arr[Math.floor(srnd()*arr.length)];
 let HSALT=0;   // world salt: re-rolls the terrain noise field per leg
+const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0}; // declared early: worldgen consults it at boot
 
 /* ---------------- renderer / scene ---------------- */
 const renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:true});
@@ -6063,7 +6064,7 @@ function strikeBolt(){
 /* ============================================================
    WANDER, the open country: no road, no orders, no one coming
    ============================================================ */
-const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0};
+
 function startWander(){
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   cleanupModes();
