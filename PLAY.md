@@ -7,6 +7,8 @@ npm install
 npm run dev
 ```
 
+Before committing: `npm run check` (syntax + parser-verified load-order guard).
+
 Open the localhost URL printed by Vite.
 
 ## Production Build

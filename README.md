@@ -21,6 +21,9 @@ npm run preview
 The production site is emitted to `dist/`.
 
 ## Modes
+- **Wander**, endless open-country survival: travel region to region, scavenge
+  caches, wake dens, meet the hermit who remembers you across lives, rescue
+  strangers who walk with you. Your run ends as a written story.
 - **New Campaign**, escort the last convoy out of Greyfield across eight hundred
   kilometres of procedurally generated dead country. Companions with faces, names,
   and wishes; camps, heirlooms, dilemmas; permadeath; multiple endings.
