@@ -1051,9 +1051,9 @@ scatterPosts();
 const depot=new THREE.Group();
 {
   const plat=new THREE.Mesh(new THREE.BoxGeometry(13,.3,13),
-    new THREE.MeshStandardMaterial({color:0x847a62,map:woodTex,roughness:.85}));
+    new THREE.MeshStandardMaterial({color:0x847a62,map:woodTex,roughness:.85,bumpMap:woodTex,bumpScale:.2}));
   plat.position.y=.15;plat.castShadow=plat.receiveShadow=true;depot.add(plat);
-  const crateM=new THREE.MeshStandardMaterial({color:0x9a9a6a,map:woodTex,roughness:.8});
+  const crateM=new THREE.MeshStandardMaterial({color:0x9a9a6a,map:woodTex,roughness:.8,bumpMap:woodTex,bumpScale:.25});
   for(let i=0;i<6;i++){
     const c=new THREE.Mesh(new THREE.BoxGeometry(rand(1.2,1.9),rand(.9,1.5),rand(1.2,1.9)),crateM);
     c.position.set(rand(-4,4),.3+c.geometry.parameters.height/2,rand(-4,4));
@@ -1068,18 +1068,19 @@ const depot=new THREE.Group();
   flag.position.set(1,7,0);depot.add(flag);
   const lampL=new THREE.PointLight(0xffc070,20,26);lampL.position.set(0,6,0);depot.add(lampL);
   // dressing: tents, sandbags, a mast, lanterns. somewhere someone defended.
-  const tentM=new THREE.MeshStandardMaterial({color:0x6b6f4f,roughness:.95});
+  const tentM=new THREE.MeshStandardMaterial({color:0x6b6f4f,roughness:.95,
+    map:burlapTex,bumpMap:burlapTex,bumpScale:.25});
   for(const[tx,tz,tr]of[[-4.5,5.5,.6],[5.2,-4.8,-1.1]]){
     const tent=new THREE.Mesh(new THREE.ConeGeometry(1.8,2.1,4),tentM);
     tent.position.set(tx,1.05,tz);tent.rotation.y=tr;tent.castShadow=true;depot.add(tent);
     CAMP_COLLIDERS.push({x:tx,z:tz+9.5,r:1.7});
   }
-  const bagM=new THREE.MeshStandardMaterial({color:0x7a6f54,roughness:1,map:woodTex});
   for(let bI=0;bI<14;bI++){
     const a=bI/14*TAU;
     if(Math.sin(a)<-.42)continue;                 // open arc where the road runs
-    const bag=new THREE.Mesh(new THREE.BoxGeometry(.9,.4,.5),bagM);
-    bag.position.set(Math.cos(a)*8.2,.2+(bI%2)*.38,Math.sin(a)*8.2);
+    const bag=new THREE.Mesh(bagGeo,bagMat);
+    bag.scale.set(1.1,1,.75);
+    bag.position.set(Math.cos(a)*8.2,.13+(bI%2)*.3,Math.sin(a)*8.2);
     bag.rotation.y=-a+rand(-.15,.15);bag.castShadow=true;depot.add(bag);
     CAMP_COLLIDERS.push({x:Math.cos(a)*8.2,z:Math.sin(a)*8.2+9.5,r:.7});
   }
@@ -1096,7 +1097,8 @@ const depot=new THREE.Group();
     bulb.position.set(lx,3.55,lz);depot.add(bulb);   // HDR-hot: blooms like a real lantern
   }
   // the wall greyfield died behind: palisade, two towers, breaches still smoking
-  const palM=new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95});
+  const palM=new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,
+    bumpMap:woodTex,bumpScale:.3});
   const charM=new THREE.MeshStandardMaterial({color:0x18140f,roughness:1});
   const ringR=13.5;
   for(let wa=.62;wa<TAU-.62;wa+=.16){            // open toward the road
@@ -1355,22 +1357,22 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
 const grassData=[];
 let grassMesh=null;
 {
-  const c=document.createElement('canvas');c.width=64;c.height=128;
+  const c=document.createElement('canvas');c.width=128;c.height=256;
   const g=c.getContext('2d');
-  for(let i=0;i<48;i++){ // a fan of meadow blades: dark at the root, sun-bleached at the tip
-    const bx=6+Math.random()*52,top=Math.random()*38,lean=(bx-32)*.55+rand(-9,9);
-    const grd=g.createLinearGradient(0,128,0,top);
+  for(let i=0;i<110;i++){ // a fan of meadow blades: dark at the root, sun-bleached at the tip
+    const bx=12+Math.random()*104,top=Math.random()*76,lean=(bx-64)*.55+rand(-18,18);
+    const grd=g.createLinearGradient(0,256,0,top);
     const[base,tip]=pick([['30,52,20','96,128,52'],['44,68,26','118,138,58'],
       ['58,76,30','142,148,72'],['74,84,36','158,150,84']]);
     grd.addColorStop(0,`rgba(${base},1)`);
     grd.addColorStop(.7,`rgba(${tip},.85)`);
     grd.addColorStop(1,`rgba(${tip},.25)`);
-    g.strokeStyle=grd;g.lineWidth=rand(1.4,3.4);
-    g.beginPath();g.moveTo(bx,128);
-    g.quadraticCurveTo(bx+lean*.4,80,bx+lean,top);g.stroke();
+    g.strokeStyle=grd;g.lineWidth=rand(2,4.8);
+    g.beginPath();g.moveTo(bx,256);
+    g.quadraticCurveTo(bx+lean*.4,160,bx+lean,top);g.stroke();
     if(Math.random()<.22){ // a few blades carry seed heads
       g.fillStyle='rgba(172,152,92,.85)';
-      g.beginPath();g.ellipse(bx+lean,top+2,1.6,4.5,lean*.02,0,TAU);g.fill();
+      g.beginPath();g.ellipse(bx+lean,top+4,2.8,8,lean*.02,0,TAU);g.fill();
     }
   }
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
@@ -2311,10 +2313,25 @@ function tracer(a,b){
 }
 const decals=[];
 {
+  const splatTex=(()=>{ // spilled, not stamped: a core, runners, satellite drops
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d');
+    for(let i=0;i<26;i++){ // the body of it
+      const a=Math.random()*TAU,r=Math.pow(Math.random(),1.6)*26;
+      g.fillStyle=`rgba(255,255,255,${rand(.5,.95)})`;
+      g.beginPath();g.ellipse(64+Math.cos(a)*r,64+Math.sin(a)*r,rand(8,20),rand(6,16),Math.random()*TAU,0,TAU);g.fill();
+    }
+    for(let i=0;i<34;i++){ // flung droplets, thinning outward
+      const a=Math.random()*TAU,r=24+Math.pow(Math.random(),.7)*36;
+      g.fillStyle=`rgba(255,255,255,${rand(.35,.8)})`;
+      g.beginPath();g.ellipse(64+Math.cos(a)*r,64+Math.sin(a)*r,rand(1.2,4),rand(1,3),a,0,TAU);g.fill();
+    }
+    const t=new THREE.CanvasTexture(c);return t;
+  })();
   const g=new THREE.CircleGeometry(.9,16);g.rotateX(-Math.PI/2);
   for(let i=0;i<50;i++){
     const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x551610,transparent:true,opacity:0,
-      map:softDot,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}));
+      map:splatTex,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}));
     scene.add(m);decals.push(m);
   }
 }
@@ -2711,14 +2728,15 @@ let zGeoBody,zGeoHead;
   zGeoHead=mergeGeometries(flesh);
 }
 const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance tint survives
-  const c=document.createElement('canvas');c.width=c.height=128;
-  const g=c.getContext('2d'),img=g.createImageData(128,128);
-  for(let y=0;y<128;y++)for(let x=0;x<128;x++){
-    const i=(y*128+x)*4;
-    let v=205+fbm2(x*.09,y*.09,4)*70-35;
-    const vein=Math.abs(fbm2(x*.05+60,y*.05+19,3)-.5);
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d'),img=g.createImageData(256,256);
+  for(let y=0;y<256;y++)for(let x=0;x<256;x++){
+    const i=(y*256+x)*4;
+    let v=205+fbm2(x*.045,y*.045,4)*70-35;
+    const vein=Math.abs(fbm2(x*.025+60,y*.025+19,3)-.5);
     v-=Math.pow(Math.max(0,1-vein*7),2)*55;            // dark vein web
-    v-=(hash(x*11,y*17)<.03?60:0);                     // lesions
+    v+=(hash(x*7,y*5)-.5)*16;                          // pore-fine grain the old map blurred over
+    v-=(hash(x*11,y*17)<.012?60:0);                    // lesions
     img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.9;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
