@@ -2052,6 +2052,14 @@ function updateZombies(dt,t){
       writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,-.15,-.2,.12,-.08,true,zb.tint);
       mi++;continue;
     }
+    if(zb.sleeping){
+      // face-down among the bones, saving their strength
+      _E.set(-1.45,zb.face||0,0);_Q.setFromEuler(_E);
+      _P.set(zb.x,heightAt(zb.x,zb.z)+.12,zb.z);_S.setScalar(zb.scale);
+      _M.compose(_P,_Q,_S);
+      writeZombie(mi,_M,zb.cloth||0x39402c,zb.flesh||0x6a6258,-.1,-.1,0,0,true,zb.tint);
+      mi++;continue;
+    }
     if(zb.rise>0){
       zb.rise-=dt*.8;
       const gy=heightAt(zb.x,zb.z);
@@ -4700,11 +4708,12 @@ function interact(){
       if(!L.taken&&Math.hypot(player.x-L.x,player.z-L.z)<2.6){
         L.taken=true;scene.remove(L.mesh);
         const roll=Math.random();
-        if(roll<.35){player.reserve=Math.min(player.carryCap,player.reserve+50);toast('CACHE: +50 ROUNDS');}
-        else if(roll<.6){G.items.medkit++;toast('CACHE: A MEDKIT, STILL SEALED');}
-        else if(roll<.8){G.scrap+=45;toast('CACHE: +45 SCRAP');}
-        else{G.items.nade++;G.items.molotov++;toast('CACHE: ORDNANCE, LOVINGLY WRAPPED');}
-        SFX.chime();G.score+=40;
+        const k2=L.rich?2:1;
+        if(roll<.35){player.reserve=Math.min(player.carryCap,player.reserve+50*k2);toast('CACHE: +'+(50*k2)+' ROUNDS');}
+        else if(roll<.6){G.items.medkit+=k2;toast('CACHE: '+(k2>1?'MEDKITS':'A MEDKIT')+', STILL SEALED');}
+        else if(roll<.8){G.scrap+=45*k2;toast('CACHE: +'+(45*k2)+' SCRAP');}
+        else{G.items.nade+=k2;G.items.molotov+=k2;toast('CACHE: ORDNANCE, LOVINGLY WRAPPED');}
+        SFX.chime();G.score+=40*k2;
         return;
       }
     }
@@ -6089,6 +6098,22 @@ function startWander(){
     scene.add(c);WANDER._meshes.push(c);
     WANDER.loot.push({x,z,mesh:c,taken:false});
   }
+  { // the den: somewhere out there, the dead sleep on a hoard
+    const a=rand(TAU),r=rand(half*.5,half*.8);
+    WANDER.den={x:clamp(Math.cos(a)*r,-half+18,half-18),z:clamp(Math.sin(a)*r,-half+18,half-18),woken:false};
+    for(let i=0;i<3;i++){
+      const c=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,1.1),
+        new THREE.MeshStandardMaterial({color:0x4a3e33,map:woodTex,roughness:.85}));
+      c.position.set(WANDER.den.x+rand(-2,2),heightAt(WANDER.den.x,WANDER.den.z)+.4,WANDER.den.z+rand(-2,2));
+      c.castShadow=true;scene.add(c);WANDER._meshes.push(c);
+      WANDER.loot.push({x:c.position.x,z:c.position.z,mesh:c,taken:false,rich:true});
+    }
+    for(let i=0;i<7;i++){ // the sleepers, face-down around their hoard
+      const z=spawnZombie(i===0?'brute':null);
+      if(z){z.x=WANDER.den.x+rand(-9,9);z.z=WANDER.den.z+rand(-9,9);
+        z.rise=999;z.sleeping=true;}   // they do not rise until woken
+    }
+  }
   $('start').classList.remove('show');$('gameover').classList.remove('show');
   $('hud').classList.add('on');
   initSlots();refreshVM();
@@ -6097,10 +6122,20 @@ function startWander(){
 }
 function wanderUpdate(dt){
   WANDER.t+=dt;
+  const wnf=0.5-0.5*Math.cos(WANDER.t/150*TAU);
+  if(wnf>.75&&!WANDER.nightSaid){WANDER.nightSaid=true;
+    say('THE COUNTRY','Dead of night. They move faster when nothing watches.',3600);}
+  if(wnf<.5)WANDER.nightSaid=false;
+  if(WANDER.den&&!WANDER.den.woken&&Math.hypot(player.x-WANDER.den.x,player.z-WANDER.den.z)<26){
+    WANDER.den.woken=true;
+    for(const z of zombies)if(z.sleeping){z.sleeping=false;z.rise=rand(1.2,2.4);}
+    SFX.wail();flashT=Math.max(flashT,.15);
+    announce('THE DEN WAKES','you stepped among them. the hoard is theirs until it isn\'t.');
+  }
   G.wave=Math.min(14,1+Math.floor(WANDER.t/75));   // the land learns you are here
   WANDER.spawnT-=dt;
   if(WANDER.spawnT<=0){
-    WANDER.spawnT=clamp(9-G.wave*.55,2.6,9);
+    WANDER.spawnT=clamp(9-G.wave*.55,2.6,9)*(wnf>.75?.6:1);
     const n=Math.random()<.25?2+(Math.random()*G.wave/3|0):1;
     for(let i=0;i<n;i++){
       const z=spawnZombie();
