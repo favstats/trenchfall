@@ -6036,8 +6036,9 @@ function bastionUpdate(dt){
   }
   if(BAST.heli.visible&&BAST.heli.userData.nav)
     BAST.heli.userData.nav.material.color.setScalar(Math.floor(performance.now()/350)%2?6:0.4);
-  // war drums: when the field is full, the night gets a pulse
-  const thick=zombies.filter(z=>z.alive).length;
+  // one pass over the dead, however many they are
+  let thick=0,overWall=0;
+  for(const z of zombies){if(!z.alive)continue;thick++;if(z.rise<=0&&z.x>-22)overWall++;}
   if(thick>8){
     BAST.drumT=(BAST.drumT||0)-dt;
     if(BAST.drumT<=0){
@@ -6049,7 +6050,7 @@ function bastionUpdate(dt){
   // breach watch: anything east of the wall gets called by name
   BAST.breachT=Math.max(0,(BAST.breachT||0)-dt);
   if(BAST.breachT<=0){
-    const over=zombies.filter(z=>z.alive&&z.rise<=0&&z.x>-22).length;
+    const over=overWall;
     if(over>0){BAST.breachT=8;
       say('LOOKOUT',over===1?'One\'s over the wall! East side, inside the wire!':over+' inside the wire! They\'re behind us!',3400);
       SFX.beep();}
