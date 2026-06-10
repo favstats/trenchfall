@@ -2208,14 +2208,14 @@ function updateZombies(dt,t){
           burst(sx,heightAt(sx,sz)+.4,sz,big?30:18,0x5a4326,5,6);
           const dp=Math.hypot(player.x-sx,player.z-sz);
           camShake=Math.max(camShake,clamp(1.3-dp*.03,0,1)*(big?.9:.6));
-          if(tg.kind==='player'&&dp<(big?4.6:3.6))damagePlayer(big?45:30);
+          if(tg.kind==='player'&&dp<(big?4.6:3.6))damagePlayer(big?45:30,zb);
           else if(tg.kind==='depot')damageDepot(big?60:26);
           else if(tg.kind==='truck')damageTruck(big?70:34,tg.ref);
           else if(tg.kind==='turret')damageTurret(tg.ref,big?70:34);
           else if(tg.kind==='ally')damageAlly(tg.ref,big?60:28);
         }else{
           zb.atkT=.95;
-          if(tg.kind==='player')damagePlayer(8);
+          if(tg.kind==='player')damagePlayer(8,zb);
           else if(tg.kind==='depot')damageDepot(7);
           else if(tg.kind==='truck')damageTruck(9,tg.ref);
           else if(tg.kind==='turret')damageTurret(tg.ref,10);
@@ -2360,7 +2360,7 @@ function updateAcids(dt){
         SFX.acidHit();
         burst(p.x,p.y+.2,p.z,14,0x9aff30,3.5,4);
         const dp=Math.hypot(player.x-p.x,player.z-p.z);
-        if(player.alive&&dp<3.4){damagePlayer(14);acidFlash=1;}
+        if(player.alive&&dp<3.4){damagePlayer(14,zb);acidFlash=1;}
         for(const t of[...turrets])if(Math.hypot(t.x-p.x,t.z-p.z)<3.2)damageTurret(t,14);
         if(Math.hypot(p.x,p.z)<7.5)damageDepot(8);
         for(const t of aliveTrucks())if(Math.hypot(t.x-p.x,roadZ(t.x)-p.z)<3.6)damageTruck(12,t);
@@ -4424,7 +4424,17 @@ function damageDepot(d){
   G.depotHp-=d;
   if(G.depotHp<=0){G.depotHp=0;gameOver();}
 }
-function damagePlayer(d){
+function dmgArcFrom(sx,sz){
+  const rel=Math.atan2(sx-player.x,sz-player.z)-(player.yaw+Math.PI);
+  const el=document.createElement('div');
+  el.className='dmgArc';
+  el.style.transform='rotate('+(-rel)+'rad)';
+  document.body.appendChild(el);
+  setTimeout(()=>{el.style.opacity=0;},350);
+  setTimeout(()=>el.remove(),1200);
+}
+function damagePlayer(d,src){
+  if(src)dmgArcFrom(src.x,src.z);
   if(!player.alive)return;
   player.hp-=d;player.hurtT=1;player.regenT=6;
   camShake=Math.max(camShake,.35);
@@ -5465,6 +5475,13 @@ function updateHUD(dt){
   $('hpPct').textContent=Math.ceil(player.hp);
   $('hpBar').style.width=clamp(player.hp,0,100)+'%';
   $('hpBar').style.background=player.hp<30?'#a3271e':'#9ab35c';
+  $('vitals').classList.toggle('low',player.hp<30&&player.alive);
+  { const rb=$('reloadBar');
+    if(player.reloadT>0&&!player.tool){
+      const w2=curW();rb.className='on';
+      rb.firstElementChild.style.width=(100*(1-player.reloadT/(w2.reload*G.reloadMul)))+'%';
+    }else rb.className='';
+  }
   $('scrap').textContent=G.scrap;
   $('dirt').textContent=G.dirt;
   $('score').textContent=G.score.toLocaleString();

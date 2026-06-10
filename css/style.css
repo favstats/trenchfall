@@ -72,6 +72,16 @@
   #prompt{position:absolute;left:50%;bottom:140px;transform:translateX(-50%);
     font-size:16px;letter-spacing:.14em;text-align:center;text-shadow:0 1px 3px #000}
   #prompt b{color:var(--signal);border:1px solid var(--signal);padding:0 7px;font-weight:600}
+  #vitals.low{animation:vitPulse 1.05s ease-in-out infinite}
+  @keyframes vitPulse{0%,100%{box-shadow:0 0 0 rgba(163,39,30,0)}50%{box-shadow:0 0 22px rgba(163,39,30,.55)}}
+  #reloadBar{height:3px;background:rgba(201,189,146,.18);margin-top:5px;display:none}
+  #reloadBar.on{display:block}
+  #reloadBar>i{display:block;height:100%;background:var(--signal);width:0%}
+  .dmgArc{position:fixed;left:50%;top:50%;width:130px;height:130px;margin:-65px 0 0 -65px;
+    pointer-events:none;z-index:7;opacity:.85;transition:opacity .8s}
+  .dmgArc::before{content:'';position:absolute;left:50%;top:-46px;margin-left:-34px;
+    width:68px;height:26px;border-radius:50% 50% 0 0;
+    background:radial-gradient(ellipse at 50% 100%,rgba(163,39,30,.9),transparent 70%)}
   #hint{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);
     font-size:14px;letter-spacing:.14em;color:rgba(201,189,146,.7);white-space:nowrap;
     font-family:"Special Elite","Courier New",monospace;text-shadow:0 1px 3px #000}
