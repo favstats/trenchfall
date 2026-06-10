@@ -2936,7 +2936,7 @@ function updateAllies(dt,t){
         _tv2.set(best.x,heightAt(best.x,best.z)+1.1*best.scale,best.z);
         tracer(_tv,_tv2);
         if(Math.random()<.75){
-          damageZombie(best,9*(a.dmgMul||1)*(1+(a.xp||0)*.004),_tv2);
+          damageZombie(best,9*(a.dmgMul||1)*(1+(a.xp||0)*.004)*(BAST.rally?1.35:1),_tv2);
           if(!best.alive){
             const r0=rankOf(a.xp||0);a.xp=(a.xp||0)+1;
             if(rankOf(a.xp)!==r0)say(a.name,'They\'re calling me '+rankOf(a.xp)+' now. Same mud, better hat.',3200);
@@ -5868,7 +5868,7 @@ function startBastion(){
   CAMP.on=false;BAST.on=true;
   CAMP.comps=[];CAMP.heirlooms=[];CAMP.mode='menu';
   $('roster').classList.remove('on');
-  Object.assign(BAST,{wave:0,shells:8,cache:240,heliT:34,drops:[],interT:5,lastStand:false,breachT:0});
+  Object.assign(BAST,{wave:0,shells:8,cache:240,heliT:34,drops:[],interT:5,lastStand:false,rally:false,breachT:0});
   setSeed((Math.random()*2**31)|0);
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);  // tonight's theater, drawn from the deck
   buildWorld((Math.random()*2**31)|0);
@@ -6084,9 +6084,15 @@ function bastionUpdate(dt){
       SFX.beep();}
   }
   // the wall's last hour announces itself, once
-  if(G.depotHp<300&&!BAST.lastStand){BAST.lastStand=true;
+  if(G.depotHp<300&&!BAST.lastStand){BAST.lastStand=true;BAST.rally=true;
     flashT=Math.max(flashT,.3);SFX.wail();
     announce('THE WALL IS DYING','three hundred left in her. make every sandbag count.');
+    const lines=['Then she dies expensive. FIX BAYONETS.','I came here to be buried. Not tonight.',
+      'Every round counts twice now. Make them.','If the wall goes, we ARE the wall.'];
+    allies.filter(a=>!a.down).forEach((a,i)=>setTimeout(()=>say(a.name,lines[i%lines.length],3600),2800+i*2400));
+  }
+  if(BAST.lastStand&&G.depotHp>420&&BAST.rally){BAST.rally=false;BAST.lastStand=false;
+    say('LOOKOUT','She holds. She actually holds. Stand down from the brink.',4200);
   }
   // gun cooldowns + manned fire
   for(const g of BAST.guns)g.cd=Math.max(0,g.cd-dt);
