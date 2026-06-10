@@ -5647,7 +5647,7 @@ function updateHUD(dt){
       bars.appendChild(d);
     }
   }
-  convoy.forEach((t,i)=>{
+  if(!BAST.on)convoy.forEach((t,i)=>{
     const row=bars.children[i];if(!row)return;
     const bar=row.querySelector('i');
     bar.style.width=Math.max(0,t.hp/t.maxhp*100)+'%';
