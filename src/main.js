@@ -936,7 +936,7 @@ const woodTex=(()=>{ // plank grain for crates / platform
     rg.addColorStop(0,'rgba(50,36,20,.8)');rg.addColorStop(1,'rgba(50,36,20,0)');
     g.fillStyle=rg;g.beginPath();g.arc(x,y,7,0,TAU);g.fill();
   }
-  const t=new THREE.CanvasTexture(c);woodTex.anisotropy=8;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -1052,6 +1052,7 @@ scene.add(depot);
 }
 /* ---------------- the forest: birches, firs, and the dead ones ---------------- */
 let scatterForest=null;
+const DESTRUCT=[];   // declared ahead of the first scatterForest() run: every felled thing registers here
 {
   const rockG=new THREE.IcosahedronGeometry(1,1);
   const rockM=new THREE.MeshStandardMaterial({color:0x55503f});
@@ -1652,7 +1653,7 @@ const facadeTex=(()=>{
     if(broken>.86){g.fillStyle='rgba(0,0,0,.85)'; // blast scorch above the frame
       g.beginPath();g.ellipse(xx+11,yy-4,15,8,0,0,TAU);g.fill();}
   }
-  const t=new THREE.CanvasTexture(c);facadeTex.anisotropy=8;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -2850,7 +2851,6 @@ function updateNades(dt){
     if(p.t<=0){m.live=false;m.visible=false;explode(p.x,p.y,p.z);}
   }
 }
-const DESTRUCT=[];
 function wreckEnvironment(x,z,r){
   const touched=new Set();
   const M0=new THREE.Matrix4().makeScale(0,0,0);
