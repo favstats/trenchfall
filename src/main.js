@@ -2283,6 +2283,13 @@ function damageZombie(zb,dmg,hitPos,isHead){
   if(zb.hp<=0){
     zb.alive=false;zb.deadT=0;
     G.kills++;chain++;chainT=3;
+    { const ch=$('crosshair');ch.classList.remove('kill');void ch.offsetWidth;ch.classList.add('kill');
+      setTimeout(()=>ch.classList.remove('kill'),240);
+      const sp=document.createElement('div');sp.className='scorePop';
+      sp.textContent='+'+(zb.brute?60:zb.kind==='colossus'?400:10)*(chain>4?2:1)+(chain>4?' ×2':'');
+      document.body.appendChild(sp);setTimeout(()=>sp.remove(),850);
+      if(document.querySelectorAll('.scorePop').length>4)document.querySelector('.scorePop').remove();
+    }
     G.scrap+=Math.round((zb.kind==='colossus'?150:zb.brute?40:4)*G.scrapMul*(wxFrenzy?2:1));
     G.score+=(zb.kind==='colossus'?500:zb.brute?120:10)+(chain>=2?Math.min(chain,25)*3:0);
     decal(zb.x,zb.z,zb.kind==='colossus'?3.4:zb.brute?2.2:1);
