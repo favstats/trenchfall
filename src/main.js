@@ -5822,12 +5822,13 @@ function startBastion(){
 }
 function bastionWave(){
   BAST.wave++;G.wave=Math.min(14,1+BAST.wave);
-  G.spawnLeft=14+BAST.wave*5;
+  G.spawnLeft=Math.round((14+BAST.wave*5)*(BAST.mod==='swarm'?1.7:1));
+  if(BAST.mod==='swarm')G.bruteLeft=0;
   G.bruteLeft=BAST.wave%4===0?Math.ceil(BAST.wave/4):0;
   BAST.colossus=BAST.wave%10===0;
   if(BAST.colossus)G.bruteLeft=Math.max(1,G.bruteLeft);
   G.spawnT=.5;
-  BAST.mod=BAST.planned??((BAST.wave>=3&&BAST.wave%3===0)?pick(['moon','tide','fog']):null);
+  BAST.mod=BAST.planned??((BAST.wave>=3&&BAST.wave%3===0)?pick(['moon','tide','fog','swarm']):null);
   BAST.planned=null;
   if(BAST.mod==='fog'){wxNext=2;wxBlend=0;wxTimer=60;}
   SFX.waveHorn();
@@ -5879,11 +5880,12 @@ function bastionUpdate(dt){
         announce('NIGHT '+BAST.wave+' HELD','it fell. sparrow sends six shells out of respect.');}
       else announce('NIGHT '+BAST.wave+' HELD','the wall mends · '+G.kills+' confirmed · stand easy');
       const nw=BAST.wave+1;
-      BAST.planned=(nw>=3&&nw%3===0)?pick(['moon','tide','fog']):null;
+      BAST.planned=(nw>=3&&nw%3===0)?pick(['moon','tide','fog','swarm']):null;
       if(BAST.planned)setTimeout(()=>say('LOOKOUT',{
         moon:'Next push looks fast. Lean shapes, long strides. Runners.',
         tide:'The grass is wrong out there. They\'re already inside the field. Watch your feet.',
-        fog:'Weather\'s turning. Next one comes blind. Trust the searchlight.'}[BAST.planned],5200),2600);
+        fog:'Weather\'s turning. Next one comes blind. Trust the searchlight.',
+        swarm:'Horizon\'s moving. All of it. No big ones, just... all of it. Feed the guns.'}[BAST.planned],5200),2600);
     }
     if(BAST.cleared&&BAST.wave>0&&BAST.wave%3===0&&!BAST.reqDone){
       BAST.reqDone=true;bastionRequisition();
