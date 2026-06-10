@@ -4771,10 +4771,18 @@ function gameOver(){
   const nb=G.score>best;
   if(nb){best=G.score;localStorage.setItem('trenchfall_best',best);}
   $('goBest').textContent=nb?'NEW RECORD, previous best beaten':'best: '+best.toLocaleString();
-  $('gameover').classList.add('show');
-  $('resume').classList.remove('show');
-  $('hud').classList.remove('on');
   document.exitPointerLock&&document.exitPointerLock();
+  $('resume').classList.remove('show');
+  const finish=()=>{
+    document.body.classList.remove('cine');
+    $('gameover').classList.add('show');
+    $('hud').classList.remove('on');
+  };
+  if(gameOver._bw!=null){ // the camera lifts away from the dying wall
+    document.body.classList.add('cine');
+    $('hud').classList.remove('on');
+    setTimeout(finish,3800);
+  }else finish();
   SFX.crash();
 }
 function startGame(){
@@ -5893,6 +5901,13 @@ function buildFort(){
     const housing=new THREE.Mesh(new THREE.CylinderGeometry(.34,.42,.6,8),pole.material);
     housing.rotation.z=Math.PI/2-.3;
     housing.position.copy(pole.position).y+=2.7;setpieces.add(housing);
+    const beamG=new THREE.CylinderGeometry(.35,5.5,120,12,1,true);
+    beamG.translate(0,-60,0);beamG.rotateX(-Math.PI/2);
+    BAST.beam=new THREE.Mesh(beamG,new THREE.MeshBasicMaterial({color:0xfff2d8,
+      transparent:true,opacity:.03,blending:THREE.AdditiveBlending,
+      depthWrite:false,side:THREE.DoubleSide}));
+    BAST.beam.position.copy(housing.position);
+    scene.add(BAST.beam);
     const sl=new THREE.SpotLight(0xfff2d8,900,150,.11,.45,1.4);
     sl.position.copy(housing.position);
     scene.add(sl);scene.add(sl.target);
@@ -6138,6 +6153,10 @@ function bastionUpdate(dt){
       BAST.search.target.position.set(-85,0,Math.sin(BAST.searchA)*60+9.5);
     }
     BAST.search.intensity=850+Math.sin((BAST.searchA||0)*7)*120;
+    if(BAST.beam){
+      BAST.beam.lookAt(BAST.search.target.position);
+      BAST.beam.material.opacity=.022+CAMP.nf*.025;
+    }
   }
   if(BAST.heli.visible&&BAST.heli.userData.nav)
     BAST.heli.userData.nav.material.color.setScalar(Math.floor(performance.now()/350)%2?6:0.4);
@@ -6288,6 +6307,26 @@ function npcMortarFire(g,a){
   setTimeout(()=>{explode(tx,heightAt(tx,tz)+.5,tz,6.5,130,1.1);},1150);
 }
 window.startBastion=startBastion;
+/* lightning made visible: geometry, not just a bright frame */
+const boltGeo=new THREE.BufferGeometry();
+boltGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(11*3),3));
+const boltMat=new THREE.LineBasicMaterial({transparent:true,opacity:0,blending:THREE.AdditiveBlending});
+boltMat.color.setRGB(9,10,14);
+const bolt=new THREE.Line(boltGeo,boltMat);
+bolt.frustumCulled=false;scene.add(bolt);
+let boltT=0;
+function strikeBolt(){
+  const bx=player.x+rand(-120,120),bz=player.z+rand(-120,120);
+  const p=boltGeo.attributes.position.array;
+  let x=bx,z=bz;
+  for(let i=0;i<11;i++){
+    const y=120-i*(120-heightAt(bx,bz))/10;
+    p[i*3]=x;p[i*3+1]=y;p[i*3+2]=z;
+    x+=rand(-9,9);z+=rand(-9,9);
+  }
+  boltGeo.attributes.position.needsUpdate=true;
+  boltT=.22;
+}
 /* ---------------- main loop ---------------- */
 let last=performance.now(),elapsed=0,stormT=14,flashT=0;
 let frameAvg=16,qTimer=4,lowRes=false;
@@ -6375,11 +6414,12 @@ function frame(now){
   if(wxParam('storm',nf)>.5){
     stormT-=dt;
     if(stormT<=0){
-      stormT=rand(6,16);flashT=.26;
+      stormT=rand(6,16);flashT=.26;strikeBolt();
       setTimeout(()=>SFX.thunder(),rand(400,1500));
     }
   }
   flashT=Math.max(0,flashT-dt*1.4);
+  if(boltT>0){boltT-=dt;boltMat.opacity=Math.max(0,boltT*4.5);}
   boomLight.intensity=Math.max(0,boomLight.intensity-dt*4500);
 
   updatePlayer(dt,elapsed);
