@@ -71,6 +71,17 @@ sun.shadow.camera.top=46;sun.shadow.camera.bottom=-46;
 sun.shadow.camera.far=320;sun.shadow.bias=-0.0005;
 sun.shadow.normalBias=.02;sun.shadow.radius=5;
 scene.add(sun);scene.add(sun.target);
+// the sun has a body: an HDR core that blooms, a halo that breathes
+const sunDisc=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:softDot,transparent:true,opacity:.9,fog:false,depthWrite:false}));
+sunDisc.material.color.setRGB(14,9,4.5);
+sunDisc.scale.setScalar(26);
+const sunHalo=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:softDot,transparent:true,opacity:.32,fog:false,depthWrite:false,
+  blending:THREE.AdditiveBlending}));
+sunHalo.material.color.setRGB(3.2,2.1,1.1);
+sunHalo.scale.setScalar(95);
+scene.add(sunDisc);scene.add(sunHalo);
 const rim=new THREE.DirectionalLight(0x7a93c8,.45);   // cool back-light for silhouettes
 rim.position.set(60,40,70);scene.add(rim);
 const DUSK={fog:new THREE.Color(0x70755c),sun:new THREE.Color(0xffb070),sunI:3.1,hemiI:.45};
@@ -6471,6 +6482,14 @@ function frame(now){
   depot.userData.flag.rotation.y=Math.sin(elapsed*1.7)*.3;
   // shadow frustum follows the player → crisp shadows where you look
   sun.position.set(player.x-70,80,player.z-40);
+  { // park the disc far along the light direction; night and fog swallow it
+    const sd=_dir.set(-70,80,-40).normalize();
+    sunDisc.position.copy(camera.position).addScaledVector(sd,520);
+    sunHalo.position.copy(sunDisc.position);
+    const vis=Math.max(0,1-nf*1.15);
+    sunDisc.material.opacity=.9*vis;
+    sunHalo.material.opacity=.32*vis;
+  }
   sun.target.position.set(player.x,0,player.z);
   rim.intensity=.35+nf*.4;
   if(wxParam('storm',nf)>.5){
