@@ -618,17 +618,39 @@ const BIOME={name:'GREYFIELD MARCH',tint:[1,1,1],rugged:1,treeK:1,grassK:1,rockK
 let terrainSkirt=null;
 function buildSkirt(){
   if(terrainSkirt)scene.remove(terrainSkirt);
-  const g=new THREE.RingGeometry(half-2,half+150,40,1);
-  g.rotateX(-Math.PI/2);
-  const pos=g.attributes.position;
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i),z=pos.getZ(i);
-    const r=Math.hypot(x,z);
-    const t2=clamp((r-(half-2))/152,0,1);
-    pos.setY(i,r<=half?heightAt(clamp(x,-half+1,half-1),clamp(z,-half+1,half-1)):-t2*t2*34);
+  // a square apron: inner edge welded to the terrain rim, outer edge falling away
+  const SEG=26,DROP=34,OUT=150;
+  const verts=[],idx=[];
+  const edges=[
+    (t2)=>[ -half+t2*2*half, -half, 0,  1],   // north rim, aprons fall -z
+    (t2)=>[  half, -half+t2*2*half,  1, 0],   // east
+    (t2)=>[  half-t2*2*half,  half, 0, -1],   // south
+    (t2)=>[ -half,  half-t2*2*half, -1, 0],   // west
+  ];
+  let vi=0;const edgeEnds=[];
+  for(const e of edges){
+    const base=vi;
+    for(let i=0;i<=SEG;i++){
+      const[x,z,dx,dz]=e(i/SEG);
+      verts.push(x,heightAt(clamp(x,-half+1,half-1),clamp(z,-half+1,half-1)),z);
+      verts.push(x+dx*OUT, -DROP, z+dz*OUT);
+      vi+=2;
+    }
+    for(let i=0;i<SEG;i++){
+      const a=base+i*2;
+      idx.push(a,a+1,a+2, a+1,a+3,a+2);
+    }
+    edgeEnds.push({firstIn:base,firstOut:base+1,lastIn:vi-2,lastOut:vi-1});
   }
+  for(let k=0;k<4;k++){ // corner fans: no daylight between aprons
+    const A=edgeEnds[k],B=edgeEnds[(k+1)%4];
+    idx.push(A.lastIn,A.lastOut,B.firstOut, A.lastIn,B.firstOut,B.firstIn);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(verts),3));
+  g.setIndex(idx);
   g.computeVertexNormals();
-  terrainSkirt=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x202515,roughness:1}));
+  terrainSkirt=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x202515,roughness:1,side:THREE.DoubleSide}));
   terrainSkirt.receiveShadow=true;
   scene.add(terrainSkirt);
 }
