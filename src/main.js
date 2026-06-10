@@ -727,6 +727,16 @@ function vertColor(v,out){
   if(isRoad(x,z)){r=.145+n*.025;g=.135+n*.025;b=.115;}
   else if(dug>.18){const d=clamp(dug/2.6,.0,1);r=.30-d*.14+n*.03;g=.21-d*.10+n*.02;b=.13-d*.06;}
   else if(dug<-.18){r=.38+n*.05;g=.30+n*.04;b=.18;}
+  else if(BIOME.ground){ // the biome brings its own earth: snowpack, steppe straw, hardpan
+    const k=n*.5+smoothNoise(ix*.3,iz*.3)*.5;
+    r=BIOME.ground[0]*(.78+k*.5);g=BIOME.ground[1]*(.78+k*.5);b=BIOME.ground[2]*(.78+k*.5);
+    if(BIOME.snow){const drift=smoothNoise(ix*.05+3,iz*.05+9); // wind builds drifts, scours hollows
+      const dw=clamp((drift-.45)*3,0,1);
+      r=lerp(r,.84,dw);g=lerp(g,.87,dw);b=lerp(b,.94,dw);}
+    if(BIOME.desert){const crack=smoothNoise(ix*.4+5,iz*.4+2); // cracked pan reads darker in the seams
+      if(crack<.3){const cw=Math.min(1,(.3-crack)*5);
+        r*=1-cw*.3;g*=1-cw*.32;b*=1-cw*.3;}}
+  }
   else{const k=n*.5+smoothNoise(ix*.3,iz*.3)*.5;
     r=.16+k*.10;g=.235+k*.13;b=.10+k*.045;    // deep meadow loam, matches the grass
     const mac=smoothNoise(ix*.045+7,iz*.045+13);   // macro patchwork: the land changes its mind in 30m sweeps
@@ -3488,6 +3498,15 @@ const BIOMES=[
   ds:'Houses with their faces blown off, still standing politely in rows.'},
  {name:'SALT FLATS',tint:[1.05,1.05,1.0],rugged:.3,treeK:.15,grassK:.25,rockK:2,risk:1.2,nfBias:.05,leafHue:0,grassHue:-.03,
   ds:'Open ground. You will see them coming. They will see you.'},
+ {name:'THE WHITE WASTE',tint:[1.02,1.05,1.14],rugged:1.5,treeK:.5,grassK:.12,rockK:1.6,risk:1.2,nfBias:.08,leafHue:.04,grassHue:.02,
+  snow:true,ground:[.62,.66,.74],grassS:.25,grassL:1.9,pineBias:.9,
+  ds:'Snow that fell before the war and never left. The cold keeps them slower. And fresher.'},
+ {name:'THE LONG STEPPE',tint:[1.06,1.02,.9],rugged:.4,treeK:.1,grassK:2.2,rockK:.5,risk:1.1,nfBias:.04,leafHue:-.05,grassHue:-.075,
+  ground:[.31,.26,.13],grassS:.55,grassL:1.3,
+  ds:'Grass to every horizon, waist high and whispering. Anything could be walking in it.'},
+ {name:'RED HARDPAN',tint:[1.12,.98,.84],rugged:.85,treeK:.06,grassK:.12,rockK:2.4,risk:1.3,nfBias:.06,leafHue:-.07,grassHue:-.09,
+  desert:true,ground:[.46,.30,.16],grassS:.5,grassL:1.1,
+  ds:'Cracked red earth and rust-coloured dust. Water was the first thing this country forgot.'},
 ];
 const NODE_ADJ=['RAVENS\'','PALE','BROKEN','LAST','SAINT EDDA\'S','THE COLONEL\'S','WIDOW\'S','HOLLOW','SUNKEN','IRON','THE LONG','BLACKBIRD'];
 const NODE_NOUN=['CAUSEWAY','CROSSING','REACH','MILE','ORCHARD','DITCHES','MARCH','GATE','FIELDS','BEND','REST','PASSAGE'];
@@ -3510,7 +3529,10 @@ function buildWorld(legSeed){
   for(const d of decals)d.material.opacity=0;
   envBakedNf=-1;
 }
-function setBiome(b){BIOME.city=0;BIOME.shore=false;Object.assign(BIOME,b);}
+function setBiome(b){BIOME.city=0;BIOME.shore=false;
+  BIOME.snow=false;BIOME.desert=false;BIOME.ground=null;
+  BIOME.grassS=1;BIOME.grassL=1;BIOME.pineBias=0;
+  Object.assign(BIOME,b);}
 
 /* ---- route generation: the map is drawn fresh every campaign ---- */
 function genRouteOptions(){
@@ -5613,7 +5635,15 @@ function drawMap(){
   if(CAMP.cache)dot(CAMP.cache.x,CAMP.cache.z,'#9dff70',3);
   for(const zb of zombies)if(zb.alive)dot(zb.x,zb.z,zb.brute?'#ff5030':'#a3271e',zb.brute?3.4:2);
   if(roadBlockedAt!==null)dot(roadBlockedAt,roadZ(roadBlockedAt),'#e8742c',3.6);
-  if(WANDER.on)for(const L of WANDER.loot)if(!L.taken)dot(L.x,L.z,'#9dff70',2.6);
+  if(WANDER.on){
+    for(const L of WANDER.loot)if(!L.taken)dot(L.x,L.z,L.rich?'#e8742c':'#9dff70',2.6);
+    for(const s of WANDER.sites)if(!s.used)
+      dot(s.x,s.z,s.kind==='hermit'?'#e8c050':s.kind==='quester'?'#d8c878':'#7fa0c8',3);
+    const q=WANDER.quest;
+    if(q&&q.taken&&!q.turned)dot(q.objDone?q.gx:q.x,q.objDone?q.gz:q.z,'#ffd060',3.4);
+    if(WANDER.landmark&&!WANDER.landmark.found)dot(WANDER.landmark.x,WANDER.landmark.z,'#9fb4d8',3);
+    if(WANDER.den&&!WANDER.den.woken)dot(WANDER.den.x,WANDER.den.z,'#a3271e',3);
+  }
   if(BAST.on){
     mapC.strokeStyle='#c9bd92';mapC.lineWidth=2;     // the wall
     mapC.beginPath();mapC.moveTo(ox-24*s,oy-54*s);mapC.lineTo(ox-24*s,oy+54*s);mapC.stroke();
