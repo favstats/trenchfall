@@ -5926,7 +5926,13 @@ function bastionUpdate(dt){
       BAST.cleared=true;SFX.chime();
       if(BAST.wave%10===0){BAST.shells+=6;BAST.cache+=120;
         announce('NIGHT '+BAST.wave+' HELD','it fell. sparrow sends six shells out of respect.');}
-      else announce('NIGHT '+BAST.wave+' HELD','the wall mends · '+G.kills+' confirmed · stand easy');
+      else{
+        const sn=BAST.snap||{k:0,hp:G.depotHp,sh:0,crew:allies.length};
+        const dHp=Math.max(0,Math.round(sn.hp-G.depotHp));
+        announce('NIGHT '+BAST.wave+' HELD',
+          (G.kills-sn.k)+' put down · wall took '+dHp+' · '+(G.shots-sn.sh)+' rounds spent · '
+          +allies.length+' on the wall'+(allies.length<sn.crew?' · we are fewer':''));
+      }
       const nw=BAST.wave+1;
       BAST.planned=(nw>=3&&nw%3===0)?pick(['moon','tide','fog','swarm']):null;
       if(BAST.planned)setTimeout(()=>say('LOOKOUT',{
