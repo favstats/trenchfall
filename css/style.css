@@ -476,4 +476,8 @@
 @keyframes lowBlink{50%{opacity:.45}}
 /* U toggles the whole instrument layer */
 body.hudmin #vitals,body.hudmin #ammoBox,body.hudmin #mapWrap,body.hudmin #squad,
-body.hudmin #sitrep,body.hudmin #bars,body.hudmin #compass{display:none!important}
+body.hudmin #waveBox,body.hudmin #depotBox,body.hudmin #compass{display:none!important}
+
+#waveBox,#depotBox{background:rgba(10,11,7,.42);border-color:rgba(201,189,146,.16);
+  box-shadow:none;padding:7px 12px}
+#waveBox .stencil,#waveTxt{font-size:17px}
