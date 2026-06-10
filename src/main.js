@@ -4373,7 +4373,7 @@ const WX=[
  {id:'OVERCAST',    n:[30,19],f:[120,85], rain:0,  cover:.7, storm:0,tint:[.96,.97,1.02],frenzy:false},
  {id:'FOG BANK',    n:[14,10],f:[54,42],  rain:0,  cover:.5, storm:0,tint:[.97,.98,1],   frenzy:false},
  {id:'RAIN',        n:[26,17],f:[100,72], rain:.65,cover:.75,storm:0,tint:[.93,.96,1.05],frenzy:false},
- {id:'THUNDERSTORM',n:[22,14],f:[80,60],  rain:1,  cover:.92,storm:1,tint:[.9,.94,1.08], frenzy:false},
+ {id:'THUNDERSTORM',n:[22,14],f:[80,60],  rain:1,  cover:.92,storm:1,tint:[.74,.79,.98], frenzy:false},
  {id:'BLOOD FOG',   n:[15,10],f:[58,44],  rain:0,  cover:.55,storm:0,tint:[1.32,.8,.76], frenzy:true},
 ];
 let wxCur=0,wxNext=0,wxBlend=1,wxTimer=55,wxFrenzy=false;
@@ -6424,6 +6424,7 @@ function wanderUpdate(dt){
 window.startWander=startWander;
 /* ---------------- main loop ---------------- */
 let last=performance.now(),elapsed=0,stormT=14,flashT=0;
+const _flashCol=new THREE.Color(.62,.68,.95);
 let frameAvg=16,qTimer=4,lowRes=false;
 function frame(now){
   requestAnimationFrame(frame);
@@ -6464,6 +6465,7 @@ function frame(now){
   skyMat.uniforms.flash.value=flashT;
   skyMat.uniforms.cover.value=wxParam('cover',nf);
   scene.fog.color.lerpColors(DUSK.fog,NIGHT.fog,nf);
+  if(flashT>0)scene.fog.color.lerp(_flashCol,Math.min(1,flashT*2.6)); // the strike lights the air itself
   scene.fog.color.r*=lerp(1,BIOME.tint[0],.45);
   scene.fog.color.g*=lerp(1,BIOME.tint[1],.45);
   scene.fog.color.b*=lerp(1,BIOME.tint[2],.45);
