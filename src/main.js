@@ -2904,7 +2904,7 @@ function updateRockets(dt){
 }
 function explode(x,y,z,r=8,dmg=150,crater=1.25){
   wreckEnvironment(x,z,r*.8);
-  decal(x,z,2.4);
+  decal(x,z,Math.min(4,r*.35));   // the scorch fits the blast
   modifyTerrain(x,z,crater*3.5,-crater);
   burst(x,y+.6,z,Math.round(r*5.5),0xd08838,r+1,r+2);
   burst(x,y+.3,z,Math.round(r*3.5),0x3a2c1c,r-1,r-1);
