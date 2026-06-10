@@ -1902,19 +1902,24 @@ scatterSetpieces();
 
 /* ---------------- the dead city: streets you drive through ---------------- */
 const facadeTex=(()=>{
-  const c=document.createElement('canvas');c.width=c.height=256;
+  const c=document.createElement('canvas');c.width=c.height=512;
   const g=c.getContext('2d');
-  g.fillStyle='#43382f';g.fillRect(0,0,256,256);
-  for(let i=0;i<2600;i++){const v=40+Math.random()*45|0;
+  g.fillStyle='#43382f';g.fillRect(0,0,512,512);
+  for(let i=0;i<10400;i++){const v=40+Math.random()*45|0;  // brick speckle, twice as fine
     g.fillStyle=`rgba(${v},${v*.9|0},${v*.78|0},.5)`;
-    g.fillRect(Math.random()*256,Math.random()*256,3,1.6);}
-  for(let yy=14;yy<256;yy+=46)for(let xx=14;xx<256;xx+=40){
+    g.fillRect(Math.random()*512,Math.random()*512,4,2.4);}
+  for(let yy=0;yy<512;yy+=11){                  // mortar courses the old map was too coarse for
+    g.fillStyle='rgba(28,22,17,.28)';g.fillRect(0,yy,512,1.6);
+  }
+  for(let yy=28;yy<512;yy+=92)for(let xx=28;xx<512;xx+=80){
     const broken=Math.random();
     if(broken<.14)continue;                       // bricked over
     g.fillStyle=broken<.5?'#0c0a08':'#15110c';    // hollow rooms
-    g.fillRect(xx,yy,22,30);
+    g.fillRect(xx,yy,44,60);
+    g.fillStyle='rgba(190,178,150,.5)';           // a worn sill below every window
+    g.fillRect(xx-3,yy+60,50,4);
     if(broken>.86){g.fillStyle='rgba(0,0,0,.85)'; // blast scorch above the frame
-      g.beginPath();g.ellipse(xx+11,yy-4,15,8,0,0,TAU);g.fill();}
+      g.beginPath();g.ellipse(xx+22,yy-8,30,16,0,0,TAU);g.fill();}
   }
   const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
@@ -1927,7 +1932,8 @@ const cityWalls=new THREE.InstancedMesh(
 cityWalls.castShadow=cityWalls.receiveShadow=true;
 const cityRubble=new THREE.InstancedMesh(
   new THREE.IcosahedronGeometry(1,1),
-  new THREE.MeshStandardMaterial({color:0x4e463c,roughness:.95}),90);
+  new THREE.MeshStandardMaterial({color:0x8d8276,roughness:.95,
+    map:brickTex,bumpMap:brickTex,bumpScale:.4}),90); // collapsed masonry, not grey blobs
 cityRubble.castShadow=true;
 const cityWins=new THREE.InstancedMesh(
   new THREE.PlaneGeometry(.5,.7),
@@ -3923,25 +3929,29 @@ function nameTex(name){
 }
 function buildTruckMesh(name){
   const g=new THREE.Group();
-  const m=new THREE.MeshStandardMaterial({color:0x8a8f74,map:truckPaint,roughness:.78});
-  const md=new THREE.MeshStandardMaterial({color:0x565a48,map:truckPaint,roughness:.85});
+  const m=new THREE.MeshStandardMaterial({color:0x8a8f74,map:truckPaint,roughness:.78,
+    bumpMap:truckPaint,bumpScale:.15}); // dents and chipped paint catch the sun
+  const md=new THREE.MeshStandardMaterial({color:0x565a48,map:truckPaint,roughness:.85,
+    bumpMap:truckPaint,bumpScale:.15});
   const cab=new THREE.Mesh(new THREE.BoxGeometry(2,1.7,2.2),m);cab.position.set(0,1.5,-2.1);cab.castShadow=true;
   const bed=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.9,4.4),md);bed.position.set(0,1.6,1.2);bed.castShadow=true;
-  const canvasTop=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,4.4,8,1,false,0,Math.PI),
-    new THREE.MeshStandardMaterial({color:0x6b6f4a,roughness:.95,side:THREE.DoubleSide}));
+  const canvasTop=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,4.4,16,1,false,0,Math.PI),
+    new THREE.MeshStandardMaterial({color:0x6b6f4a,roughness:.95,side:THREE.DoubleSide,
+      map:burlapTex,bumpMap:burlapTex,bumpScale:.25}));
   canvasTop.rotation.z=Math.PI/2;canvasTop.rotation.y=Math.PI/2;
   canvasTop.position.set(0,2.55,1.2);canvasTop.castShadow=true;
   for(const[wx,wz]of[[-1,-2],[1,-2],[-1,1],[1,1],[-1,2.6],[1,2.6]]){
-    const w=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.4,12),
-      new THREE.MeshStandardMaterial({color:0x1d1f18,roughness:.95}));
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.4,18),
+      new THREE.MeshStandardMaterial({color:0x1d1f18,roughness:.95,
+        bumpMap:burlapTex,bumpScale:.2})); // the weave reads as tread at this size
     w.rotation.z=Math.PI/2;w.position.set(wx*1.1,.55,wz);g.add(w);
-    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.44,8),
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.44,12),
       new THREE.MeshStandardMaterial({color:0x55584a,roughness:.4,metalness:.6}));
     hub.rotation.z=Math.PI/2;hub.position.set(wx*1.1,.55,wz);g.add(hub);
   }
   const hood=new THREE.Mesh(new THREE.BoxGeometry(1.7,.62,1.15),m);
   hood.position.set(0,1.05,-2.95);hood.castShadow=true;g.add(hood);
-  const cabRoof=new THREE.Mesh(new THREE.CylinderGeometry(1.02,1.02,1.9,10,1,false,0,Math.PI),md);
+  const cabRoof=new THREE.Mesh(new THREE.CylinderGeometry(1.02,1.02,1.9,16,1,false,0,Math.PI),md);
   cabRoof.rotation.z=Math.PI/2;cabRoof.rotation.y=Math.PI/2;
   cabRoof.scale.set(1,1,.4);cabRoof.position.set(0,2.32,-2.1);g.add(cabRoof);
   const grille=new THREE.Mesh(new THREE.BoxGeometry(1.5,.7,.08),
@@ -3954,11 +3964,11 @@ function buildTruckMesh(name){
     new THREE.MeshStandardMaterial({color:0x1c2226,roughness:.15,metalness:.6,envMapIntensity:1.6}));
   glass.position.set(0,1.85,-3.18);g.add(glass);
   for(const sx of[-0.6,0.6]){ // headlamps with a hooded brow
-    const hl=new THREE.Mesh(new THREE.SphereGeometry(.09,7,5),
+    const hl=new THREE.Mesh(new THREE.SphereGeometry(.09,10,7),
       new THREE.MeshStandardMaterial({color:0xfff0c0,emissive:0xffd070,emissiveIntensity:.7}));
     hl.position.set(sx,1.1,-3.25);g.add(hl);
   }
-  const spare=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.22,10),
+  const spare=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.22,16),
     new THREE.MeshStandardMaterial({color:0x2a2c24,roughness:.9}));
   spare.rotation.x=Math.PI/2;spare.position.set(0,1.5,3.5);g.add(spare);
   const jerry=new THREE.Mesh(new THREE.BoxGeometry(.3,.42,.16),
@@ -3968,7 +3978,7 @@ function buildTruckMesh(name){
     new THREE.MeshStandardMaterial({color:0x33352a,roughness:.5,metalness:.6}));
   pipe.position.set(1.05,2.1,-1.2);g.add(pipe);
   for(const[wx,wz]of[[-1,-2],[1,-2],[-1,2.6],[1,2.6]]){ // mudguards
-    const fender=new THREE.Mesh(new THREE.CylinderGeometry(.66,.66,.46,8,1,true,Math.PI,Math.PI),
+    const fender=new THREE.Mesh(new THREE.CylinderGeometry(.66,.66,.46,14,1,true,Math.PI,Math.PI),
       new THREE.MeshStandardMaterial({color:0x4a4d3a,roughness:.7,side:THREE.DoubleSide}));
     fender.rotation.z=Math.PI/2;fender.rotation.y=Math.PI/2;
     fender.position.set(wx*1.1,.72,wz);g.add(fender);
@@ -4007,8 +4017,8 @@ function mountGun(t){
   if(t.gun)return;
   const g=new THREE.Group();
   const mm=new THREE.MeshStandardMaterial({color:0x2e3026,roughness:.4,metalness:.7});
-  const base=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.5,7),mm);g.add(base);
-  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,1.1,6),mm);
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.5,12),mm);g.add(base);
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,1.1,10),mm);
   barrel.rotation.x=Math.PI/2;barrel.position.set(0,.32,.5);g.add(barrel);
   const shield=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,.05),mm);
   shield.position.set(0,.35,.12);g.add(shield);
@@ -6704,6 +6714,10 @@ function buildFort(){
       const rib=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,2.4,5),charM2);
       rib.rotation.z=.4;rib.position.set(.4,2,.6);
       hulk.add(cab2,bed2,rib);
+      for(const[wx2,wz2]of[[-1.1,-2],[1.1,-2],[-1.1,1.6],[1.1,1.6]]){ // burned to the rims
+        const wh2=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.34,14),charM2);
+        wh2.rotation.z=Math.PI/2;wh2.position.set(wx2,.5,wz2);hulk.add(wh2);
+      }
       hulk.traverse(o=>{if(o.isMesh)o.castShadow=true;});
       hulk.position.set(hx,heightAt(hx,hz),hz);
       hulk.rotation.y=Math.PI/2+srand(-.5,.5);hulk.rotation.z=srand(-.08,.08);
