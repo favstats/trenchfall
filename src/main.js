@@ -5823,10 +5823,10 @@ function startBastion(){
 function bastionWave(){
   BAST.wave++;G.wave=Math.min(14,1+BAST.wave);
   G.spawnLeft=Math.round((14+BAST.wave*5)*(BAST.mod==='swarm'?1.7:1));
-  if(BAST.mod==='swarm')G.bruteLeft=0;
   G.bruteLeft=BAST.wave%4===0?Math.ceil(BAST.wave/4):0;
   BAST.colossus=BAST.wave%10===0;
   if(BAST.colossus)G.bruteLeft=Math.max(1,G.bruteLeft);
+  else if(BAST.mod==='swarm')G.bruteLeft=0;   // the swarm is numbers, nothing else
   G.spawnT=.5;
   BAST.mod=BAST.planned??((BAST.wave>=3&&BAST.wave%3===0)?pick(['moon','tide','fog','swarm']):null);
   BAST.planned=null;
