@@ -47,6 +47,7 @@ const srand=(a=1,b)=>b===undefined?srnd()*a:a+srnd()*(b-a);
 const spick=arr=>arr[Math.floor(srnd()*arr.length)];
 let HSALT=0;   // world salt: re-rolls the terrain noise field per leg
 const WANDER={on:false,road:false,t:0,loot:[],spawnT:6,kills0:0,region:1,story:[],sites:[],hermit:null}; // declared early: worldgen consults it at boot
+const SBOX={on:false,biomeIdx:null,time:null,spawnMul:1,god:false,ammo:false,arsenal:false}; // the toolbox country
 
 /* ---------------- renderer / scene ---------------- */
 const renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:true});
@@ -6393,6 +6394,7 @@ function dmgArcFrom(sx,sz){
   setTimeout(()=>el.remove(),1200);
 }
 function damagePlayer(d,src){
+  if(SBOX.on&&SBOX.god)return; // unkillable, as requested
   if(src)dmgArcFrom(src.x,src.z);
   if(!player.alive)return;
   player.hp-=d;player.hurtT=1;player.regenT=6;
@@ -6553,6 +6555,22 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
     g.fillStyle='#05060a';g.fillRect(w*.5-2,h*.61,4,17);g.fillRect(w*.5-1,h*.58,5,4);
     g.fillStyle='rgba(255,200,120,.85)';g.fillRect(w*.5+7,h*.74,2,2);
   });
+  paint('artSbox',(g,w,h)=>{ // blueprint country: the world as a draft
+    g.fillStyle='#0e1a22';g.fillRect(0,0,w,h);
+    g.strokeStyle='rgba(120,180,220,.18)';g.lineWidth=1;
+    for(let x=0;x<w;x+=20){g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();}
+    for(let y=0;y<h;y+=20){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+    g.strokeStyle='rgba(180,220,250,.75)';g.lineWidth=1.6;
+    g.beginPath();g.moveTo(0,h*.7);                       // a drafted ridge line
+    for(let x=0;x<=w;x+=8)g.lineTo(x,h*.7-Math.sin(x*.04)*16-Math.sin(x*.013)*9);
+    g.stroke();
+    g.setLineDash([4,4]);g.beginPath();g.arc(w*.32,h*.52,17,0,TAU);g.stroke();  // a planned hill
+    g.beginPath();g.arc(w*.72,h*.62,11,0,TAU);g.stroke();g.setLineDash([]);
+    g.fillStyle='rgba(255,200,120,.9)';g.fillRect(w*.32-1.5,h*.52-1.5,3,3);     // pins
+    g.fillStyle='rgba(140,255,170,.9)';g.fillRect(w*.72-1.5,h*.62-1.5,3,3);
+    g.fillStyle='rgba(180,220,250,.8)';g.font='10px monospace';
+    g.fillText('DRAFT NO.7 - THE COUNTRY',8,12);
+  });
 })();
 { // the bastion card remembers its pace
   const pr=document.getElementById('paceRow');
@@ -6567,6 +6585,70 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
     }
   }
 }
+(function sandboxUI(){ // the toolbox: pick your country, pick your rules
+  const OPTS=[
+    {key:'biome',label:'COUNTRY',vals:null},   // filled from BIOMES at open
+    {key:'time',label:'HOUR',vals:['CYCLE','DAWN','DUSK','NIGHT']},
+    {key:'dead',label:'THE DEAD',vals:['NONE','SPARSE','NORMAL','THE TIDE']},
+    {key:'god',label:'MORTALITY',vals:['MORTAL','UNKILLABLE']},
+    {key:'ammo',label:'AMMUNITION',vals:['COUNTED','BOTTOMLESS']},
+    {key:'arsenal',label:'ARSENAL',vals:['EARNED','EVERYTHING']},
+  ];
+  let el=null,state={};
+  try{state=JSON.parse(localStorage.getItem('tlr_sbox'))||{};}catch(e){}
+  function build(){
+    OPTS[0].vals=['AS ROLLED'].concat(BIOMES.map(b=>b.name));
+    el=document.createElement('div');
+    el.style.cssText='position:fixed;inset:0;z-index:26;display:flex;align-items:center;justify-content:center;'+
+      'background:rgba(8,7,5,.92);font-family:"Special Elite",monospace';
+    const box=document.createElement('div');
+    box.style.cssText='background:rgba(16,18,11,.96);border:1px solid rgba(201,189,146,.4);'+
+      'border-left:3px solid #e8742c;padding:22px 30px;min-width:380px;color:#c9bd92;letter-spacing:.08em';
+    box.innerHTML='<div style="font-family:\'Saira Stencil One\';font-size:22px;letter-spacing:.2em;color:#e6dcb8;margin-bottom:12px">THE TOOLBOX</div>';
+    for(const o of OPTS){
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;justify-content:space-between;gap:24px;padding:6px 0;cursor:pointer;font-size:14px';
+      const lab=document.createElement('span');lab.textContent=o.label;lab.style.color='#8a8068';
+      const val=document.createElement('span');val.style.color='#e8742c';
+      state[o.key]=Math.min(state[o.key]||0,o.vals.length-1);
+      val.textContent=o.vals[state[o.key]];
+      row.appendChild(lab);row.appendChild(val);
+      row.addEventListener('click',()=>{
+        state[o.key]=(state[o.key]+1)%o.vals.length;
+        val.textContent=o.vals[state[o.key]];
+        try{localStorage.setItem('tlr_sbox',JSON.stringify(state));}catch(e){}
+      });
+      box.appendChild(row);
+    }
+    const bar=document.createElement('div');
+    bar.style.cssText='display:flex;gap:18px;justify-content:center;margin-top:16px';
+    const mk=(t,fn)=>{const d=document.createElement('div');d.className='mItem';d.textContent=t;
+      d.style.fontSize='16px';d.addEventListener('click',fn);bar.appendChild(d);};
+    mk('SET OUT',()=>{
+      el.style.display='none';
+      Object.assign(SBOX,{on:true,
+        biomeIdx:state.biome>0?state.biome-1:null,
+        time:[null,0,75,150][state.time||0],
+        spawnMul:[0,.4,1,2.5][state.dead===undefined?2:state.dead],
+        god:state.god===1,ammo:state.ammo===1,arsenal:state.arsenal===1});
+      try{localStorage.removeItem('tlr_wander');}catch(e){} // never resume into a sandbox ghost
+      startWander(false,true);
+      if(SBOX.arsenal){
+        player.owned=WEAPONS.map(()=>true);
+        player.mags=WEAPONS.map(w=>w.melee?0:w.magSize);
+        Object.assign(G.items,{nade:10,molotov:10,mine:10,medkit:10,flare:10,rocket:10});
+        G.scrap=999;initSlots();refreshVM();
+      }
+      announce('SANDBOX \u00b7 '+BIOME.name.toUpperCase(),'your country, your rules. nothing here is remembered.');
+    });
+    mk('BACK',()=>{el.style.display='none';});
+    box.appendChild(bar);
+    el.appendChild(box);
+    document.body.appendChild(el);
+  }
+  const btn=document.getElementById('sboxBtn');
+  if(btn)btn.addEventListener('click',()=>{if(!el)build();else el.style.display='flex';});
+})();
 { // the cards keep score
   try{
     const bb=+localStorage.getItem('tlr_best_bast')||0;
@@ -8767,7 +8849,8 @@ function strikeBolt(){
    WANDER, the open country: no road, no orders, no one coming
    ============================================================ */
 
-function startWander(load){
+function startWander(load,sandbox){
+  if(!sandbox){SBOX.on=false;}
   audioInit();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   cleanupModes();
   CAMP.on=false;BAST.on=false;WANDER.on=true;
@@ -8828,7 +8911,7 @@ function captureRegionState(){
   };
 }
 function saveWander(){
-  if(!WANDER.on)return;
+  if(!WANDER.on||SBOX.on)return; // the sandbox never writes home
   WANDER.saveRegions[WANDER.region]=captureRegionState();
   try{localStorage.setItem('tlr_wander',JSON.stringify({v:1,
     runSeed:WANDER.runSeed,region:WANDER.region,t:WANDER.t,story:WANDER.story,
@@ -8863,6 +8946,7 @@ function buildWanderRegion(idx){
   const seed=regionSeed(idx);
   setSeed(seed);
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);
+  if(SBOX.on&&SBOX.biomeIdx!=null)setBiome(BIOMES[SBOX.biomeIdx]); // the toolbox picks the country
   WANDER.road=srnd()<.55;
   for(const o of WANDER._meshes||[])scene.remove(o);
   WANDER._meshes=[];WANDER.loot=[];WANDER.quest=null;WANDER.landmark=null;
@@ -9107,7 +9191,7 @@ function travelRegion(){
   fadeBlink();
   WANDER.saveRegions[WANDER.region]=captureRegionState();
   WANDER.region++;
-  try{if(WANDER.region>(+localStorage.getItem('tlr_best_wand')||0))
+  try{if(!SBOX.on&&WANDER.region>(+localStorage.getItem('tlr_best_wand')||0))
     localStorage.setItem('tlr_best_wand',WANDER.region);}catch(e){}
   const heading=Math.abs(player.x)>Math.abs(player.z)?(player.x>0?'east':'west'):(player.z>0?'south':'north');
   player.x=-player.x*.88;player.z=-player.z*.88;
@@ -9141,6 +9225,11 @@ function wanderTalk(title,who,text,opts){
 }
 function wanderUpdate(dt){
   WANDER.t+=dt;
+  if(SBOX.on){
+    if(SBOX.time!=null)WANDER.t=SBOX.time;      // the hour holds where you set it
+    if(SBOX.ammo){player.reserve=player.carryCap;
+      for(let wi=0;wi<WEAPONS.length;wi++)if(!WEAPONS[wi].melee)player.mags[wi]=Math.max(player.mags[wi],WEAPONS[wi].magSize);}
+  }
   const wnf=0.5-0.5*Math.cos(WANDER.t/150*TAU);
   if(wnf>.65&&Math.random()<dt*.08){ // a star lets go of the sky
     const tr=tracers.find(t2=>t2.t<=0);
@@ -9183,8 +9272,8 @@ function wanderUpdate(dt){
   }
   G.wave=Math.min(14,1+Math.floor(WANDER.t/75));   // the land learns you are here
   WANDER.spawnT-=dt;
-  if(WANDER.spawnT<=0){
-    WANDER.spawnT=clamp(9-G.wave*.55,2.6,9)*(wnf>.75?.6:1);
+  if(WANDER.spawnT<=0&&(!SBOX.on||SBOX.spawnMul>0)){
+    WANDER.spawnT=clamp(9-G.wave*.55,2.6,9)*(wnf>.75?.6:1)/(SBOX.on?SBOX.spawnMul:1);
     const n=Math.random()<.25?2+(Math.random()*G.wave/3|0):1;
     for(let i=0;i<n;i++){
       const z=spawnZombie();
@@ -9195,7 +9284,7 @@ function wanderUpdate(dt){
   }
   if(G.kills>=WANDER.kills0+25){WANDER.kills0=G.kills;
     say('THE COUNTRY','Twenty-five more under the grass. It has noticed.',3200);}
-  WANDER.colT=(WANDER.colT??rand(70,120))-dt;
+  if(!SBOX.on||SBOX.spawnMul>0)WANDER.colT=(WANDER.colT??rand(70,120))-dt;
   if(WANDER.colT<=0){
     WANDER.colT=rand(110,180);
     const a=rand(TAU),sx=player.x+Math.cos(a)*rand(60,90),sz=player.z+Math.sin(a)*rand(60,90);
