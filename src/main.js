@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as skClone} from 'three/addons/utils/SkeletonUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -3388,6 +3390,7 @@ function freeSkin(zb){
   if(zb._skin==null)return;
   const sl=SKINS[zb._skin];
   if(sl&&sl.zb===zb){sl.zb=null;sl.mesh.visible=false;}
+  if(GLBZ.ready&&GLBZ.rigs[zb._skin])GLBZ.rigs[zb._skin].rig.visible=false;
   zb._skin=null;
 }
 function assignSkins(){
@@ -3426,6 +3429,54 @@ function poseSkin(sl,zb,pitch,sway,px,py,pz,aL,aR,eL,eR,lL,lR,kL,kR,hX,hZ,jaw,co
   sl.matF.color.set(colF).multiplyScalar(tint);
   m.updateMatrixWorld(true);
   return B[3].matrixWorld;                                  // the head's world matrix, for the eyes to ride
+}
+/* ---- the borrowed dead: the mocap rig from the three.js skinning examples, dressed for this war.
+   Idle/Walk/Run weight-blended per the webgl_animation_skinning_blending demo; the procedural rig
+   still takes over for the grasp and the strike, which no mocap soldier ever learned. */
+const GLBZ={ready:false,rigs:[]};
+try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
+  for(let i=0;i<SKIN_N;i++){
+    const rig=skClone(gltf.scene);
+    const mats=[];let head=null;
+    rig.traverse(o=>{
+      if(o.isMesh){
+        o.material=o.material.clone();
+        o.material.roughness=.96;o.material.metalness=0;
+        o.material.color.set(0x8d8a76);
+        deathlit(o.material);
+        mats.push(o.material);
+        o.castShadow=true;o.frustumCulled=false;
+      }
+      if(o.isBone&&/head/i.test(o.name)&&!head)head=o;
+    });
+    rig.visible=false;
+    const mixer=new THREE.AnimationMixer(rig);
+    const act={};
+    for(const c of gltf.animations){act[c.name]=mixer.clipAction(c);act[c.name].play();act[c.name].setEffectiveWeight(0);}
+    scene.add(rig);
+    GLBZ.rigs.push({rig,mixer,act,mats,head});
+  }
+  GLBZ.ready=true;
+},undefined,e=>console.warn('Soldier.glb missing; the procedural rigs carry on',e));}
+catch(e){console.warn('no asset loading here; the procedural rigs carry on');}
+function poseGlb(i,zb,dt,px,py,pz,pitch,sway,spd,colF,tint){
+  const r=GLBZ.rigs[i];if(!r)return null;
+  r.rig.visible=true;
+  r.rig.position.set(px,py-.04,pz);
+  r.rig.rotation.set(pitch*.3,(zb.face||0)+Math.PI,sway*.6);
+  {const w=zb.wide||1;r.rig.scale.set(zb.scale*w,zb.scale,zb.scale*w);}
+  const runK=clamp((spd-3.2)/1.8,0,1);
+  const walkK=(1-runK)*clamp(spd/1.1,0,1);
+  const idleK=Math.max(0,1-runK-walkK);
+  const tw={Idle:idleK,Walk:walkK,Run:runK};
+  for(const k in tw){const a=r.act[k];if(!a)continue;
+    const cur=a.getEffectiveWeight();a.setEffectiveWeight(cur+(tw[k]-cur)*Math.min(1,dt*6));}
+  if(r.act.Walk)r.act.Walk.setEffectiveTimeScale(clamp(spd/1.5,.5,1.7));
+  if(r.act.Run)r.act.Run.setEffectiveTimeScale(clamp(spd/4.4,.6,1.5));
+  r.mixer.update(dt);
+  for(const m of r.mats)m.color.set(colF).multiplyScalar(tint*1.05);
+  r.rig.updateMatrixWorld(true);
+  return r.head?r.head.matrixWorld:null;
 }
 let zHats;
 {
@@ -3892,10 +3943,19 @@ function updateZombies(dt,t){
       _eyeFl[0]=e[0]*fl;_eyeFl[1]=e[1]*fl;_eyeFl[2]=e[2]*fl;
     }
     let shm=null;
-    if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb)
-      shm=poseSkin(SKINS[zb._skin],zb,
-        (crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,sway,
-        _P.x,_P.y,_P.z,aL,aR,eLb,eRb,lL,lR,kL,kR,hX2,hZ2,jaw,colC,colF,flash?1:zb.tint,wk);
+    if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb){
+      const useGlb=GLBZ.ready&&!zb.brute&&!crawl&&zb.reach<.45&&!(zb.swingT>0);
+      if(useGlb){
+        SKINS[zb._skin].mesh.visible=false;
+        shm=poseGlb(zb._skin,zb,dt,_P.x,_P.y,_P.z,
+          (zb.hunch||.22)+spz*.4,sway,zb.speed*spMul,colF,flash?1:zb.tint);
+      }else{
+        if(GLBZ.ready&&GLBZ.rigs[zb._skin])GLBZ.rigs[zb._skin].rig.visible=false;
+        shm=poseSkin(SKINS[zb._skin],zb,
+          (crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,sway,
+          _P.x,_P.y,_P.z,aL,aR,eLb,eRb,lL,lR,kL,kR,hX2,hZ2,jaw,colC,colF,flash?1:zb.tint,wk);
+      }
+    }
     writeZombie(mi,_M,colC,colF,
       aL,aR,lL,lR,false,flash?1:zb.tint,_eyeFl,zb.hat&&!zb.brute,zb.gone,
       eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC,shm);
