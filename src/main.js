@@ -9803,7 +9803,7 @@ window.devWorld=name=>{ // dev: preview any biome from the console
 /* ---------------- main loop ---------------- */
 let last=performance.now(),elapsed=0,stormT=14,flashT=0;
 const _flashCol=new THREE.Color(.62,.68,.95);
-let frameAvg=16,qTimer=4,lowRes=false;
+let frameAvg=16,qTimer=4,lowRes=false,crispRes=false;
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.05,(now-last)/1000);last=now;
@@ -9816,8 +9816,12 @@ function frame(now){
     qTimer=3;
     rebuildColGrid();          // sites and explosions edit COLLIDERS after worldgen
     const target=Math.min(devicePixelRatio,1.5);
-    if(!lowRes&&frameAvg>26){lowRes=true;gtaoPass.enabled=false;renderer.setPixelRatio(1);composer.setPixelRatio(1);composer.setSize(innerWidth,innerHeight);}
-    else if(lowRes&&frameAvg<13){lowRes=false;gtaoPass.enabled=true;renderer.setPixelRatio(target);composer.setPixelRatio(target);composer.setSize(innerWidth,innerHeight);}
+    const setPR=pr=>{renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);};
+    if(!lowRes&&frameAvg>26){lowRes=true;crispRes=false;gtaoPass.enabled=false;setPR(1);}
+    else if(lowRes&&frameAvg<13){lowRes=false;gtaoPass.enabled=true;setPR(target);}
+    else if(!lowRes&&!crispRes&&frameAvg<8.5&&devicePixelRatio>1.5){ // headroom to burn: supersample
+      crispRes=true;setPR(Math.min(devicePixelRatio,2));
+    }else if(crispRes&&frameAvg>15){crispRes=false;setPR(target);}
   }
   sky.position.copy(camera.position);
   skyMat.uniforms.time.value=elapsed;
