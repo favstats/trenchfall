@@ -2516,8 +2516,8 @@ addEventListener('keydown',e=>{
   if(e.code==='Space')e.preventDefault();
   if(e.code==='Tab'){e.preventDefault();if(!BAST.on){updateRoster();$('roster').classList.toggle('on');}}
   if(e.code==='KeyI'&&G.state==='play')toggleInv();
-  if(e.code==='KeyC'&&BAST.on&&G.state==='play'&&!shopOpen&&!perkOpen&&!invOpen)cmdUI(!cmdOpen);
-  if(cmdOpen){const dg=/^Digit([1-5])$/.exec(e.code);if(dg)giveOrder(+dg[1]);}
+  if(e.code==='KeyC'&&(BAST.on||WANDER.on||CAMP.on)&&G.state==='play'&&!shopOpen&&!perkOpen&&!invOpen)cmdUI(!cmdOpen);
+  if(cmdOpen){const dg=/^Digit([1-5])$/.exec(e.code);if(dg)giveOrder(+dg[1],e.shiftKey);}
   if(e.code==='KeyU'&&G.state==='play')document.body.classList.toggle('hudmin');
   if(e.code==='KeyM'){AU.muted=!AU.muted;if(AU.master)AU.master.gain.value=AU.muted?0:.5;}
   if(G.state!=='play')return;
@@ -3975,7 +3975,8 @@ function updateAllies(dt,t){
     if(a.wanderT<=0){
       a.wanderT=rand(2.5,6);
       let ax=0,az=0,rr=[11,16];
-      if(WANDER.on){ax=player.x;az=player.z;rr=[2,5];}
+      if((a.duty==='hold'||a.duty==='rally')&&a.post&&!BAST.on){ax=a.post.x;az=a.post.z;rr=[0,1.6];}
+      else if(WANDER.on){ax=player.x;az=player.z;rr=[2,5];}
       else if(BAST.on){ // duty first, then thirst, then the post. travel by the road, like people.
         const mortar=BAST.guns.find(g2=>g2.type==='mortar');
         const viaRoad=(tx2,tz2)=>{ // cross between wall and camp through the gate lane
@@ -7520,15 +7521,17 @@ function cmdUI(show){
     document.body.appendChild(cmdEl);
   }
   if(show){
-    const a=nearestAlly();
-    cmdEl.innerHTML='<b style="color:#e8742c;letter-spacing:.25em">COMMAND NET'+
-      (a?' · '+a.name.toUpperCase():'')+'</b><br>'+
-      '<b>1</b> HOLD YOUR POST<br>'+
-      '<b>2</b> CREW THE MORTAR<br>'+
-      '<b>3</b> ON ME<br>'+
-      '<b>4</b> GO RESUPPLY<br>'+
-      '<b>5</b> REBUILD THE GATE<br>'+
-      '<span style="color:#7a7d55">[C] CLOSE · orders go to the nearest rifleman</span>';
+    if(!allies.length){toast('NOBODY ON THE NET');SFX.deny();return;}
+    const duty=a=>({post:'AT POST',mortar:'ON THE TUBE',follow:'WITH YOU',gate:'ON THE GATE',
+      resupply:'RUNNING AMMO',hold:'HOLDING',rally:'AT THE RALLY'}[a.duty]||(BAST.on?'AT POST':'WITH YOU'));
+    const roster=allies.map(a2=>a2.name.toUpperCase()+' · '+duty(a2)+
+      ' · '+Math.round(a2.hp/a2.maxhp*100)+'%').join('<br>');
+    const orders=BAST.on
+      ?'<b>1</b> HOLD YOUR POST<br><b>2</b> CREW THE MORTAR<br><b>3</b> ON ME<br><b>4</b> GO RESUPPLY<br><b>5</b> REBUILD THE GATE<br>'
+      :'<b>1</b> ON ME<br><b>2</b> HOLD WHERE YOU STAND<br><b>3</b> RALLY ON MY MARK (where you\'re looking)<br><b>4</b> SPREAD OUT<br>';
+    cmdEl.innerHTML='<b style="color:#e8742c;letter-spacing:.25em">COMMAND NET</b><br>'+
+      '<span style="color:#9a9576;font-size:12.5px">'+roster+'</span><br>'+orders+
+      '<span style="color:#7a7d55">[C] CLOSE · nearest rifleman takes it · SHIFT+No. = ALL HANDS</span>';
     cmdEl.style.display='block';
   }else cmdEl.style.display='none';
   cmdOpen=show;
@@ -7538,15 +7541,38 @@ function nearestAlly(){
   for(const a of allies){const d=Math.hypot(a.x-player.x,a.z-player.z);if(d<bd){bd=d;best=a;}}
   return best;
 }
-function giveOrder(n){
-  const a=nearestAlly();if(!a)return;
-  const mortar=BAST.guns.find(g=>g.type==='mortar');
-  if(n===1){a.duty='post';say(a.name,'Holding my post. They\'ll have to take it off me.',2600);}
-  if(n===2){if(a.duty==='mortar'){say(a.name,'Already on the tube, boss.');}
-    else{a.duty='mortar';a.wanderT=0;say(a.name,'Moving to the mortar. Call the rounds, I\'ll send them.',2800);}}
-  if(n===3){a.duty='follow';a.wanderT=0;say(a.name,'On you.',1800);}
-  if(n===4){a.duty='resupply';a.ammo=0;a.wanderT=0;say(a.name,'Running the cache road. Cover the gap!',2600);}
-  if(n===5){a.duty='gate';a.wanderT=0;say(a.name,'On the gate. Bags going up, keep them off my back.',2800);}
+function giveOrder(n,all=false){
+  const targets=all?allies.filter(a2=>!a2.down):[nearestAlly()].filter(Boolean);
+  if(!targets.length)return;
+  const one=targets.length===1;
+  const ack=(a,line,hold=2600)=>{if(one||a===targets[0])say(one?a.name:'THE SQUAD',line,hold);};
+  if(BAST.on){
+    for(const a of targets){
+      if(n===1){a.duty='post';ack(a,one?'Holding my post. They\'ll have to take it off me.':'Posts! Everyone to your posts!');}
+      if(n===2){if(a.duty==='mortar')ack(a,'Already on the tube, boss.');
+        else{a.duty='mortar';a.wanderT=0;ack(a,'Moving to the mortar. Call the rounds, I\'ll send them.',2800);}}
+      if(n===3){a.duty='follow';a.wanderT=0;ack(a,one?'On you.':'All hands on the boss. Move!',1800);}
+      if(n===4){a.duty='resupply';a.ammo=0;a.wanderT=0;ack(a,'Running the cache road. Cover the gap!');}
+      if(n===5){a.duty='gate';a.wanderT=0;ack(a,'On the gate. Bags going up, keep them off my back.',2800);}
+    }
+  }else{
+    let mark=null;
+    if(n===3){ // rally where the boss is looking
+      camera.getWorldDirection(_dir);
+      const gr=groundRay(camera.position,_dir,80);
+      mark=gr?{x:gr.point.x,z:gr.point.z}:null;
+      if(!mark){toast('NO GROUND IN SIGHT TO RALLY ON');SFX.deny();cmdUI(false);return;}
+    }
+    for(const a of targets){
+      if(n===1){a.duty=null;a.post=null;a.wanderT=0;ack(a,one?'On you.':'Squad on the boss.',1800);}
+      if(n===2){a.duty='hold';a.post={x:a.x,z:a.z};a.wanderT=0;
+        ack(a,one?'Holding right here. Bring trouble to me.':'Squad holds. Ground is ours.');}
+      if(n===3){a.duty='rally';a.post=mark;a.wanderT=0;
+        ack(a,one?'Moving to your mark.':'Squad moving to the mark. Watch the flanks.');}
+      if(n===4){a.duty=null;a.post=null;a.ang=rand(TAU);a.wanderT=0;
+        ack(a,one?'Spreading out.':'Open order! Five paces between graves.');}
+    }
+  }
   SFX.beep();cmdUI(false);
 }
 function bastionRequisition(){
@@ -7861,7 +7887,8 @@ function travelRegion(){
   player.x=-player.x*.88;player.z=-player.z*.88;
   buildWanderRegion(WANDER.region);
   applyRegionState(WANDER.saveRegions[WANDER.region]);
-  for(const al of allies){al.x=player.x+rand(-4,4);al.z=player.z+rand(-4,4);al.tx=al.x;al.tz=al.z;}
+  for(const al of allies){al.x=player.x+rand(-4,4);al.z=player.z+rand(-4,4);al.tx=al.x;al.tz=al.z;
+    al.duty=null;al.post=null;} // old orders die at the border
   WANDER.story.push('Walked '+heading+' into '+BIOME.name.toLowerCase()+'. Region '+WANDER.region+'.');
   G.score+=100;
   announce('REGION '+WANDER.region+' · '+BIOME.name.toUpperCase(),'the country goes on. so do you.');
