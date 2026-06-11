@@ -2855,9 +2855,18 @@ const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance 
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
-const zMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1.15,
+function deathlit(mat){ // a cold rim the dusk can't account for: the dead read against the treeline
+  mat.onBeforeCompile=s=>{
+    s.fragmentShader=s.fragmentShader.replace('#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+       float dlRim=pow(1.-clamp(dot(normalize(vNormal),normalize(vViewPosition)),0.,1.),3.);
+       totalEmissiveRadiance+=vec3(.4,.52,.68)*dlRim*.22;`);
+  };
+  return mat;
+}
+const zMat=deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:1.15,
   map:fleshTex,bumpMap:fleshTex,bumpScale:.6,
-  roughnessMap:fleshTex}); // raw patches run low in green: exposed meat glistens, dry skin doesn't
+  roughnessMap:fleshTex})); // raw patches run low in green: exposed meat glistens, dry skin doesn't
 const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter gone black
   const c=document.createElement('canvas');c.width=c.height=128;
   const g=c.getContext('2d'),img=g.createImageData(128,128);
@@ -2875,8 +2884,8 @@ const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter g
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
-const zClothMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.97,
-  map:zClothTex,bumpMap:zClothTex,bumpScale:.45});
+const zClothMat=deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.97,
+  map:zClothTex,bumpMap:zClothTex,bumpScale:.45}));
 const zMesh=new THREE.InstancedMesh(zGeoBody,zClothMat,MAXZ);
 zMesh.castShadow=true;zMesh.frustumCulled=false;
 scene.add(zMesh);
@@ -2960,8 +2969,8 @@ const zHair=(()=>{ // a matted scalp jittered into clumps, strands hanging at te
   for(const[sx,sy,sz,ln]of[[-.16,1.66,-.01,.17],[.17,1.65,.01,.15],[-.06,1.64,-.16,.21],[.09,1.65,-.15,.19]]){
     const s=new THREE.CylinderGeometry(.013,.005,ln,5);s.translate(sx,sy-ln/2,sz);parts.push(s);}
   const g=mergeGeometries(parts);g.translate(0,-1.5,-.08);g.scale(.92,.92,.92);
-  const m=new THREE.InstancedMesh(g,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.96,
-    map:zHairTex,bumpMap:zHairTex,bumpScale:.35}),MAXZ);
+  const m=new THREE.InstancedMesh(g,deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.96,
+    map:zHairTex,bumpMap:zHairTex,bumpScale:.35})),MAXZ);
   m.castShadow=true;m.frustumCulled=false;scene.add(m);LIMBS.push(m);return m;
 })();
 const HAIR_COL=[0x241c12,0x382a1a,0x4a4234,0x16140f,0x6a6258,0x52331f];
@@ -2972,7 +2981,7 @@ let zHats;
   const brim=new THREE.CylinderGeometry(.24,.26,.02,16);brim.translate(0,1.71,.09);
   const hg=mergeGeometries([dome,brim]);hg.translate(0,-1.5,-.08);hg.scale(.92,.92,.92); // hats ride the head pivot
   zHats=new THREE.InstancedMesh(hg,
-    new THREE.MeshStandardMaterial({color:0x3a3b2c,roughness:.95}),MAXZ);
+    deathlit(new THREE.MeshStandardMaterial({color:0x3a3b2c,roughness:.95})),MAXZ);
   zHats.castShadow=true;zHats.frustumCulled=false;scene.add(zHats);
 }
 const zombies=[];
