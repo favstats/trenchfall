@@ -2701,9 +2701,9 @@ const gunModels=[];
     const g2=c.getContext('2d'),img=g2.createImageData(128,128);
     for(let y=0;y<128;y++)for(let x=0;x<128;x++){
       const i=(y*128+x)*4;
-      let v=205+Math.sin(x*.9+hash(0,y)*9)*9          // brushing along the machining direction
-            +(hash(x*3,y*7)-.5)*22                     // parkerized speckle
-            +fbm2(x*.06+50,y*.06+9,3)*26-13;           // faint wear clouds
+      let v=195+Math.sin(x*.9+hash(0,y)*9)*14         // brushing along the machining direction
+            +(hash(x*3,y*7)-.5)*36                     // parkerized speckle
+            +fbm2(x*.06+50,y*.06+9,3)*44-22;           // wear clouds you can actually see
       img.data[i]=v;img.data[i+1]=v;img.data[i+2]=v*1.02;img.data[i+3]=255;
     }
     g2.putImageData(img,0,0);
@@ -2711,12 +2711,12 @@ const gunModels=[];
     t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
     return t;
   })();
-  const dark=new THREE.MeshStandardMaterial({color:0x3a3a30,roughness:.42,metalness:.65,envMapIntensity:1.1,
-    map:gunTex,bumpMap:gunTex,bumpScale:.06});
+  const dark=new THREE.MeshStandardMaterial({color:0x3a3a30,roughness:.5,metalness:.45,envMapIntensity:1.1,
+    map:gunTex,bumpMap:gunTex,bumpScale:.12,roughnessMap:gunTex}); // worn spots go shiny, the rest stays parkerized
   const wood=new THREE.MeshStandardMaterial({color:0x6b4f30,map:woodTex,roughness:.72,envMapIntensity:.6,
     bumpMap:woodTex,bumpScale:.08}); // grain you can almost feel at arm's length
-  const steel=new THREE.MeshStandardMaterial({color:0x6b6b62,roughness:.28,metalness:.88,envMapIntensity:1.4,
-    map:gunTex,bumpMap:gunTex,bumpScale:.05});
+  const steel=new THREE.MeshStandardMaterial({color:0x6b6b62,roughness:.4,metalness:.6,envMapIntensity:1.3,
+    map:gunTex,bumpMap:gunTex,bumpScale:.1,roughnessMap:gunTex});
   const tank=new THREE.MeshStandardMaterial({color:0x7a2a1c,roughness:.45,metalness:.5,envMapIntensity:1});
   const box=(w,h,d,m)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
   const cyl=(r,l,m)=>{const c=new THREE.Mesh(new THREE.CylinderGeometry(r,r,l),m);c.rotation.x=Math.PI/2;return c;};
@@ -2833,7 +2833,7 @@ const gunModels=[];
       const hider=new THREE.Mesh(new THREE.ConeGeometry(.028,.06,12),steel);
       hider.rotation.x=-Math.PI/2;hider.position.set(0,.03,-.82);g.add(hider);
       const bracket=box(.05,.03,.12,steel);bracket.position.set(-.065,-.01,-.02);g.add(bracket); // the belt box hangs off real steel
-      const mag2=box(.13,.11,.19,steel);mag2.position.set(-.12,-.03,-.02);g.add(mag2);
+      const mag2=box(.13,.11,.19,dark);mag2.position.set(-.12,-.03,-.02);g.add(mag2); // olive-drab tin, not bare plate
       const lid=box(.134,.014,.194,dark);lid.position.set(-.12,.032,-.02);g.add(lid);
       for(const pz of[.05,.15]){const post2=box(.012,.04,.012,steel);post2.position.set(0,.1,pz);g.add(post2);}
       const hgrip=ellw(.012,.014,.14,wood);hgrip.position.set(0,.122,.1);g.add(hgrip);        // carry handle on its posts
