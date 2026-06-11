@@ -103,7 +103,7 @@ let rifle=null,rifleKick=0;
 const GUN=(new URLSearchParams(location.search)).get('gun')||'sniper';
 loader.load('assets/models/'+GUN+'.glb',gltf=>{
   const q=new URLSearchParams(location.search);
-  if(GUN==='sniper'&&!q.get('bare')){ // the whole rig: her hands came with the rifle
+  if(GUN==='sniper'&&q.get('hands')){ // experimental: the rig's own hands (alignment unsolved)
     const rig=skClone(gltf.scene);
     rig.traverse(o=>{if(o.isSkinnedMesh)o.frustumCulled=false;});
     const mx=new THREE.AnimationMixer(rig);
@@ -111,9 +111,29 @@ loader.load('assets/models/'+GUN+'.glb',gltf=>{
     a2.play();mx.update(+(q.get('t')??.2));      // frozen at the hold
     const holder=new THREE.Group();
     holder.add(rig);
+    rig.updateMatrixWorld(true);
+    { // aim by geometry: the rifle's own long axis goes down the lens
+      let rm=null;
+      rig.traverse(o=>{if(o.isSkinnedMesh&&/sniper/i.test((o.material&&o.material.name)||''))rm=rm||o;});
+      if(rm){
+        const pa=rm.geometry.attributes.position,v=new THREE.Vector3(),pts=[];
+        const step=Math.max(1,Math.floor(pa.count/240));
+        for(let i=0;i<pa.count;i+=step){
+          rm.boneTransform(i,v);                 // the posed vertex, mesh-local
+          pts.push(v.clone().applyMatrix4(rm.matrixWorld));
+        }
+        let A=0,B=0,best=0;                      // the farthest pair IS the barrel line
+        for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+          const d=pts[i].distanceToSquared(pts[j]);if(d>best){best=d;A=i;B=j;}
+        }
+        const axis=pts[A].clone().sub(pts[B]).normalize();
+        if(q.get('flip'))axis.negate();
+        holder.quaternion.setFromUnitVectors(axis,new THREE.Vector3(0,0,-1));
+      }
+    }
+    holder.rotateY(+(q.get('ry')??0));holder.rotateX(+(q.get('rx')??0));
     holder.scale.setScalar(+(q.get('s')??.1));
-    holder.position.set(+(q.get('px')??.18),+(q.get('py')??-.02),+(q.get('pz')??-.3));
-    holder.rotation.set(+(q.get('rx')??0),+(q.get('ry')??1.5),+(q.get('rz')??0));
+    holder.position.set(+(q.get('px')??.22),+(q.get('py')??-.12),+(q.get('pz')??-.4));
     holder.userData.rx0=holder.rotation.x;holder.userData.pz0=holder.position.z;
     camera.add(holder);rifle=holder;
     return;
