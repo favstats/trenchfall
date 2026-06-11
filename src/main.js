@@ -274,19 +274,23 @@ const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 const gradePass=new ShaderPass({
-  uniforms:{tDiffuse:{value:null},time:{value:0},heat:{value:0},tint:{value:new THREE.Vector3(1,1,1)},
+  uniforms:{tDiffuse:{value:null},time:{value:0},heat:{value:0},horizonY:{value:.55},
+    tint:{value:new THREE.Vector3(1,1,1)},
     px:{value:new THREE.Vector2(1/1280,1/720)},
     sunPos:{value:new THREE.Vector2(.5,.8)},rayI:{value:0},rayCol:{value:new THREE.Vector3(1,.5,.3)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;
     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time;uniform vec3 tint;
     uniform vec2 px;uniform vec2 sunPos;uniform float rayI;uniform vec3 rayCol;uniform float heat;
+    uniform float horizonY;
     void main(){
       vec2 uv=vUv,cc=uv-.5;float rd=dot(cc,cc);
-      // heat shimmer: the hardpan bends the air above it
+      // mirage: only the deep air at the horizon bends, and it boils slowly
       if(heat>.001){
-        float hb=smoothstep(.78,.5,uv.y)*smoothstep(.08,.3,uv.y);
-        uv+=vec2(sin(uv.y*230.+time*12.)*.0016,cos(uv.x*190.-time*10.)*.0011)*hb*heat;
+        float hd=uv.y-horizonY;
+        float hb=exp(-hd*hd*36.)+.3*exp(-(hd+.16)*(hd+.16)*14.);
+        uv+=vec2(sin(uv.y*120.+time*7.)*.0009,
+                 cos(uv.x*90.-time*6.)*.0014*(.6+.4*sin(uv.x*7.+time*1.3)))*hb*heat;
       }
       // chromatic aberration toward frame edges
       vec3 col;
@@ -7840,6 +7844,7 @@ function frame(now){
   scene.fog.far=wxParam('f',nf)+flashT*120;
   const tnt=[1,1,1];wxTint(tnt);
   gradePass.uniforms.heat.value=BIOME.desert?Math.max(0,1-nf*1.7):0; // the mirage dies with the day
+  gradePass.uniforms.horizonY.value=.5-Math.tan(camera.rotation.x)/(2*Math.tan(camera.fov*Math.PI/360)); // where the horizon sits on screen
   gradePass.uniforms.tint.value.set(
     tnt[0]*lerp(1,.86,nf*.8),tnt[1]*lerp(1,.95,nf*.8),tnt[2]*lerp(1,1.14,nf*.8));
   sun.color.lerpColors(DUSK.sun,NIGHT.sun,nf);
