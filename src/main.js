@@ -69,11 +69,11 @@ const hemi=new THREE.HemisphereLight(0x9aa5c0,0x4a4434,.6);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffb070,2.7);
 sun.position.set(-70,80,-40);
 sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048);
+sun.shadow.mapSize.set(4096,4096); // the examples' look is mostly their shadows
 sun.shadow.camera.left=-46;sun.shadow.camera.right=46;
 sun.shadow.camera.top=46;sun.shadow.camera.bottom=-46;
 sun.shadow.camera.far=320;sun.shadow.bias=-0.0005;
-sun.shadow.normalBias=.02;sun.shadow.radius=5;
+sun.shadow.normalBias=.02;sun.shadow.radius=3.5;
 scene.add(sun);scene.add(sun.target);
 const softDot=(()=>{
   const c=document.createElement('canvas');c.width=c.height=32;
@@ -3394,6 +3394,7 @@ function freeSkin(zb){
   const sl=SKINS[zb._skin];
   if(sl&&sl.zb===zb){sl.zb=null;sl.mesh.visible=false;}
   if(GLBZ.ready&&GLBZ.rigs[zb._skin])GLBZ.rigs[zb._skin].rig.visible=false;
+  clearWounds(zb._skin);
   zb._skin=null;
 }
 function assignSkins(){
@@ -3440,8 +3441,9 @@ const GLBZ={ready:false,rigs:[]};
 try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
   for(let i=0;i<SKIN_N;i++){
     const rig=skClone(gltf.scene);
-    const mats=[];let head=null;
+    const mats=[],bones=[];let head=null;
     rig.traverse(o=>{
+      if(o.isBone)bones.push(o);
       if(o.isMesh){
         o.material=o.material.clone();
         o.material.roughness=.96;o.material.metalness=0;
@@ -3457,7 +3459,7 @@ try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
     const act={};
     for(const c of gltf.animations){act[c.name]=mixer.clipAction(c);act[c.name].play();act[c.name].setEffectiveWeight(0);}
     scene.add(rig);
-    GLBZ.rigs.push({rig,mixer,act,mats,head});
+    GLBZ.rigs.push({rig,mixer,act,mats,head,bones});
   }
   GLBZ.ready=true;
 },undefined,e=>console.warn('Soldier.glb missing; the procedural rigs carry on',e));}
@@ -3480,6 +3482,56 @@ function poseGlb(i,zb,dt,px,py,pz,pitch,sway,spd,colF,tint){
   for(const m of r.mats)m.color.set(colF).multiplyScalar(tint*1.05);
   r.rig.updateMatrixWorld(true);
   return r.head?r.head.matrixWorld:null;
+}
+/* ---- wounds that stay: bone-attached splats, the decals example with the safety off ---- */
+const woundTex=(()=>{
+  const c=document.createElement('canvas');c.width=c.height=32;
+  const g2=c.getContext('2d');
+  const rg=g2.createRadialGradient(16,16,2,16,16,15);
+  rg.addColorStop(0,'rgba(255,255,255,.95)');rg.addColorStop(.55,'rgba(255,255,255,.6)');rg.addColorStop(1,'rgba(255,255,255,0)');
+  g2.fillStyle=rg;g2.beginPath();g2.arc(16,16,15,0,TAU);g2.fill();
+  for(let i=0;i<7;i++){const a=Math.random()*TAU,r=8+Math.random()*7;
+    g2.fillStyle='rgba(255,255,255,.7)';
+    g2.beginPath();g2.arc(16+Math.cos(a)*r,16+Math.sin(a)*r,1.4+Math.random()*1.6,0,TAU);g2.fill();}
+  const t=new THREE.CanvasTexture(c);return t;
+})();
+const WPOOL=[];let wHead=0;
+{
+  const wg=new THREE.CircleGeometry(.085,10);
+  const wm=new THREE.MeshBasicMaterial({color:0x3d0c08,map:woundTex,transparent:true,
+    depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,side:THREE.DoubleSide});
+  for(let i=0;i<40;i++){const w=new THREE.Mesh(wg,wm);w.visible=false;w.userData.slot=-1;WPOOL.push(w);}
+}
+const _wv=new THREE.Vector3(),_wv2=new THREE.Vector3();
+function addWound(zb,hp){
+  const i=zb._skin;if(i==null)return;
+  const glb=GLBZ.ready&&GLBZ.rigs[i]&&GLBZ.rigs[i].rig.visible;
+  const bones=glb?GLBZ.rigs[i].bones:(SKINS[i]?SKINS[i].bones:null);
+  if(!bones||!bones.length)return;
+  let best=null,bd=1e9;
+  for(const b of bones){
+    b.getWorldPosition(_wv);
+    const d=_wv.distanceToSquared(hp);
+    if(d<bd){bd=d;best=b;}
+  }
+  if(!best||bd>1.2)return;
+  const w=WPOOL[wHead++%WPOOL.length];
+  if(w.parent)w.parent.remove(w);
+  best.add(w);
+  w.position.copy(best.worldToLocal(_wv.copy(hp)));
+  best.getWorldPosition(_wv2);
+  _wv.copy(hp).sub(_wv2).normalize();
+  w.lookAt(_wv2.copy(hp).add(_wv));          // face outward from the bone, hugging the surface
+  w.translateZ(.012);                        // sit just off the flesh
+  w.scale.setScalar(rand(.7,1.4));
+  w.rotation.z=rand(TAU);
+  w.userData.slot=i;w.visible=true;
+}
+function clearWounds(i){
+  for(const w of WPOOL)if(w.userData.slot===i){
+    if(w.parent)w.parent.remove(w);
+    w.userData.slot=-1;w.visible=false;
+  }
 }
 let zHats;
 {
@@ -3986,6 +4038,7 @@ function damageZombie(zb,dmg,hitPos,isHead){
   if(isHead)sTone('sine',1900,1500,.06,.12);
   SFX.hitFlesh();
   if(hitPos)burst(hitPos.x,hitPos.y,hitPos.z,7,0xa32417,3,3);
+  if(hitPos&&zb.alive)addWound(zb,hitPos); // the hit stays with the body
   if(zb.hp<=0){
     zb.alive=false;zb.deadT=0;
     freeSkin(zb); // the rig moves on to the next walker
@@ -9905,6 +9958,8 @@ function frame(now){
     const f=window.__fly;
     camera.position.set(f.x,f.y,f.z);
     camera.lookAt(f.tx,f.ty,f.tz);
+    scene.fog.near=Math.max(scene.fog.near,180);  // the postcard lens sees through weather
+    scene.fog.far=Math.max(scene.fog.far,560);
   }
   composer.render();
 }
