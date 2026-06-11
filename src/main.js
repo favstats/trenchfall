@@ -2824,9 +2824,11 @@ let zGeoBody,zGeoHead;
   zGeoBody=mergeGeometries(cloth);
   zGeoHead=mergeGeometries(flesh);
   zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
+  zGeoHead.scale(.92,.92,.92);       // human proportion ≈ 7.5 heads — shrink toward it
 }
 const zJawGeo=(()=>{ // the lower jaw, hinged below the ears: it gapes
   const j=new THREE.SphereGeometry(.085,14,10);j.scale(1,.55,1.2);j.rotateX(.5);j.translate(0,-.06,.12);
+  j.scale(.92,.92,.92); // matches the skull
   return j;})();
 const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance tint survives
   const c=document.createElement('canvas');c.width=c.height=256;
@@ -2888,8 +2890,8 @@ const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thum
   const a=new THREE.CylinderGeometry(.04,.05,.26,10);a.rotateX(Math.PI/2);a.translate(0,0,.13);
   const h=new THREE.SphereGeometry(.058,10,7);h.scale(1,.62,1.35);h.translate(0,-.01,.3);
   const parts=[a,h];
-  for(let i=-1;i<2;i++){const f=new THREE.CylinderGeometry(.012,.009,.11,5);
-    f.rotateX(Math.PI/2-.55);f.translate(i*.032,-.04,.41);parts.push(f);}
+  for(let i=-1;i<2;i++){const f=new THREE.CylinderGeometry(.014,.009,.15,5);
+    f.rotateX(Math.PI/2-.55);f.translate(i*.034,-.05,.43);parts.push(f);} // long enough to read as claws
   {const th=new THREE.CylinderGeometry(.013,.01,.09,5);
    th.rotateX(Math.PI/2-.9);th.rotateY(.7);th.translate(.06,-.03,.34);parts.push(th);}
   return mergeGeometries(parts);})();
@@ -2918,7 +2920,7 @@ let zEyes;
   const e2=new THREE.SphereGeometry(.04,8,6);e2.scale(1,.75,.55);e2.translate(.085,1.7,.26);
   const eyeMat=new THREE.MeshBasicMaterial();
   eyeMat.color.setRGB(1,1,1);   // per-instance HDR colors decide the glow
-  const eg=mergeGeometries([e1,e2]);eg.translate(0,-1.5,-.08); // eyes ride the head pivot
+  const eg=mergeGeometries([e1,e2]);eg.translate(0,-1.5,-.08);eg.scale(.92,.92,.92); // eyes ride the head pivot
   zEyes=new THREE.InstancedMesh(eg,eyeMat,MAXZ);
   zEyes.frustumCulled=false;scene.add(zEyes);
 }
@@ -2927,7 +2929,7 @@ let zHats;
   const dome=new THREE.SphereGeometry(.2,14,9,0,TAU,0,1.5);
   dome.scale(1,.8,1.05);dome.translate(0,1.78,.09);
   const brim=new THREE.CylinderGeometry(.24,.26,.02,16);brim.translate(0,1.71,.09);
-  const hg=mergeGeometries([dome,brim]);hg.translate(0,-1.5,-.08); // hats ride the head pivot
+  const hg=mergeGeometries([dome,brim]);hg.translate(0,-1.5,-.08);hg.scale(.92,.92,.92); // hats ride the head pivot
   zHats=new THREE.InstancedMesh(hg,
     new THREE.MeshStandardMaterial({color:0x3a3b2c,roughness:.95}),MAXZ);
   zHats.castShadow=true;zHats.frustumCulled=false;scene.add(zHats);
@@ -2969,15 +2971,15 @@ function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=fal
   zMesh.setColorAt(mi,_C.set(colC).multiplyScalar(tint));      // the coat
   zHead.setMatrixAt(mi,_HM);
   zHead.setColorAt(mi,_C.set(colF).multiplyScalar(tint));      // the skin
-  _M2.makeTranslation(0,.08,.02);_M3.copy(_HM).multiply(_M2);  // the jaw hinge, below the ears
+  _M2.makeTranslation(0,.074,.018);_M3.copy(_HM).multiply(_M2);  // the jaw hinge, below the ears (.92-scaled with the skull)
   _M2.makeRotationX(jaw);_M3.multiply(_M2);
   zJaw.setMatrixAt(mi,_M3);
   zJaw.setColorAt(mi,_C.set(colF).multiplyScalar(tint*.82));   // shadowed, wet
   _C.set(colF).multiplyScalar(tint);_C2.copy(_C);              // bare arms, bare hands
   if(gone==='aL')limbHide(zArmL,zArmL2,mi,M);
-  else limb2To(zArmL,zArmL2,mi,M,-.3,1.42,.08,aL,eL,true);
+  else limb2To(zArmL,zArmL2,mi,M,-.27,1.44,.06,aL,eL,true);
   if(gone==='aR')limbHide(zArmR,zArmR2,mi,M);
-  else limb2To(zArmR,zArmR2,mi,M,.3,1.42,.08,aR,eR,true);
+  else limb2To(zArmR,zArmR2,mi,M,.27,1.44,.06,aR,eR,true);
   _C2.set(colF).multiplyScalar(tint*.92);                      // shins a shade dirtier
   _C.set(colC).multiplyScalar(tint*.72);                       // trousers, darker
   limb2To(zLegL,zLegL2,mi,M,-.14,.78,0,lL,kL,false);
@@ -3037,6 +3039,7 @@ function spawnZombie(kindIn){
     drag:Math.random()<.35,                                      // the bad foot never leaves the ground
     loll:rand(-.55,.55),lollSp:rand(.5,1.4),                     // the neck gave out long ago
     twitchT:rand(2,8),twitching:0,reach:0,armS:Math.random(),
+    lean:rand(-.09,.09),                                         // one shoulder rides higher, always
     cloth:[0x5a5347,0x4a3e33,0x39402c,0x57424a,0x3e4654,0x6a604a][Math.floor(Math.random()*6)],
     flesh:[0x8d8a76,0x9a8f7c,0x7e8a72,0xa39383,0x76705e][Math.floor(Math.random()*5)],// no two rot alike
     quirk:kind==='walker'&&Math.random()<.12?'stare':null,// some of them remember
@@ -3280,7 +3283,7 @@ function updateZombies(dt,t){
     /* the grasp: arms come up as it closes on meat */
     const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')&&d<8&&!crawl;
     zb.reach+=((meat?1:0)-zb.reach)*Math.min(1,dt*2.5);
-    const sway=ck*(zb.kind==='runner'?.1:.06)*(1+Math.abs(zb.limp))+spz;
+    const sway=(zb.lean||0)+ck*(zb.kind==='runner'?.1:.06)*(1+Math.abs(zb.limp))+spz;
     const bob=Math.abs(wk)*(crawl?.04:.07)*(zb.drag?.5:1);
     /* the weight goes over the stance leg: the whole body ferries side to side */
     const lat=crawl?0:ck*.05*(1+Math.abs(zb.limp)*1.6);
