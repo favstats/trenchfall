@@ -4000,14 +4000,26 @@ function updateAllies(dt,t){
       if(a.detour.t<=0||Math.hypot(a.detour.x-a.x,a.detour.z-a.z)<1.2)a.detour=null;}
     const tgx=a.detour?a.detour.x:(a.tx??a.x),tgz=a.detour?a.detour.z:(a.tz??a.z);
     const mdx=tgx-a.x,mdz=tgz-a.z,md=Math.hypot(mdx,mdz);
-    let best=null,bd=45*45;
+    let best=null,bs=1e9,bestD=99;
     for(const zb of zombies){
       if(!zb.alive||zb.rise>0)continue;
       const d2=(zb.x-a.x)**2+(zb.z-a.z)**2;
-      if(d2<bd){bd=d2;best=zb;}
+      if(d2>45*45)continue;
+      let s=d2;
+      if(zb.kind==='exploder'||zb.kind==='screamer')s*=.3;  // the worst die first
+      else if(zb.brute)s*=.65;
+      if((zb.x-player.x)**2+(zb.z-player.z)**2<81)s*=.5;    // it's on the boss: priority
+      if(s<bs){bs=s;best=zb;bestD=Math.sqrt(d2);}
     }
+    const hurt=a.hp<a.maxhp*.35;
+    if(best&&hurt&&bestD<11){ // hurt and pressed: open the range, keep shooting
+      const aw=Math.atan2(a.x-best.x,a.z-best.z);
+      a.tx=a.x+Math.sin(aw)*8;a.tz=a.z+Math.cos(aw)*8;a.wanderT=Math.max(a.wanderT,1.2);
+      if(!a._cried){a._cried=true;
+        say(a.name,pick(['Falling back, I\'m leaking!','Too close! Opening the range!','Patch me after. Moving now.']),3000);}
+    }else if(a.hp>a.maxhp*.6)a._cried=false;
     let stepping=false;
-    if(md>.6&&!best){
+    if(md>.6&&(!best||bestD>16||hurt)){ // fight on the move unless the work is close
       const asp=md>14?6.2:2.4;
       const av=steerAvoid(a.x,a.z,mdx/md,mdz/md,2.8,a);
       const dx2=av.x,dz2=av.z;
@@ -4042,7 +4054,7 @@ function updateAllies(dt,t){
         _tv.set(a.x+Math.sin(a.face)*.6,my,a.z+Math.cos(a.face)*.6);
         _tv2.set(best.x,heightAt(best.x,best.z)+1.1*best.scale,best.z);
         tracer(_tv,_tv2);
-        if(Math.random()<.75){
+        if(Math.random()<(stepping?.55:.78)){ // walking fire is hasty fire
           damageZombie(best,9*(a.dmgMul||1)*(1+(a.xp||0)*.004)*(BAST.rally?1.35:1),_tv2);
           if(!best.alive){
             const r0=rankOf(a.xp||0);a.xp=(a.xp||0)+1;
@@ -4073,6 +4085,11 @@ function updateAllies(dt,t){
         a.mortT=(a.mortT??2)-dt;
         if(a.mortT<=0){a.mortT=4.2;npcMortarFire(mg,a);}
       }
+    }
+    for(const o of allies){ // shoulder room: a squad, not a stack
+      if(o===a||o.down)continue;
+      const ox=a.x-o.x,oz=a.z-o.z,od=Math.hypot(ox,oz);
+      if(od<1.1&&od>1e-4){a.x+=ox/od*dt*1.5;a.z+=oz/od*dt*1.5;}
     }
     pushOut2(a,.35,[COLLIDERS,CAMP_COLLIDERS]);
     const gy=heightAt(a.x,a.z);
