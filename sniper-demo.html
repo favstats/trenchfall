@@ -1,0 +1,363 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TRENCHFALL · sniper holdout</title>
+<style>
+body{margin:0;overflow:hidden;background:#0d0e10}
+#hint{position:fixed;left:12px;top:10px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000}
+#hud{position:fixed;right:14px;top:10px;color:#e8e0c8;font:15px/1.6 monospace;text-align:right;text-shadow:0 1px 2px #000}
+#cross{position:fixed;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;pointer-events:none}
+#cross:before,#cross:after{content:'';position:absolute;background:#e8e0c8;box-shadow:0 0 2px #000}
+#cross:before{left:4px;top:0;width:2px;height:10px}
+#cross:after{left:0;top:4px;width:10px;height:2px}
+#scope{position:fixed;inset:0;pointer-events:none;display:none;
+  background:radial-gradient(circle at center,transparent 0 31vmin,rgba(4,4,4,.985) 33vmin 100%)}
+#scope:before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1.5px;background:rgba(10,10,10,.8)}
+#scope:after{content:'';position:absolute;top:50%;left:0;right:0;height:1.5px;background:rgba(10,10,10,.8)}
+#hurt{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(160,20,10,.55));opacity:0;transition:opacity .25s}
+#dead{position:fixed;inset:0;display:none;place-items:center;background:rgba(10,4,4,.78);color:#e8e0c8;font:22px monospace;text-align:center}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="hint">CLICK to take the glass &middot; mouse aims &middot; <b>RMB</b> scope &middot; <b>LMB</b> fire &middot; <b>R</b> reload &middot; WASD move</div>
+<div id="hud"></div>
+<div id="cross"></div>
+<div id="scope"></div>
+<div id="hurt"></div>
+<div id="dead"><div>THE GLASS WENT QUIET<br><br><span style="font-size:15px">click to go again</span></div></div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as skClone} from 'three/addons/utils/SkeletonUtils.js';
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x2a2622);
+scene.fog=new THREE.Fog(0x2a2622,30,110);
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.04,260);
+scene.add(camera);
+
+scene.add(new THREE.HemisphereLight(0xc8bfae,0x2e2a24,1.25));
+const sun=new THREE.DirectionalLight(0xffd9b0,2.6);
+sun.position.set(10,14,6);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-30;sun.shadow.camera.right=30;
+sun.shadow.camera.top=30;sun.shadow.camera.bottom=-30;
+scene.add(sun);
+
+{ // churned mud
+  const c=document.createElement('canvas');c.width=c.height=512;
+  const g=c.getContext('2d');
+  g.fillStyle='#43392b';g.fillRect(0,0,512,512);
+  for(let i=0;i<2600;i++){
+    const v=28+Math.random()*26|0;
+    g.fillStyle=`rgba(${v+8},${v},${v-8},${.12+Math.random()*.2})`;
+    g.beginPath();g.ellipse(Math.random()*512,Math.random()*512,2+Math.random()*9,1+Math.random()*5,Math.random()*7,0,7);g.fill();
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(12,12);t.anisotropy=8;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(260,260),
+    new THREE.MeshStandardMaterial({map:t,roughness:.95}));
+  floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+}
+const loader=new GLTFLoader();
+function placeProp(file,size,spots,yaws){ // the same furniture the holdout demo uses
+  loader.load('assets/models/props/'+file,gltf=>{
+    const base=gltf.scene;
+    base.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+    const box=new THREE.Box3().setFromObject(base);
+    const dim=box.getSize(new THREE.Vector3());
+    const s=size/Math.max(dim.x,dim.z);
+    spots.forEach((p,i)=>{
+      const m=base.clone();
+      m.scale.setScalar(s);
+      const b2=new THREE.Box3().setFromObject(m);
+      const ctr=b2.getCenter(new THREE.Vector3());
+      m.position.set(p[0]-ctr.x,-b2.min.y,p[1]-ctr.z);
+      m.rotation.y=(yaws&&yaws[i])||0;
+      scene.add(m);
+    });
+  });
+}
+placeProp('watch_tower.glb',4.5,[[-12,14]],[2.9]);
+placeProp('barrier.glb',1.8,[[5,8],[8,6],[-6,9]],[.8,1.1,-.6]);
+placeProp('barbed_wire.glb',2.4,[[-5,12],[0,13],[5,12],[9,10]],[0,.2,-.2,.5]);
+placeProp('military_crate.glb',1.1,[[-1.6,-1.6],[-2.4,-1.1]],[.4,1.2]);
+
+/* ---------- the player: a pair of boots, a pair of eyes, and the glass ---------- */
+const P={x:0,z:-2,yaw:0,pitch:0,hp:100,ammo:5,reserve:25,fireCd:0,boltT:0,reloadT:0,kills:0,dead:false,scoped:false};
+const EYE=1.7,FOV=55,SCOPE_FOV=13;
+
+/* the user's SCAR, baked from its exploded skin to one honest rifle (walk-demo recipe) */
+let rifle=null,rifleKick=0;
+loader.load('assets/models/scar.glb',gltf=>{
+  gltf.scene.updateMatrixWorld(true);
+  const body=new THREE.Group();
+  const junk=/glove|sleeve|crosshair|shape/i; // the FPS arms live a kilometer away in raw space
+  gltf.scene.traverse(o=>{
+    if(!o.isMesh&&!o.isSkinnedMesh)return;
+    if(junk.test((o.material&&o.material.name)||''))return;
+    const g2=o.geometry.clone();
+    g2.deleteAttribute('skinIndex');g2.deleteAttribute('skinWeight');
+    const c=new THREE.Mesh(g2,o.material);
+    c.applyMatrix4(o.matrixWorld);
+    const bb2=new THREE.Box3().setFromObject(c),sz=bb2.getSize(new THREE.Vector3());
+    if(Math.max(sz.x,sz.y,sz.z)>30)return;       // nothing rifle-sized is thirty units long
+    c.castShadow=true;body.add(c);
+  });
+  const bb=new THREE.Box3().setFromObject(body);
+  const dim=bb.getSize(new THREE.Vector3());
+  const L=Math.max(dim.x,dim.y,dim.z);
+  const ctr=bb.getCenter(new THREE.Vector3());
+  body.position.copy(ctr).multiplyScalar(-1);
+  const holder=new THREE.Group();
+  holder.add(body);
+  holder.scale.setScalar(.95/L);                 // ~95cm of long rifle
+  const q=new URLSearchParams(location.search);  // tuning params while the mount settles
+  holder.position.set(+(q.get('px')??.27),+(q.get('py')??-.26),+(q.get('pz')??-.62));
+  holder.rotation.set(+(q.get('rx')??Math.PI/2),+(q.get('ry')??-.12),+(q.get('rz')??0)); // laid forward, muzzle toward the work
+  holder.userData.rx0=holder.rotation.x;holder.userData.pz0=holder.position.z;
+  camera.add(holder);
+  rifle=holder;
+});
+
+/* ---------- sound: the crack, the bolt, the click ---------- */
+const AC=new (window.AudioContext||window.webkitAudioContext)();
+function shot(){
+  const t=AC.currentTime;
+  const nb=AC.createBuffer(1,AC.sampleRate*.3|0,AC.sampleRate);
+  const d=nb.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+  const n=AC.createBufferSource();n.buffer=nb;
+  const f=AC.createBiquadFilter();f.type='lowpass';
+  f.frequency.setValueAtTime(8000,t);f.frequency.exponentialRampToValueAtTime(500,t+.26);
+  const g=AC.createGain();g.gain.setValueAtTime(.85,t);g.gain.exponentialRampToValueAtTime(.001,t+.32);
+  n.connect(f);f.connect(g);g.connect(AC.destination);n.start();
+  const o=AC.createOscillator();o.type='triangle';
+  o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(38,t+.13);
+  const og=AC.createGain();og.gain.setValueAtTime(.55,t);og.gain.exponentialRampToValueAtTime(.001,t+.18);
+  o.connect(og);og.connect(AC.destination);o.start();o.stop(t+.2);
+}
+function bolt(){ // two metal taps, spaced like working the action
+  for(const[dt0,f0]of[[0,1900],[.13,1200]]){
+    const t=AC.currentTime+dt0;
+    const o=AC.createOscillator();o.type='square';o.frequency.setValueAtTime(f0,t);
+    const g=AC.createGain();g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.06);
+  }
+}
+function click(){
+  const t=AC.currentTime,o=AC.createOscillator();o.type='square';o.frequency.value=2400;
+  const g=AC.createGain();g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.03);
+  o.connect(g);g.connect(AC.destination);o.start();o.stop(t+.04);
+}
+
+/* ---------- the dead, streaming in (walk-demo pack logic) ---------- */
+const ZN=10,zombies=[];
+let zombiePack=null,zombieRoots=[],soldierGltf=null;
+loader.load('assets/models/zombies_pack.glb',gltf=>{
+  zombiePack=gltf;
+  gltf.scene.traverse(o=>{if(/^rig_CharRoot/.test(o.name||''))zombieRoots.push(o.name);});
+  for(let i=0;i<ZN;i++)spawnZombie(i,true);
+});
+loader.load('assets/models/Soldier.glb',gltf=>{soldierGltf=gltf;},undefined,()=>{
+  document.getElementById('hint').innerHTML='open over http(s), not file:// — browsers refuse local model fetches';
+});
+function spawnZombie(i,first){
+  if(first&&zombies[i])return zombies[i];
+  const z=first?{}:zombies[i];
+  if(first&&zombiePack&&zombieRoots.length){
+    const rig=skClone(zombiePack.scene);
+    const pickName=zombieRoots[i%zombieRoots.length];
+    rig.traverse(o=>{
+      if(zombieRoots.includes(o.name))o.visible=(o.name===pickName);
+      if((o.name||'').startsWith('Line001'))o.visible=false;
+    });
+    const chosen=rig.getObjectByName(pickName);
+    const mats=[];
+    chosen.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.castShadow=true;mats.push(o.material);}});
+    z.group=new THREE.Group();z.group.add(rig);scene.add(z.group);
+    const mixer=new THREE.AnimationMixer(rig);
+    const clip=zombiePack.animations[0];
+    const act=mixer.clipAction(clip);act.play();
+    act.time=Math.random()*clip.duration;
+    Object.assign(z,{rig,mats,mixer,chosen,packMode:true,calib:false});
+    zombies[i]=z;
+  }else if(first)return null;
+  const a=Math.random()*Math.PI*2;
+  const r2=46+Math.random()*22;       // long lanes: a sniper's kind of distance
+  z.group.position.set(P.x+Math.cos(a)*r2,0,P.z+Math.sin(a)*r2);
+  z.hp=40;z.dead=false;z.fall=0;z.atkT=0;z.stagT=0;z.respawnT=0;
+  z.speed=.6+Math.random()*1.1;
+  z.group.visible=true;z.group.rotation.set(0,0,0);
+  for(const m of z.mats)m.color.set(0x77836b).multiplyScalar(.75+Math.random()*.5);
+  return z;
+}
+
+/* ---------- input: pointer lock, the sniper's stillness ---------- */
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true;
+  if(e.code==='KeyR'&&!P.dead&&P.reloadT<=0&&P.ammo<5&&P.reserve>0){P.reloadT=1.9;bolt();}});
+addEventListener('keyup',e=>keys[e.code]=false);
+let locked=false;
+renderer.domElement.addEventListener('click',()=>{
+  if(AC.state==='suspended')AC.resume();
+  if(!locked)renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;});
+addEventListener('mousemove',e=>{
+  if(!locked)return;
+  const k=P.scoped?.0009:.0024;       // glass steadies the hand
+  P.yaw-=e.movementX*k;
+  P.pitch=Math.max(-1.45,Math.min(1.45,P.pitch-e.movementY*k));
+});
+addEventListener('mousedown',e=>{
+  if(!locked||P.dead)return;
+  if(e.button===2)P.scoped=true;
+  if(e.button===0)tryFire();
+});
+addEventListener('mouseup',e=>{if(e.button===2)P.scoped=false;});
+addEventListener('contextmenu',e=>e.preventDefault());
+document.getElementById('dead').addEventListener('click',()=>location.reload());
+
+/* ---------- the shot ---------- */
+const _rayO=new THREE.Vector3(),_rayD=new THREE.Vector3(),_tp=new THREE.Vector3(),_hp2=new THREE.Vector3();
+const tracerPool=[];
+function flashTracer(a,b){
+  let tr=tracerPool.find(t=>t.t<=0);
+  if(!tr){tr={line:new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+    new THREE.LineBasicMaterial({color:0xffd080,transparent:true,opacity:0})),t:0};
+    scene.add(tr.line);tracerPool.push(tr);}
+  tr.line.geometry.setFromPoints([a.clone(),b.clone()]);
+  tr.line.material.opacity=.9;tr.t=.07;
+}
+const muzzleFlash=new THREE.PointLight(0xffb050,0,10);scene.add(muzzleFlash);
+function tryFire(){
+  if(P.fireCd>0||P.boltT>0||P.reloadT>0)return;
+  if(P.ammo<=0){click();return;}
+  P.ammo--;P.fireCd=.12;P.boltT=.85;rifleKick=1;
+  shot();setTimeout(bolt,330);
+  camera.getWorldDirection(_rayD);_rayO.copy(camera.position);
+  let best=null,bestT=1e9,bestHead=false;
+  for(const z of zombies){
+    if(!z||z.dead)continue;
+    for(const[hy,rr,isH]of[[1.25,.42,false],[1.62,.24,true]]){
+      _tp.copy(z.group.position);_tp.y+=hy;
+      const t=_tp.clone().sub(_rayO).dot(_rayD);
+      if(t<0||t>bestT)continue;
+      const d=_tp.distanceTo(_rayO.clone().addScaledVector(_rayD,t));
+      if(d<rr){bestT=t;best=z;bestHead=isH;}
+    }
+  }
+  const mz=_hp2.copy(camera.position).addScaledVector(_rayD,.9);
+  const end=best?_tp.copy(_rayO).addScaledVector(_rayD,bestT):_tp.copy(_rayO).addScaledVector(_rayD,160);
+  flashTracer(mz,end);
+  muzzleFlash.position.copy(mz);muzzleFlash.intensity=40;
+  if(best){
+    best.hp-=bestHead?100:55;best.stagT=.3;       // the long rifle argues once
+    for(const m of best.mats)m.color.multiplyScalar(1.6);
+    const bz=best;setTimeout(()=>{if(!bz.dead)for(const m of bz.mats)m.color.multiplyScalar(1/1.6);},70);
+    if(best.hp<=0){best.dead=true;best.fall=0;best.respawnT=5;P.kills++;}
+  }
+}
+
+/* ---------- loop ---------- */
+const clock=new THREE.Clock();
+const _zt=new THREE.Vector3(),_np=new THREE.Vector3(),_e=new THREE.Euler(),_q2=new THREE.Quaternion();
+const hud=document.getElementById('hud'),hurt=document.getElementById('hurt'),
+  scopeEl=document.getElementById('scope'),crossEl=document.getElementById('cross');
+window.DEMO={camera,zombies,P};
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(.05,clock.getDelta());
+  // move
+  let fx=(keys.KeyW?1:0)-(keys.KeyS?1:0),sx=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+  if((fx||sx)&&!P.dead){
+    const sp=(P.scoped?1.4:3.4)*dt,l=Math.hypot(fx,sx);
+    P.x+=(Math.sin(P.yaw)*-fx+Math.cos(P.yaw)*sx)*sp/l;
+    P.z+=(Math.cos(P.yaw)*-fx-Math.sin(P.yaw)*sx)*sp/l;
+    P.x=Math.max(-24,Math.min(24,P.x));P.z=Math.max(-24,Math.min(24,P.z));
+  }
+  camera.position.set(P.x,EYE,P.z);
+  camera.rotation.order='YXZ';
+  const sway=P.scoped?.0014:.004;     // breath, even through the glass
+  camera.rotation.set(P.pitch+Math.sin(clock.elapsedTime*1.7)*sway,P.yaw+Math.cos(clock.elapsedTime*1.3)*sway,0);
+  // scope
+  const wantFov=P.scoped?SCOPE_FOV:FOV;
+  camera.fov+=(wantFov-camera.fov)*Math.min(1,dt*14);
+  camera.updateProjectionMatrix();
+  scopeEl.style.display=P.scoped?'block':'none';
+  crossEl.style.display=P.scoped?'none':'block';
+  if(rifle){
+    rifle.visible=!P.scoped;          // through the glass you see the world, not the gun
+    rifleKick=Math.max(0,rifleKick-dt*5);
+    rifle.position.z=rifle.userData.pz0+rifleKick*.12;
+    rifle.rotation.x=rifle.userData.rx0+rifleKick*.1;
+  }
+  P.fireCd-=dt;P.boltT-=dt;
+  if(P.reloadT>0){P.reloadT-=dt;
+    if(P.reloadT<=0){const take=Math.min(5-P.ammo,P.reserve);P.ammo+=take;P.reserve-=take;}}
+  muzzleFlash.intensity*=Math.pow(.001,dt);
+  for(const tr of tracerPool){tr.t-=dt;if(tr.t<=0)tr.line.material.opacity=Math.max(0,tr.line.material.opacity-dt*12);}
+  // the dead keep coming
+  for(const z of zombies){
+    if(!z)continue;
+    if(z.dead){
+      z.fall=Math.min(1,z.fall+dt*2.4);
+      z.group.rotation.x=-z.fall*Math.PI/2*.94;
+      z.group.position.y=-z.fall*.06;
+      z.respawnT-=dt;
+      if(z.respawnT<=0)spawnZombie(zombies.indexOf(z),false);
+      continue;
+    }
+    z.stagT=Math.max(0,z.stagT-dt);
+    _zt.set(P.x-z.group.position.x,0,P.z-z.group.position.z);
+    const d=_zt.length();
+    const spd=(z.stagT>0?.25:1)*z.speed*(d>16?1.7:1);
+    if(d>1.1&&!P.dead){
+      _zt.normalize();
+      z.group.position.addScaledVector(_zt,spd*dt);
+      _e.set(0,Math.atan2(_zt.x,_zt.z),0);_q2.setFromEuler(_e);
+      z.group.quaternion.rotateTowards(_q2,dt*5);
+    }else if(!P.dead){
+      z.atkT-=dt;
+      if(z.atkT<=0){z.atkT=1;P.hp-=11;hurt.style.opacity=.9;setTimeout(()=>hurt.style.opacity=0,260);}
+    }
+    z.mixer.update(dt);
+    if(z.packMode&&!z.calib){ // bone-measured scale, as the holdout demo learned
+      z.group.updateMatrixWorld(true);
+      let mn=1e9,mx=-1e9,cx=0,cz=0,n=0;
+      z.chosen.traverse(o=>{if(o.isBone){o.getWorldPosition(_np);
+        if(_np.y<mn)mn=_np.y;if(_np.y>mx)mx=_np.y;cx+=_np.x;cz+=_np.z;n++;}});
+      if(mx>mn&&n){
+        const k=1.78/(mx-mn);
+        z.rig.scale.multiplyScalar(k);
+        z.rig.position.x-=(cx/n-z.group.position.x)*k;
+        z.rig.position.z-=(cz/n-z.group.position.z)*k;
+        z.rig.position.y-=(mn-z.group.position.y)*k;
+        z.calib=true;
+      }
+    }
+  }
+  if(P.hp<=0&&!P.dead){P.dead=true;document.exitPointerLock();document.getElementById('dead').style.display='grid';}
+  hud.textContent=`HP ${Math.max(0,Math.round(P.hp))} · KILLS ${P.kills} · ${P.reloadT>0?'RELOADING':P.ammo+' / '+P.reserve}`;
+  renderer.render(scene,camera);
+}
+animate();
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
