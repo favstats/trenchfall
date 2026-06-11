@@ -514,7 +514,7 @@ body.hudmin #waveBox,body.hudmin #depotBox,body.hudmin #compass{display:none!imp
 .tbar .bar{height:4px;background:rgba(8,9,6,.55)}
 
 /* ---- mode title cards ---- */
-#menu.cards{display:flex;gap:18px;justify-content:center;align-items:stretch;flex-wrap:wrap;max-width:980px;margin:0 auto}
+#menu.cards{display:flex;flex-direction:row;gap:18px;justify-content:center;align-items:stretch;flex-wrap:wrap;max-width:980px;margin:0 auto}
 .card{width:280px;background:rgba(14,15,10,.82);border:1px solid rgba(201,189,146,.28);
   padding:0 0 12px;text-align:center;transition:transform .15s,border-color .15s,box-shadow .15s}
 .card:hover{transform:translateY(-4px);border-color:rgba(232,116,44,.7);box-shadow:0 14px 50px rgba(0,0,0,.55)}
