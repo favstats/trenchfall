@@ -3188,14 +3188,19 @@ function updateZombies(dt,t){
       const melt=clamp((corpseLim-zb.deadT)/1.4,0,1);
       const k=clamp(zb.deadT/.45,0,1);
       {const s1=Math.sin(zb.phase*5),s2=Math.sin(zb.phase*9); // each corpse falls its own way
-       _E.set((zb.dieFwd?1.42:-1.5)*k,zb.face||0,s1*.14*k);_Q.setFromEuler(_E);
+       const st=Math.max(0,zb.deadT-.45);                     // time since the body hit the ground
+       const bounce=Math.exp(-st*5)*Math.sin(st*21)*.07;      // loose mass coming to rest, twice
+       const tw=zb.deadT<1.6?(1.6-zb.deadT)*Math.sin(zb.deadT*37+zb.phase*9)*.1:0; // the last nerves arguing
+       _E.set((zb.dieFwd?1.42:-1.5)*k+bounce,zb.face||0,s1*.14*k+bounce*.6);_Q.setFromEuler(_E);
        _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05-Math.min(.45,Math.max(0,zb.deadT-16)*.04),zb.z);
        {const w=zb.wide||1;_S.set(Math.max(.001,zb.scale*melt*w),Math.max(.001,zb.scale*melt),Math.max(.001,zb.scale*melt*w*.96));}
        _M.compose(_P,_Q,_S);
-       const tw=zb.deadT<1.6?(1.6-zb.deadT)*Math.sin(zb.deadT*37+zb.phase*9)*.11:0; // the last nerves arguing
+       /* in the air the limbs flail; on the ground they fall flat and spread */
+       const fl=1-k+Math.abs(bounce)*4;                       // how much is still airborne/loose
        writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,
-         -.5+s1*.5+tw,-.6-s2*.5-tw,.15+s2*.25,-.1+s1*.25+tw,true,zb.tint,null,false,zb.gone,
-         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,
+         -.55+s1*.7+tw+fl*.35,-.65-s2*.7-tw-fl*.3,.15+s2*.28+fl*.2,-.12+s1*.28-fl*.2,true,zb.tint,null,false,zb.gone,
+         .1+Math.abs(s2)*.22+fl*.7+tw*1.5,.08+Math.abs(s1)*.2+fl*.6-tw*1.2,  // elbows settle flat
+         .08+Math.abs(s1)*.16+fl*.5,.13+Math.abs(s2)*.18+fl*.45,-.25,        // knees too: nothing left holding them
          (s1>0?.8:-.8)*(zb.dieHead?1.6:1),.65,zb.hairC);} // jaw fallen open; a headshot leaves the neck wrong
       mi++;continue;
     }
@@ -3371,6 +3376,8 @@ function updateZombies(dt,t){
       swA=k<.35?lerp(-.5,-2,k/.35):lerp(-2,.6,(k-.35)/.65);
       swPitch=k<.35?lerp(0,-.12,k/.35):lerp(-.12,.3,(k-.35)/.65);
     }
+    const stagK=(zb.stagT||0)>0?zb.stagT/.22:0; // the round knocks through the body
+    swPitch-=stagK*.16;
     /* the grasp: arms come up as it closes on meat */
     const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')
       &&d<(zb.kind==='runner'?3.5:8)&&!crawl; // a runner pumps its arms until the last stride
@@ -3417,8 +3424,9 @@ function updateZombies(dt,t){
       else if((zb.swingArm||1)<0){aL=swA;eLb=.28;}
       else{aR=swA;eRb=.28;}
     }
+    if(stagK>0&&swA===null){aL-=stagK*.5;aR-=stagK*.42;} // arms jerk with the impact
     /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
-    const hX2=(crawl?-.55:sprint?-.32:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4; // a sprinter's head comes up, eyes on you
+    const hX2=(crawl?-.55:sprint?-.32:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4-stagK*.45; // a sprinter's head comes up; a hit snaps it back
     const hZ2=zb.loll*(1-zb.reach*.55)+Math.sin(t*zb.lollSp*.73+zb.phase*2)*.07;
     /* the jaw: slack at rest, gaping and working as it closes — chewing on the air */
     const jaw=.08+Math.abs(spz)*2+zb.reach*(.5+Math.sin(t*9+zb.phase)*.22)+(swA!==null?.45:0); // it screams into the blow

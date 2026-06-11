@@ -59,9 +59,16 @@ for(let s=0;s<2;s++){
   await page.waitForTimeout(1600);
   await page.screenshot({path:`/tmp/tf-zomb-mid-${s}.png`,timeout:120000}).catch(()=>console.log('mid shot failed',s));
 }
-await page.evaluate(()=>{ // the aftermath: drop most of them where they stand
+await page.evaluate(()=>{ // the aftermath: drop them all at the player's feet
   window.PLAYER.hp=Infinity;
-  window.ZOMBIES.forEach((z,i)=>{if(z.alive&&i%4!==0)z.hp=0;});
+  const P=window.PLAYER,m=window.CAMERA.matrixWorld.elements;
+  let fx=-m[8],fz=-m[10];const fl=Math.hypot(fx,fz)||1;fx/=fl;fz/=fl;
+  window.ZOMBIES.forEach((z,i)=>{
+    if(!z.alive)return;
+    const lane=(i%5-2)*1.6,depth=3+Math.floor(i/5)*2.5;
+    z.x=P.x+fx*depth-fz*lane;z.z=P.z+fz*depth+fx*lane;
+    z.hp=0;
+  });
 });
 for(let s=0;s<2;s++){
   await page.waitForTimeout(2200);
