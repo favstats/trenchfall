@@ -2799,19 +2799,20 @@ let zGeoBody,zGeoHead;
   const cloth=[],flesh=[];
   const add=(arr,geo,x,y,z,rx=0)=>{geo.rotateX(rx);geo.translate(x,y,z);arr.push(geo);};
   const blob=(r,sx,sy,sz)=>{const g=new THREE.SphereGeometry(r,14,10);g.scale(sx,sy,sz);return g;};
-  // what's left of a coat: ribcage, shoulders, hips
-  add(cloth,blob(.3,1.0,1.2,.62),0,1.1,0,.15);
-  add(cloth,blob(.3,1.08,.42,.55),0,1.42,.05,.1);
-  add(cloth,blob(.24,.88,.52,.6),0,.76,0);
-  // the body under the coat: shoulder blades, rib ridges, spine knobs, a sagging gut
-  add(cloth,blob(.09,1.1,1.4,.5),-.13,1.32,-.16,.1);   // left scapula
-  add(cloth,blob(.09,1.1,1.4,.5),.13,1.32,-.16,.1);    // right scapula
-  for(let i=0;i<4;i++)add(cloth,blob(.035,1,.8,.9),0,1.36-i*.13,-.19+i*.012); // spine, knob by knob
-  add(cloth,blob(.06,2.4,.35,.7),-.02,1.16,.15,.2);    // a rib ridge pushing at the cloth
-  add(cloth,blob(.06,2.2,.32,.7),.01,1.04,.14,.2);     // another, lower
-  add(cloth,blob(.13,1.25,.7,.9),.02,.9,.07);          // the gut, sagging off-centre
-  add(cloth,blob(.07,1.5,.5,.8),-.11,.72,-.05);        // hip bone, left
-  add(cloth,blob(.07,1.5,.5,.8),.12,.73,-.04);         // hip bone, right
+  { // one continuous body, neck to crotch — a lathed profile, not a stack of balls
+    const pts=[[.075,1.56],[.15,1.5],[.255,1.44],[.265,1.35],[.235,1.2],[.2,1.03],[.215,.9],[.225,.82],[.195,.7],[.1,.62],[.01,.6]]
+      .map(p=>new THREE.Vector2(p[0],p[1]));
+    const torso=new THREE.LatheGeometry(pts,18);
+    torso.scale(1.04,1,.68);    // oval cross-section: a chest, not a column
+    cloth.push(torso);
+  }
+  add(cloth,blob(.075,1,1.15,.95),-.255,1.41,.01);     // deltoid, left
+  add(cloth,blob(.075,1,1.15,.95),.255,1.41,.01);      // deltoid, right
+  // kept subtle now: the surface should ripple, not bubble
+  add(cloth,blob(.06,1.1,1.3,.4),-.1,1.28,-.12,.08);   // left scapula
+  add(cloth,blob(.06,1.1,1.3,.4),.1,1.28,-.12,.08);    // right scapula
+  for(let i=0;i<4;i++)add(cloth,blob(.022,1,.7,.7),0,1.34-i*.12,-.14+i*.008); // spine, knob by knob
+  add(cloth,blob(.09,1.2,.55,.7),.02,.93,.09);         // the gut, sagging off-centre
   // what's left of a person: neck, skull, one bare rib — the jaw hangs on its own hinge now
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,.94,1.2,1.04),0,1.69,.1,.25);     // the cranium, gone gaunt
@@ -7331,14 +7332,15 @@ function startBastion(load){
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);  // tonight's theater, drawn from the deck
   buildWorld((BAST.runSeed^0x9e3779b9)>>>0);
   setSeed((BAST.runSeed^0x51ed2701)>>>0);   // the fort dresses the same way every time
-  BAST.fort=sv?(sv.fort||'ridge'):spick(['ridge','helm','tiers','twins']);
+  BAST.fort=sv?(sv.fort||'ridge'):(window.__fortKind||spick(['ridge','helm','tiers','twins']));
   buildFort(BAST.fort);
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
     items:{nade:3,molotov:1,mine:2,medkit:1,flare:2,rocket:2},
     dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
     turretCost:60,buildMul:1,turretCap:120,pocketsLvl:0,shots:0,hits:0,
     depotHp:1000,depotMax:1000,depotAmmo:0,spawnLeft:0,bruteLeft:0,intermission:6});
-  Object.assign(player,{x:-14,z:roadZ(-14)+2,y:0,vy:0,yaw:Math.PI/2,pitch:-.02,
+  const spx=BAST.fort==='tiers'?-9:-14;  // the three steps: spawn on the high ground, not in a wall
+  Object.assign(player,{x:spx,z:roadZ(spx)+2,y:0,vy:0,yaw:Math.PI/2,pitch:-.02,
     hp:100,maxhp:100,alive:true,reserve:90,carryCap:180,
     wid:0,owned:defaultOwned(),
     mags:defaultMags(),tool:null,buildType:0,healT:0,
