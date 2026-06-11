@@ -6930,16 +6930,38 @@ function buildFort(){
   setpieces.add(cache);
   // the helicopter, asleep until needed
   const heli=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(.9,.7,4.6,8),
-    new THREE.MeshStandardMaterial({color:0x3a4232,roughness:.6,metalness:.4}));
+  const skin=new THREE.MeshStandardMaterial({color:0x3a4232,roughness:.6,metalness:.4});
+  const dark=new THREE.MeshStandardMaterial({color:0x1a1c14,roughness:.5});
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.9,.7,4.6,14),skin);
   body.rotation.x=Math.PI/2;heli.add(body);
-  const tail=new THREE.Mesh(new THREE.CylinderGeometry(.18,.32,3.4,6),body.material);
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(.88,14,10,0,TAU,0,Math.PI/2),
+    new THREE.MeshStandardMaterial({color:0x202c34,roughness:.15,metalness:.5,envMapIntensity:1.8}));
+  nose.rotation.x=-Math.PI/2;nose.position.z=-2.3;nose.scale.z=.75;heli.add(nose); // glass that catches the flares
+  const tail=new THREE.Mesh(new THREE.CylinderGeometry(.18,.32,3.4,10),skin);
   tail.rotation.x=Math.PI/2;tail.position.z=3.6;heli.add(tail);
-  const rotor=new THREE.Mesh(new THREE.BoxGeometry(9,.06,.32),
-    new THREE.MeshStandardMaterial({color:0x1a1c14,roughness:.5}));
-  rotor.position.y=1;heli.add(rotor);heli.userData.rotor=rotor;
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(.08,.9,.6),skin);
+  fin.position.set(0,.4,5.1);heli.add(fin);
+  const tRotor=new THREE.Mesh(new THREE.BoxGeometry(.05,1.4,.16),dark);
+  tRotor.position.set(.12,.45,5.25);heli.add(tRotor);heli.userData.tRotor=tRotor;
+  const rotor=new THREE.Group();                          // two crossed blades, a proper disc
+  for(const ry of[0,Math.PI/2]){
+    const bl=new THREE.Mesh(new THREE.BoxGeometry(9,.06,.32),dark);
+    bl.rotation.y=ry;rotor.add(bl);
+  }
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(.14,.18,.4,10),dark);
+  hub.position.y=-.1;rotor.add(hub);
+  rotor.position.y=1.1;heli.add(rotor);heli.userData.rotor=rotor;
+  for(const sx of[-1,1]){                                 // skids: it lands like it means to live
+    const skid=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,3.6,8),dark);
+    skid.rotation.x=Math.PI/2;skid.position.set(sx*.85,-1.25,0);heli.add(skid);
+    for(const sz of[-1,1]){
+      const strut=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.75,6),dark);
+      strut.position.set(sx*.85,-.92,sz*1.1);strut.rotation.z=sx*.2;heli.add(strut);
+    }
+  }
+  heli.traverse(o=>{if(o.isMesh)o.castShadow=true;});
   const navM=new THREE.MeshBasicMaterial();navM.color.setRGB(8,.6,.4);
-  const nav=new THREE.Mesh(new THREE.SphereGeometry(.09,6,5),navM);
+  const nav=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),navM);
   nav.position.set(0,-.4,3.4);heli.add(nav);heli.userData.nav=nav;
   heli.visible=false;scene.add(heli);
   BAST.heli=heli;
@@ -7114,6 +7136,7 @@ function bastionUpdate(dt){
     BAST.heli.position.y-=7.5*dt;
     BAST.heli.position.x-=9*dt;
     BAST.heli.userData.rotor.rotation.y+=dt*16;
+    BAST.heli.userData.tRotor.rotation.x+=dt*22;
     if(Math.random()<dt*18)puffSmoke(BAST.heli.position.clone(),true);
     if(BAST.heli.position.y<=heightAt(BAST.heli.position.x,BAST.heli.position.z)+1.5){
       const cx=BAST.heli.position.x,cz2=BAST.heli.position.z;
@@ -7144,6 +7167,7 @@ function bastionUpdate(dt){
   if(BAST.heli.visible){
     BAST.heli.position.z+=34*dt;
     BAST.heli.userData.rotor.rotation.y+=dt*30;
+    BAST.heli.userData.tRotor.rotation.x+=dt*44;
     if(Math.abs(BAST.heli.position.z-9)<6&&!BAST.dropDone){
       BAST.dropDone=true;
       const dx=rand(-10,14),dz=rand(-6,26);
