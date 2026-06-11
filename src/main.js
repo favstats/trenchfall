@@ -2808,21 +2808,16 @@ let zGeoBody,zGeoHead;
     torso.scale(1.04,1,.68);    // oval cross-section: a chest, not a column
     cloth.push(torso);
   }
-  add(cloth,blob(.075,1,1.15,.95),-.255,1.41,.01);     // deltoid, left
-  add(cloth,blob(.075,1,1.15,.95),.255,1.41,.01);      // deltoid, right
-  // kept subtle now: the surface should ripple, not bubble
-  add(cloth,blob(.06,1.1,1.3,.4),-.1,1.28,-.12,.08);   // left scapula
-  add(cloth,blob(.06,1.1,1.3,.4),.1,1.28,-.12,.08);    // right scapula
-  for(let i=0;i<4;i++)add(cloth,blob(.022,1,.7,.7),0,1.34-i*.12,-.14+i*.008); // spine, knob by knob
-  add(cloth,blob(.09,1.2,.55,.7),.02,.93,.09);         // the gut, sagging off-centre
-  // what's left of a person: neck, skull, one bare rib — the jaw hangs on its own hinge now
+  // no surface blobs: the rim light outlines every intersecting shape, so the coat stays one clean form
+  add(cloth,blob(.062,1,1.05,.9),-.24,1.41,.01);       // deltoid, left — buried in the shoulder, a swell not a ball
+  add(cloth,blob(.062,1,1.05,.9),.24,1.41,.01);        // deltoid, right
+  // what's left of a person: neck and skull — the jaw hangs on its own hinge
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,.94,1.2,1.04),0,1.69,.1,.25);     // the cranium, gone gaunt
-  add(flesh,blob(.055,2.2,.5,.9),0,1.745,.2,.35);      // a heavy brow: the sockets fall into shadow under it
-  add(flesh,blob(.05,1.2,.7,1),-.105,1.63,.2);         // cheekbone, left
-  add(flesh,blob(.05,1.2,.7,1),.105,1.63,.2);          // cheekbone, right
-  add(flesh,blob(.03,.8,1.5,1),0,1.66,.27);            // what's left of a nose
-  add(cloth,blob(.05,1.2,.8,1),-.15,1.18,.16); // the bare rib stays with the torso so the head can loll free
+  add(flesh,blob(.05,1.9,.45,.7),0,1.74,.17,.35);      // the brow, sunk to a ridge under the skin
+  add(flesh,blob(.035,1.1,.6,.8),-.1,1.63,.17);        // cheekbone, left — mostly inside the skull
+  add(flesh,blob(.035,1.1,.6,.8),.1,1.63,.17);         // cheekbone, right
+  add(flesh,blob(.022,.7,1.2,.9),0,1.66,.26);          // what's left of a nose
   zGeoBody=mergeGeometries(cloth);
   zGeoHead=mergeGeometries(flesh);
   zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
@@ -2860,7 +2855,7 @@ function deathlit(mat){ // a cold rim the dusk can't account for: the dead read 
     s.fragmentShader=s.fragmentShader.replace('#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
        float dlRim=pow(1.-clamp(dot(normalize(vNormal),normalize(vViewPosition)),0.,1.),3.);
-       totalEmissiveRadiance+=vec3(.4,.52,.68)*dlRim*.22;`);
+       totalEmissiveRadiance+=vec3(.4,.52,.68)*pow(dlRim,1.6)*.12;`);
   };
   return mat;
 }
@@ -2895,11 +2890,11 @@ scene.add(zHead);
 /* articulated limbs: eight instanced meshes — upper and lower segment per limb, elbows and knees posed per-frame */
 const armUpGeo=(()=>{ // shoulder to elbow
   const a=new THREE.CylinderGeometry(.052,.062,.28,10);a.rotateX(Math.PI/2);a.translate(0,0,.14);
-  const e=new THREE.SphereGeometry(.05,8,6);e.translate(0,0,.28);
+  const e=new THREE.SphereGeometry(.042,8,6);e.translate(0,0,.28); // fills the elbow without bulging past it
   return mergeGeometries([a,e]);})();
 const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thumb
   const a=new THREE.CylinderGeometry(.04,.05,.26,10);a.rotateX(Math.PI/2);a.translate(0,0,.13);
-  const h=new THREE.SphereGeometry(.058,10,7);h.scale(1,.62,1.35);h.translate(0,-.01,.3);
+  const h=new THREE.SphereGeometry(.048,10,7);h.scale(1,.55,1.45);h.translate(0,-.01,.31); // a flat mitt, not a ball
   const parts=[a,h];
   for(let i=-1;i<2;i++){const f=new THREE.CylinderGeometry(.014,.009,.15,5);
     f.rotateX(Math.PI/2-.55);f.translate(i*.034,-.05,.43);parts.push(f);} // long enough to read as claws
@@ -2908,7 +2903,7 @@ const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thum
   return mergeGeometries(parts);})();
 const legUpGeo=(()=>{ // hip to knee
   const l=new THREE.CylinderGeometry(.078,.06,.4,10);l.translate(0,-.2,0);
-  const k=new THREE.SphereGeometry(.058,8,6);k.translate(0,-.4,0);
+  const k=new THREE.SphereGeometry(.052,8,6);k.translate(0,-.4,0); // knee cap flush with the thigh
   return mergeGeometries([l,k]);})();
 const legLoGeo=(()=>{ // knee to the dragging foot
   const l=new THREE.CylinderGeometry(.052,.044,.36,10);l.translate(0,-.18,0);
