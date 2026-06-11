@@ -152,8 +152,9 @@ function runFits(){
       f.obj.position.x+=f.place.x-c2.x;
       f.obj.position.z+=f.place.z-c2.z;
       f.obj.position.y-=b2.min.y;
-    }else{
-      f.obj.position.multiplyScalar(k); // hand offsets live in bone units; scale with the rifle
+    }else{ // the rifle: seat it for the two-hand carry once its true size is known
+      f.obj.position.set(0,.563,.225);
+      f.obj.rotation.set(-.6,1.2,1.3);
     }
     done.push(f);
   }
@@ -163,7 +164,7 @@ function armHand(hand){
   if(!scarBase){pendingHands.push(hand);return;}
   const g=scarBase.clone(); // static-only now, plain clone is safe
   hand.add(g);
-  fitWorld(g,.78,'max',null);
+  fitWorld(g,.92,'max',null); // a touch oversize: presence beats realism at this art scale
 }
 loader.load('assets/models/scar.glb',gltf=>{
   gltf.scene.updateMatrixWorld(true);
@@ -237,6 +238,15 @@ function rigUp(tint,eyes){
     if(o.isBone&&/Head$/.test(o.name)&&!head)head=o;
     if(o.isBone&&/RightHand$/.test(o.name)&&!hand)hand=o;
   });
+  const arms={};
+  model.traverse(o=>{
+    if(!o.isBone)return;
+    if(/RightArm$/.test(o.name))arms.ra=o;
+    if(/RightForeArm$/.test(o.name))arms.rf=o;
+    if(/LeftArm$/.test(o.name))arms.la=o;
+    if(/LeftForeArm$/.test(o.name))arms.lf=o;
+    if(/LeftHand$/.test(o.name))arms.lh=o;
+  });
   model.rotation.y=Math.PI;
   const mixer=new THREE.AnimationMixer(model);
   const act={};
@@ -247,8 +257,20 @@ function rigUp(tint,eyes){
       new THREE.MeshBasicMaterial({color:new THREE.Color(3.2,.45,.2)}));
     eye.position.set(sx*.035,.085,.095);head.add(eye);
   }
-  return {model,mixer,act,mats,head,hand};
+  return {model,mixer,act,mats,head,hand,arms};
 }
+const CARRY={ // both hands on the rifle, low ready — tuned by screenshot rounds
+  ra:[ .70, 0, .90], rf:[ 1.30, 0, 0],
+  la:[ .90,-.20, .70], lf:[ 1.40, 0, 0]
+};
+function poseCarry(arms){
+  if(!arms)return;
+  if(arms.ra)arms.ra.rotation.set(...CARRY.ra);
+  if(arms.rf)arms.rf.rotation.set(...CARRY.rf);
+  if(arms.la)arms.la.rotation.set(...CARRY.la);
+  if(arms.lf)arms.lf.rotation.set(...CARRY.lf);
+}
+window.CARRY=CARRY; // tune live, then bake the numbers
 const tracerPool=[];
 function flashTracer(a,b){
   let tr=tracerPool.find(t=>t.t<=0);
@@ -264,7 +286,7 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
   baseGltf=gltf;
   const pr=rigUp(null,false);
   player.group.add(pr.model);
-  player.mixer=pr.mixer;player.act=pr.act;
+  player.mixer=pr.mixer;player.act=pr.act;player.arms=pr.arms;
   if(pr.hand)armHand(pr.hand);
   if(zombiePack)for(let i=0;i<ZN;i++)spawnZombie(i,true);
   else setTimeout(()=>{for(let i=0;i<ZN;i++)spawnZombie(i,true);},4000); // pack still downloading? fall back soon
@@ -382,6 +404,7 @@ function animate(){
       a.setEffectiveWeight(w+((k===want?1:0)-w)*Math.min(1,dt*6));
     }
     player.mixer.update(dt);
+    poseCarry(player.arms);
   }
   const az=controls.getAzimuthalAngle();
   if(moving){
@@ -428,6 +451,7 @@ function animate(){
     const w=n.act.Idle.getEffectiveWeight();
     n.act.Idle.setEffectiveWeight(w+(1-w)*Math.min(1,dt*4));
     n.mixer.update(dt);
+    poseCarry(n.arms);
   }
   /* the dead keep coming */
   for(const z of zombies){
