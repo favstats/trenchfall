@@ -5,7 +5,7 @@
 <title>TRENCHFALL · sniper holdout</title>
 <style>
 body{margin:0;overflow:hidden;background:#0d0e10}
-#hint{position:fixed;left:12px;top:10px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000}
+#hint{position:fixed;left:12px;bottom:12px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000;opacity:.85}
 #hud{position:fixed;right:14px;top:10px;color:#e8e0c8;font:15px/1.6 monospace;text-align:right;text-shadow:0 1px 2px #000}
 #cross{position:fixed;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;pointer-events:none}
 #cross:before,#cross:after{content:'';position:absolute;background:#e8e0c8;box-shadow:0 0 2px #000}
@@ -42,8 +42,27 @@ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x2a2622);
-scene.fog=new THREE.Fog(0x2a2622,30,110);
+scene.fog=new THREE.Fog(0xb8a488,40,160);
+{ // a real evening overhead
+  const c=document.createElement('canvas');c.width=2;c.height=256;
+  const g=c.getContext('2d');
+  const grd=g.createLinearGradient(0,256,0,0);
+  grd.addColorStop(0,'#c9b08a');grd.addColorStop(.35,'#9b7f63');
+  grd.addColorStop(.7,'#4a4350');grd.addColorStop(1,'#23222e');
+  g.fillStyle=grd;g.fillRect(0,0,2,256);
+  const tex=new THREE.CanvasTexture(c);
+  const dome=new THREE.Mesh(new THREE.SphereGeometry(180,24,12),
+    new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,fog:false}));
+  scene.add(dome);
+  const sc2=document.createElement('canvas');sc2.width=sc2.height=64;
+  const sg=sc2.getContext('2d');
+  const rg=sg.createRadialGradient(32,32,2,32,32,30);
+  rg.addColorStop(0,'rgba(255,236,200,1)');rg.addColorStop(.4,'rgba(255,214,150,.8)');rg.addColorStop(1,'rgba(255,214,150,0)');
+  sg.fillStyle=rg;sg.fillRect(0,0,64,64);
+  const sunSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(sc2),
+    color:0xffd9a8,fog:false,transparent:true,opacity:.95}));
+  sunSpr.position.set(60,26,-140);sunSpr.scale.setScalar(26);scene.add(sunSpr);
+}
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.04,260);
 scene.add(camera);
 
@@ -93,6 +112,19 @@ placeProp('watch_tower.glb',4.5,[[-12,14]],[2.9]);
 placeProp('barrier.glb',1.8,[[5,8],[8,6],[-6,9]],[.8,1.1,-.6]);
 placeProp('barbed_wire.glb',2.4,[[-5,12],[0,13],[5,12],[9,10]],[0,.2,-.2,.5]);
 placeProp('military_crate.glb',1.1,[[-1.6,-1.6],[-2.4,-1.1]],[.4,1.2]);
+{ // strewn rocks: the eye needs something to measure the flats by
+  const rg=new THREE.IcosahedronGeometry(1,1);
+  const rm=new THREE.MeshStandardMaterial({color:0x6b5e4a,roughness:.95});
+  for(let i=0;i<26;i++){
+    const m=new THREE.Mesh(rg,rm);
+    const a=Math.random()*Math.PI*2,r=10+Math.random()*60;
+    m.position.set(Math.cos(a)*r,0,Math.sin(a)*r);
+    m.scale.set(.4+Math.random()*1.4,.3+Math.random()*.8,.4+Math.random()*1.4);
+    m.position.y=m.scale.y*.4;
+    m.rotation.y=Math.random()*7;
+    m.castShadow=m.receiveShadow=true;scene.add(m);
+  }
+}
 
 /* ---------- the player: a pair of boots, a pair of eyes, and the glass ---------- */
 const P={x:0,z:-2,yaw:0,pitch:0,hp:100,ammo:5,reserve:25,fireCd:0,boltT:0,reloadT:0,kills:0,dead:false,scoped:false};
@@ -304,7 +336,7 @@ function click(){
 }
 
 /* ---------- the dead, streaming in (walk-demo pack logic) ---------- */
-const ZN=10,zombies=[];
+const ZN=16,zombies=[];
 let zombiePack=null,zombieRoots=[],soldierGltf=null;
 loader.load('assets/models/zombies_pack.glb',gltf=>{
   zombiePack=gltf;
@@ -336,10 +368,10 @@ function spawnZombie(i,first){
     zombies[i]=z;
   }else if(first)return null;
   const a=Math.random()*Math.PI*2;
-  const r2=46+Math.random()*22;       // long lanes: a sniper's kind of distance
+  const r2=22+Math.random()*30;       // close enough to matter, far enough to lead
   z.group.position.set(P.x+Math.cos(a)*r2,0,P.z+Math.sin(a)*r2);
   z.hp=40;z.dead=false;z.fall=0;z.atkT=0;z.stagT=0;z.respawnT=0;
-  z.speed=.6+Math.random()*1.1;
+  z.speed=.9+Math.random()*1.4;
   z.group.visible=true;z.group.rotation.set(0,0,0);
   for(const m of z.mats)m.color.set(0x77836b).multiplyScalar(.75+Math.random()*.5);
   return z;
@@ -387,6 +419,20 @@ function flashTracer(a,b){
   tr.line.material.opacity=.9;tr.t=.07;
 }
 const muzzleFlash=new THREE.PointLight(0xffb050,0,10);scene.add(muzzleFlash);
+let shake=0;
+const bloodPool=[];
+function bloodPuff(p){
+  let b2=bloodPool.find(x=>x.t<=0);
+  if(!b2){const m=new THREE.Sprite(new THREE.SpriteMaterial({color:0x7a1410,transparent:true,opacity:0,depthWrite:false}));
+    scene.add(m);b2={s:m,t:0};bloodPool.push(b2);}
+  b2.s.position.copy(p);b2.s.scale.setScalar(.5);b2.s.material.opacity=.9;b2.t=.4;
+}
+const killEl=document.createElement('div');
+killEl.style.cssText='position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) rotate(45deg);'+
+  'width:26px;height:26px;pointer-events:none;opacity:0;transition:opacity .3s';
+killEl.innerHTML='<div style="position:absolute;left:11px;top:0;width:4px;height:26px;background:#e03020"></div>'+
+  '<div style="position:absolute;left:0;top:11px;width:26px;height:4px;background:#e03020"></div>';
+document.body.appendChild(killEl);
 function tryFire(){
   if(P.fireCd>0||P.boltT>0||P.reloadT>0)return;
   if(P.ammo<=0){click();return;}
@@ -409,11 +455,15 @@ function tryFire(){
   const end=best?_tp.copy(_rayO).addScaledVector(_rayD,bestT):_tp.copy(_rayO).addScaledVector(_rayD,160);
   flashTracer(mz,end);
   muzzleFlash.position.copy(mz);muzzleFlash.intensity=40;
+  shake=Math.min(1,shake+.7);
   if(best){
     best.hp-=bestHead?100:55;best.stagT=.3;       // the long rifle argues once
+    _tp.copy(best.group.position);_tp.y+=bestHead?1.6:1.2;
+    bloodPuff(_tp);
     for(const m of best.mats)m.color.multiplyScalar(1.6);
     const bz=best;setTimeout(()=>{if(!bz.dead)for(const m of bz.mats)m.color.multiplyScalar(1/1.6);},70);
-    if(best.hp<=0){best.dead=true;best.fall=0;best.respawnT=5;P.kills++;}
+    if(best.hp<=0){best.dead=true;best.fall=0;best.respawnT=5;P.kills++;
+      killEl.style.opacity=1;setTimeout(()=>killEl.style.opacity=0,280);}
   }
 }
 
@@ -455,6 +505,11 @@ function animate(){
   if(P.reloadT>0){P.reloadT-=dt;
     if(P.reloadT<=0){const take=Math.min(5-P.ammo,P.reserve);P.ammo+=take;P.reserve-=take;}}
   muzzleFlash.intensity*=Math.pow(.001,dt);
+  shake=Math.max(0,shake-dt*4);
+  if(shake>0){camera.rotation.x+=Math.sin(clock.elapsedTime*70)*shake*.012;
+    camera.rotation.z=(Math.random()-.5)*shake*.01;}
+  for(const b2 of bloodPool){if(b2.t>0){b2.t-=dt;
+    b2.s.scale.multiplyScalar(1+dt*7);b2.s.material.opacity=Math.max(0,b2.t*2.2);}}
   for(const tr of tracerPool){tr.t-=dt;if(tr.t<=0)tr.line.material.opacity=Math.max(0,tr.line.material.opacity-dt*12);}
   // the dead keep coming
   for(const z of zombies){
