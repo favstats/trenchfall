@@ -3000,7 +3000,7 @@ function limbHide(up,lo,mi,M){
 /* every revenant gets its own eyes and its own shade of rot */
 const EYE_COL={walker:[7,.9,.45],runner:[8,5,2.4],crawler:[2.6,.5,.3],spitter:[1.6,7,.7],
   exploder:[8,1.4,.2],screamer:[5.5,1.2,7],brute:[9,.5,.3],colossus:[11,.4,.2]};
-const _EC=new THREE.Color();
+const _EC=new THREE.Color(),_eyeFl=[0,0,0]; // scratch for the guttering glow
 function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1,hairC=null){
   /* the skull rides its own pivot: pitch hX, roll hZ — the loll */
   _M2.makeTranslation(0,1.5,.08);_HM.copy(M).multiply(_M2);
@@ -3330,7 +3330,8 @@ function updateZombies(dt,t){
     if(zb.twitchT<=0){zb.twitchT=rand(2.5,9);zb.twitching=rand(.2,.5);}
     const spz=zb.twitching>0?(zb.twitching-=dt,Math.sin(t*43+zb.phase)*.1):0;
     /* the grasp: arms come up as it closes on meat */
-    const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')&&d<8&&!crawl;
+    const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')
+      &&d<(zb.kind==='runner'?3.5:8)&&!crawl; // a runner pumps its arms until the last stride
     zb.reach+=((meat?1:0)-zb.reach)*Math.min(1,dt*2.5);
     const sway=(zb.lean||0)+ck*(zb.kind==='runner'?.1:.06)*(1+Math.abs(zb.limp))+spz;
     const bob=Math.abs(wk)*(crawl?.04:.07)*(zb.drag?.5:1);
@@ -3350,20 +3351,27 @@ function updateZombies(dt,t){
     let kL=.12+Math.max(0,-ck)*kBend*(ampL/legAmp);
     let kR=.12+Math.max(0,ck)*kBend*(ampR/legAmp);
     if(zb.drag&&zb.limp){if(badL)kL=.55+wk*.08;else kR=.55-wk*.08;}
-    /* arms: some still reach, some hang dead, a few are one of each */
-    const armAmp=crawl?.6:.26;
+    /* arms: some still reach, some hang dead, a few are one of each — runners pump */
+    const sprint=zb.kind==='runner';
+    const armAmp=crawl?.6:sprint?.55:.26;
     const upL=zb.armS<.45||zb.armS>=.85,upR=zb.armS<.45;
-    let aL=(crawl?.9:upL?-.15:1.2)+wk*armAmp*((upL||crawl)?1:.35);
-    let aR=(crawl?.9:upR?-.1:1.25)-wk*armAmp*((upR||crawl)?1:.35);
-    let eLb=(crawl?.5:upL?.5:.3)+Math.max(0,-wk)*.25;
-    let eRb=(crawl?.5:upR?.55:.3)+Math.max(0,wk)*.25;
+    let aL,aR,eLb,eRb;
+    if(sprint){ // elbows pinned tight, fists driving — it RUNS at you
+      aL=.5+wk*armAmp;aR=.5-wk*armAmp;
+      eLb=1.25+Math.max(0,-wk)*.2;eRb=1.25+Math.max(0,wk)*.2;
+    }else{
+      aL=(crawl?.9:upL?-.15:1.2)+wk*armAmp*((upL||crawl)?1:.35);
+      aR=(crawl?.9:upR?-.1:1.25)-wk*armAmp*((upR||crawl)?1:.35);
+      eLb=(crawl?.5:upL?.5:.3)+Math.max(0,-wk)*.25;
+      eRb=(crawl?.5:upR?.55:.3)+Math.max(0,wk)*.25;
+    }
     if(zb.reach>.02){ // hands thrust level at the meat, elbows opening, a tremor in the wrists
       const tr=Math.sin(t*12+zb.phase)*.07;
       aL=lerp(aL,-.42+tr,zb.reach);aR=lerp(aR,-.36-tr,zb.reach);
       eLb=lerp(eLb,.16-tr,zb.reach);eRb=lerp(eRb,.2+tr,zb.reach);
     }
     /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
-    const hX2=(crawl?-.55:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4;
+    const hX2=(crawl?-.55:sprint?-.32:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4; // a sprinter's head comes up, eyes on you
     const hZ2=zb.loll*(1-zb.reach*.55)+Math.sin(t*zb.lollSp*.73+zb.phase*2)*.07;
     /* the jaw: slack at rest, gaping and working as it closes — chewing on the air */
     const jaw=.08+Math.abs(spz)*2+zb.reach*(.5+Math.sin(t*9+zb.phase)*.22);
@@ -3377,8 +3385,14 @@ function updateZombies(dt,t){
     else if(zb.brute){colC=0x8a3528;colF=0x9a6a52;}
     else if(zb.kind==='spitter'){colC=zb.cloth;colF=0x6e8a48;}      // the sickness shows in the skin
     else{colC=zb.frenzyT>0?0x8a6a45:zb.cloth;colF=zb.flesh;}
+    { /* the glow gutters like a bad lamp, and sometimes nearly dies */
+      const e=EYE_COL[zb.kind];
+      let fl=.72+.28*Math.sin(t*(9+zb.lollSp*5)+zb.phase*7);
+      if(Math.sin(t*1.7+zb.phase*3)>.975)fl*=.12;
+      _eyeFl[0]=e[0]*fl;_eyeFl[1]=e[1]*fl;_eyeFl[2]=e[2]*fl;
+    }
     writeZombie(mi,_M,colC,colF,
-      aL,aR,lL,lR,false,flash?1:zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone,
+      aL,aR,lL,lR,false,flash?1:zb.tint,_eyeFl,zb.hat&&!zb.brute,zb.gone,
       eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC);
     mi++;
   }
