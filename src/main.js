@@ -969,6 +969,19 @@ function clothWave(mat,amp){ // vertex ripple for cloth-like planes
        transformed.y+=sin(uWindT*3.7+position.x*2.6)*${amp}*.4*(position.x*.5+.55);`);
   };
 }
+const SnowU={value:0}; // how much the biome lays on upward faces
+function frostable(mat){ // snow settles where gravity says it should
+  mat.onBeforeCompile=s=>{
+    s.uniforms.uSnowK=SnowU;
+    s.fragmentShader='uniform float uSnowK;\n'+s.fragmentShader.replace('#include <color_fragment>',
+      `#include <color_fragment>
+       #ifndef FLAT_SHADED
+       float snowUp=smoothstep(.45,.8,dot(normalize(vNormal),normalize((viewMatrix*vec4(0.,1.,0.,0.)).xyz)));
+       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.85,.88,.95),uSnowK*snowUp);
+       #endif`);
+  };
+  return mat;
+}
 const woodTex=(()=>{ // plank grain for crates / platform
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d');
@@ -1007,8 +1020,8 @@ const bagGeo=(()=>{ // one sewn sack, reused everywhere bags get stacked
   geo.rotateZ(Math.PI/2);geo.scale(1,.74,1.3);
   return geo;
 })();
-const bagMat=new THREE.MeshStandardMaterial({color:0xb5a87f,roughness:.95,
-  map:burlapTex,bumpMap:burlapTex,bumpScale:.3});
+const bagMat=frostable(new THREE.MeshStandardMaterial({color:0xb5a87f,roughness:.95,
+  map:burlapTex,bumpMap:burlapTex,bumpScale:.3}));
 const brickTex=(()=>{ // running bond for every ruin still arguing with gravity
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d');
@@ -1033,7 +1046,7 @@ const brickTex=(()=>{ // running bond for every ruin still arguing with gravity
 })();
 const roadPosts=new THREE.InstancedMesh(
   new THREE.BoxGeometry(.18,.9,.18),
-  new THREE.MeshStandardMaterial({color:0x8a8270}),96);
+  frostable(new THREE.MeshStandardMaterial({color:0x8a8270})),96);
 roadPosts.castShadow=true;scene.add(roadPosts);
 function scatterPosts(){
   const M=new THREE.Matrix4();let i=0;
@@ -1051,9 +1064,9 @@ scatterPosts();
 const depot=new THREE.Group();
 {
   const plat=new THREE.Mesh(new THREE.BoxGeometry(13,.3,13),
-    new THREE.MeshStandardMaterial({color:0x847a62,map:woodTex,roughness:.85,bumpMap:woodTex,bumpScale:.2}));
+    frostable(new THREE.MeshStandardMaterial({color:0x847a62,map:woodTex,roughness:.85,bumpMap:woodTex,bumpScale:.2})));
   plat.position.y=.15;plat.castShadow=plat.receiveShadow=true;depot.add(plat);
-  const crateM=new THREE.MeshStandardMaterial({color:0x9a9a6a,map:woodTex,roughness:.8,bumpMap:woodTex,bumpScale:.25});
+  const crateM=frostable(new THREE.MeshStandardMaterial({color:0x9a9a6a,map:woodTex,roughness:.8,bumpMap:woodTex,bumpScale:.25}));
   for(let i=0;i<6;i++){
     const c=new THREE.Mesh(new THREE.BoxGeometry(rand(1.2,1.9),rand(.9,1.5),rand(1.2,1.9)),crateM);
     c.position.set(rand(-4,4),.3+c.geometry.parameters.height/2,rand(-4,4));
@@ -1068,8 +1081,8 @@ const depot=new THREE.Group();
   flag.position.set(1,7,0);depot.add(flag);
   const lampL=new THREE.PointLight(0xffc070,20,26);lampL.position.set(0,6,0);depot.add(lampL);
   // dressing: tents, sandbags, a mast, lanterns. somewhere someone defended.
-  const tentM=new THREE.MeshStandardMaterial({color:0x6b6f4f,roughness:.95,
-    map:burlapTex,bumpMap:burlapTex,bumpScale:.25});
+  const tentM=frostable(new THREE.MeshStandardMaterial({color:0x6b6f4f,roughness:.95,
+    map:burlapTex,bumpMap:burlapTex,bumpScale:.25}));
   for(const[tx,tz,tr]of[[-4.5,5.5,.6],[5.2,-4.8,-1.1]]){
     const tent=new THREE.Mesh(new THREE.ConeGeometry(1.8,2.1,4),tentM);
     tent.position.set(tx,1.05,tz);tent.rotation.y=tr;tent.castShadow=true;depot.add(tent);
@@ -1097,8 +1110,8 @@ const depot=new THREE.Group();
     bulb.position.set(lx,3.55,lz);depot.add(bulb);   // HDR-hot: blooms like a real lantern
   }
   // the wall greyfield died behind: palisade, two towers, breaches still smoking
-  const palM=new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,
-    bumpMap:woodTex,bumpScale:.3});
+  const palM=frostable(new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,
+    bumpMap:woodTex,bumpScale:.3}));
   const charM=new THREE.MeshStandardMaterial({color:0x18140f,roughness:1});
   const ringR=13.5;
   for(let wa=.62;wa<TAU-.62;wa+=.16){            // open toward the road
@@ -1164,8 +1177,8 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
     const t=new THREE.CanvasTexture(c);
     t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
-  const rockM=new THREE.MeshStandardMaterial({color:0x8a8268,roughness:.95,
-    map:rockTex,bumpMap:rockTex,bumpScale:.5});
+  const rockM=frostable(new THREE.MeshStandardMaterial({color:0x8a8268,roughness:.95,
+    map:rockTex,bumpMap:rockTex,bumpScale:.5}));
   const rocks=new THREE.InstancedMesh(rockG,rockM,80);
   rocks.castShadow=true;scene.add(rocks);
 
@@ -1258,11 +1271,11 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
   // geometries: trunk bases at y=0
   const mkTrunk=(r0,r1,h)=>{const g=new THREE.CylinderGeometry(r0,r1,h,11);g.translate(0,h/2,0);return g;};
   const birchT=new THREE.InstancedMesh(mkTrunk(.13,.34,14),
-    new THREE.MeshStandardMaterial({map:birchBark,roughness:.8,bumpMap:birchBark,bumpScale:.25}),520);
+    frostable(new THREE.MeshStandardMaterial({map:birchBark,roughness:.8,bumpMap:birchBark,bumpScale:.25})),520);
   const firT=new THREE.InstancedMesh(mkTrunk(.16,.42,13),
-    new THREE.MeshStandardMaterial({map:firBark,roughness:.95,bumpMap:firBark,bumpScale:.4}),440);
+    frostable(new THREE.MeshStandardMaterial({map:firBark,roughness:.95,bumpMap:firBark,bumpScale:.4})),440);
   const deadT=new THREE.InstancedMesh(mkTrunk(.14,.34,5.5),
-    new THREE.MeshStandardMaterial({color:0x2c2620,roughness:1}),140);
+    frostable(new THREE.MeshStandardMaterial({color:0x2c2620,roughness:1})),140);
   const cardG=(()=>{const p1=new THREE.PlaneGeometry(5.6,4.2);
     const p2=p1.clone();p2.rotateY(Math.PI/2);
     const p3=p1.clone();p3.rotateX(Math.PI/2);
@@ -1880,8 +1893,8 @@ function scatterPonds(){
 const setpieces=new THREE.Group();scene.add(setpieces);
 function scatterSetpieces(){
   while(setpieces.children.length)setpieces.remove(setpieces.children[0]);
-  const rust=new THREE.MeshStandardMaterial({color:0x4f4434,roughness:.7,metalness:.45});
-  const rustD=new THREE.MeshStandardMaterial({color:0x35302a,roughness:.8,metalness:.3});
+  const rust=frostable(new THREE.MeshStandardMaterial({color:0x4f4434,roughness:.7,metalness:.45}));
+  const rustD=frostable(new THREE.MeshStandardMaterial({color:0x35302a,roughness:.8,metalness:.3}));
   if(srnd()<.75){ // a dead tank, somewhere different every time
     const tank=new THREE.Group();
     const hull=new THREE.Mesh(new THREE.BoxGeometry(6,1.9,3.4),rust);hull.position.y=1.1;hull.castShadow=true;
@@ -1902,8 +1915,8 @@ function scatterSetpieces(){
     tank.rotation.y=srand(TAU);tank.rotation.z=.06;
     setpieces.add(tank);
   }
-  const brick=new THREE.MeshStandardMaterial({color:0xc4b5a4,roughness:.9,
-    map:brickTex,bumpMap:brickTex,bumpScale:.35});
+  const brick=frostable(new THREE.MeshStandardMaterial({color:0xc4b5a4,roughness:.9,
+    map:brickTex,bumpMap:brickTex,bumpScale:.35}));
   const nWalls=2+(srnd()*3|0);
   for(let wI=0;wI<nWalls;wI++){
     const wx=srand(-half+14,half-14),wz=srand(-half+14,half-14);
@@ -1950,13 +1963,13 @@ const facadeTex=(()=>{
 })();
 const cityWalls=new THREE.InstancedMesh(
   new THREE.BoxGeometry(9,10,.6),
-  new THREE.MeshStandardMaterial({map:facadeTex,roughness:.92,color:0xd0c2ae,envMapIntensity:.5,
-    bumpMap:facadeTex,bumpScale:.55}),120);
+  frostable(new THREE.MeshStandardMaterial({map:facadeTex,roughness:.92,color:0xd0c2ae,envMapIntensity:.5,
+    bumpMap:facadeTex,bumpScale:.55})),120);
 cityWalls.castShadow=cityWalls.receiveShadow=true;
 const cityRubble=new THREE.InstancedMesh(
   new THREE.IcosahedronGeometry(1,1),
-  new THREE.MeshStandardMaterial({color:0x8d8276,roughness:.95,
-    map:brickTex,bumpMap:brickTex,bumpScale:.4}),90); // collapsed masonry, not grey blobs
+  frostable(new THREE.MeshStandardMaterial({color:0x8d8276,roughness:.95,
+    map:brickTex,bumpMap:brickTex,bumpScale:.4})),90); // collapsed masonry, not grey blobs
 cityRubble.castShadow=true;
 const cityWins=new THREE.InstancedMesh(
   new THREE.PlaneGeometry(.5,.7),
@@ -4328,7 +4341,8 @@ function setBiome(b){BIOME.city=0;BIOME.shore=false;
   BIOME.snow=false;BIOME.desert=false;BIOME.ground=null;
   BIOME.grassS=1;BIOME.grassL=1;BIOME.pineBias=0;
   BIOME.alpine=false;BIOME.ash=false;
-  Object.assign(BIOME,b);}
+  Object.assign(BIOME,b);
+  SnowU.value=BIOME.snow?1:(BIOME.alpine?.55:0);}
 
 /* ---- route generation: the map is drawn fresh every campaign ---- */
 function genRouteOptions(){
@@ -7435,9 +7449,9 @@ function saveWander(){
 }
 function buildCacheMesh(rich){ // a crate that was packed by hands, not extruded
   const g=new THREE.Group();
-  const wood=new THREE.MeshStandardMaterial({color:rich?0x4a3e33:0x5d6243,map:woodTex,
-    roughness:.85,bumpMap:woodTex,bumpScale:.4});
-  const trim=new THREE.MeshStandardMaterial({color:0x3e3528,map:woodTex,roughness:.9});
+  const wood=frostable(new THREE.MeshStandardMaterial({color:rich?0x4a3e33:0x5d6243,map:woodTex,
+    roughness:.85,bumpMap:woodTex,bumpScale:.4}));
+  const trim=frostable(new THREE.MeshStandardMaterial({color:0x3e3528,map:woodTex,roughness:.9}));
   const box=new THREE.Mesh(new THREE.BoxGeometry(1.04,.74,1.04),wood);
   box.castShadow=true;box.receiveShadow=true;g.add(box);
   for(const sx of[-.45,.45]){ // corner battens
@@ -7515,8 +7529,8 @@ function buildLandmark(){
   const x=clamp(Math.cos(a)*r,-half+20,half-20),z=clamp(Math.sin(a)*r,-half+20,half-20);
   const gy=heightAt(x,z);
   const g=new THREE.Group();
-  const stone=new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95,
-    bumpMap:fleshTex,bumpScale:.5}); // the mottle reads as weathered rock at this scale
+  const stone=frostable(new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95,
+    bumpMap:fleshTex,bumpScale:.5})); // the mottle reads as weathered rock at this scale
   let name='';
   if(kind==='bell'){
     name='THE BELL TOWER';
@@ -7534,8 +7548,8 @@ function buildLandmark(){
     COLLIDERS.push({x,z,r:3});
   }else{
     name='THE SUNKEN CHURCH';
-    const brick=new THREE.MeshStandardMaterial({color:0xa89684,roughness:.95,
-      map:brickTex,bumpMap:brickTex,bumpScale:.35});
+    const brick=frostable(new THREE.MeshStandardMaterial({color:0xa89684,roughness:.95,
+      map:brickTex,bumpMap:brickTex,bumpScale:.35}));
     for(const[ox,oz,w2,ry]of[[0,-4,9,0],[4.5,0,8,Math.PI/2],[-4.5,0,8,Math.PI/2]]){
       const w3=new THREE.Mesh(new THREE.BoxGeometry(w2,4,.6),brick);
       w3.position.set(ox,.6,oz);w3.rotation.y=ry;g.add(w3);   // half-buried: the land is eating it
