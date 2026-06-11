@@ -133,20 +133,51 @@ placeProp('barbed_wire.glb',2.4,[[-5,9],[0,10],[5,9],[9,7]],[0,.2,-.2,.5]);
 /* ---------- the user's armory: a real SCAR for every hand ---------- */
 const pendingHands=[];let scarBase=null;
 const _ws=new THREE.Vector3();
+const fitQueue=[]; // size things AFTER a real render, when every matrix in the chain is true
+function fitWorld(obj,target,axis,place){fitQueue.push({obj,target,axis,place});}
+function runFits(){
+  if(!fitQueue.length)return;
+  const done=[];
+  for(const f of fitQueue){
+    const bb=new THREE.Box3().setFromObject(f.obj);
+    bb.getSize(_ws);
+    const cur=f.axis==='y'?_ws.y:Math.max(_ws.x,_ws.y,_ws.z);
+    if(cur<1e-6)continue;
+    const k=f.target/cur;
+    f.obj.scale.multiplyScalar(k);
+    if(f.place){ // world-placed things re-seat on the ground at their spot
+      f.obj.updateWorldMatrix(true,true);
+      const b2=new THREE.Box3().setFromObject(f.obj);
+      const c2=b2.getCenter(new THREE.Vector3());
+      f.obj.position.x+=f.place.x-c2.x;
+      f.obj.position.z+=f.place.z-c2.z;
+      f.obj.position.y-=b2.min.y;
+    }else{
+      f.obj.position.multiplyScalar(k); // hand offsets live in bone units; scale with the rifle
+    }
+    done.push(f);
+  }
+  for(const f of done)fitQueue.splice(fitQueue.indexOf(f),1);
+}
 function armHand(hand){
   if(!scarBase){pendingHands.push(hand);return;}
   const g=scarBase.clone(); // static-only now, plain clone is safe
-  hand.updateWorldMatrix(true,false);
-  hand.getWorldScale(_ws);                  // bones carry scale compensation; cancel it
-  g.scale.multiplyScalar(1/Math.max(1e-6,_ws.x));
-  g.position.multiplyScalar(1/Math.max(1e-6,_ws.x));
   hand.add(g);
+  fitWorld(g,.78,'max',null);
 }
 loader.load('assets/models/scar.glb',gltf=>{
   gltf.scene.updateMatrixWorld(true);
   const body=new THREE.Group();
-  gltf.scene.traverse(o=>{ // static parts only: Box3 is blind to skinning, so skinned bits lie about their size
-    if(o.isMesh&&!o.isSkinnedMesh){
+  const _bv=new THREE.Vector3();
+  gltf.scene.traverse(o=>{ // every mesh in this rifle is skinned: bake the skinning to honest static geometry
+    if(o.isSkinnedMesh){
+      // the skeleton's rest pose is an exploded parts diagram; the raw geometry is the assembled rifle
+      const g2=o.geometry.clone();
+      g2.deleteAttribute('skinIndex');g2.deleteAttribute('skinWeight');
+      const c=new THREE.Mesh(g2,o.material);
+      c.applyMatrix4(o.matrixWorld);
+      c.castShadow=true;body.add(c);
+    }else if(o.isMesh){
       const c=new THREE.Mesh(o.geometry,o.material);
       c.applyMatrix4(o.matrixWorld);c.castShadow=true;body.add(c);
     }
@@ -168,15 +199,9 @@ loader.load('assets/models/scar.glb',gltf=>{
 loader.load('assets/models/us_assault.glb',gltf=>{ // a sentinel for the tower
   const m=gltf.scene;
   m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-  const bb=new THREE.Box3().setFromObject(m);
-  const dim=bb.getSize(new THREE.Vector3());
-  const sc=1.85/dim.y;
-  m.scale.setScalar(sc);
-  const b2=new THREE.Box3().setFromObject(m);
-  const ctr=b2.getCenter(new THREE.Vector3());
-  m.position.set(-10.4-ctr.x,-b2.min.y,8.6-ctr.z);
   m.rotation.y=.6;
   scene.add(m);
+  fitWorld(m,1.85,'y',{x:-10.4,z:8.6});
 });
 
 /* ---------- actors ---------- */
@@ -422,7 +447,7 @@ function animate(){
     if(d>1.2&&!player.dead){
       _zt.normalize();
       z.group.position.addScaledVector(_zt,spd*dt);
-      _e.set(0,Math.atan2(_zt.x,_zt.z)+Math.PI,0);_q.setFromEuler(_e);
+      _e.set(0,Math.atan2(_zt.x,_zt.z)+(z.packMode?0:Math.PI),0);_q.setFromEuler(_e); // the pack faces the other way
       z.group.quaternion.rotateTowards(_q,dt*5);
     }else if(!player.dead){
       z.atkT-=dt;
@@ -461,6 +486,7 @@ function animate(){
   controls.update();
   hud.textContent=`HP ${Math.max(0,Math.round(player.hp))} · KILLS ${player.kills} · ${player.reloadT>0&&player.ammo<=0?'RELOADING':'AMMO '+player.ammo}`;
   renderer.render(scene,camera);
+  runFits(); // matrices are honest only after a render
 }
 animate();
 addEventListener('resize',()=>{
