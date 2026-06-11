@@ -3555,7 +3555,7 @@ function updateAcids(dt){
         SFX.acidHit();
         burst(p.x,p.y+.2,p.z,14,0x9aff30,3.5,4);
         const dp=Math.hypot(player.x-p.x,player.z-p.z);
-        if(player.alive&&dp<3.4){damagePlayer(14,zb);acidFlash=1;}
+        if(player.alive&&dp<3.4){damagePlayer(14,{x:p.x,z:p.z});acidFlash=1;} // the splash is the attacker here
         for(const t of[...turrets])if(Math.hypot(t.x-p.x,t.z-p.z)<3.2)damageTurret(t,14);
         if(Math.hypot(p.x,p.z)<7.5)damageDepot(8);
         for(const t of aliveTrucks())if(Math.hypot(t.x-p.x,roadZ(t.x)-p.z)<3.6)damageTruck(12,t);
