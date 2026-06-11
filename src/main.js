@@ -3187,14 +3187,16 @@ function updateZombies(dt,t){
       const corpseLim=BAST.on?(zombies.length>85?9:28):14;
       const melt=clamp((corpseLim-zb.deadT)/1.4,0,1);
       const k=clamp(zb.deadT/.45,0,1);
-      _E.set(-1.5*k,zb.face||0,0);_Q.setFromEuler(_E);
-      _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05-Math.min(.45,Math.max(0,zb.deadT-16)*.04),zb.z);
-      _S.setScalar(Math.max(.001,zb.scale*melt));
-      _M.compose(_P,_Q,_S);
       {const s1=Math.sin(zb.phase*5),s2=Math.sin(zb.phase*9); // each corpse falls its own way
+       _E.set((zb.dieFwd?1.42:-1.5)*k,zb.face||0,s1*.14*k);_Q.setFromEuler(_E);
+       _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05-Math.min(.45,Math.max(0,zb.deadT-16)*.04),zb.z);
+       {const w=zb.wide||1;_S.set(Math.max(.001,zb.scale*melt*w),Math.max(.001,zb.scale*melt),Math.max(.001,zb.scale*melt*w*.96));}
+       _M.compose(_P,_Q,_S);
+       const tw=zb.deadT<1.6?(1.6-zb.deadT)*Math.sin(zb.deadT*37+zb.phase*9)*.11:0; // the last nerves arguing
        writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,
-         -.5+s1*.5,-.6-s2*.5,.15+s2*.25,-.1+s1*.25,true,zb.tint,null,false,zb.gone,
-         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,s1>0?.8:-.8,.65,zb.hairC);} // jaw fallen open
+         -.5+s1*.5+tw,-.6-s2*.5-tw,.15+s2*.25,-.1+s1*.25+tw,true,zb.tint,null,false,zb.gone,
+         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,
+         (s1>0?.8:-.8)*(zb.dieHead?1.6:1),.65,zb.hairC);} // jaw fallen open; a headshot leaves the neck wrong
       mi++;continue;
     }
     if(zb.sleeping){
@@ -3465,6 +3467,7 @@ function damageZombie(zb,dmg,hitPos,isHead){
   if(hitPos)burst(hitPos.x,hitPos.y,hitPos.z,7,0xa32417,3,3);
   if(zb.hp<=0){
     zb.alive=false;zb.deadT=0;
+    zb.dieFwd=Math.random()<.45;zb.dieHead=!!isHead; // some pitch onto their faces; a headshot snaps the neck
     G.kills++;chain++;chainT=3;
     if(zb.questTarget&&WANDER.quest){WANDER.quest.objDone=true;
       say('YOU','The coat stops walking here.',3200);saveWander();}

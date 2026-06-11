@@ -59,5 +59,13 @@ for(let s=0;s<2;s++){
   await page.waitForTimeout(1600);
   await page.screenshot({path:`/tmp/tf-zomb-mid-${s}.png`,timeout:120000}).catch(()=>console.log('mid shot failed',s));
 }
+await page.evaluate(()=>{ // the aftermath: drop most of them where they stand
+  window.PLAYER.hp=Infinity;
+  window.ZOMBIES.forEach((z,i)=>{if(z.alive&&i%4!==0)z.hp=0;});
+});
+for(let s=0;s<2;s++){
+  await page.waitForTimeout(2200);
+  await page.screenshot({path:`/tmp/tf-zomb-dead-${s}.png`,timeout:120000}).catch(()=>console.log('dead shot failed',s));
+}
 console.log('errors:',errors.filter(e=>!e.includes('pointer lock')).slice(0,8));
 await browser.close();
