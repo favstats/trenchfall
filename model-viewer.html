@@ -35,9 +35,10 @@ new GLTFLoader().load(q.get('m')||'assets/models/assault.glb',g=>{
     o=body;sc.add(o);
   }else sc.add(o);
   o.traverse(n=>{if(n.isSkinnedMesh){n.skeleton.pose();n.frustumCulled=false;}}); // rest the bones
-  if(g.animations.length&&q.get('anim')){ // or hold frame 0 of the first clip
+  if(g.animations.length&&q.get('anim')){ // hold any moment of the first clip: &t=seconds
     const mx=new THREE.AnimationMixer(o);const a2=mx.clipAction(g.animations[0]);
-    a2.play();mx.update(0.001);window.__anim=g.animations.map(a3=>a3.name);
+    a2.play();mx.update(+(q.get('t')||0.001));window.__anim=g.animations.map(a3=>a3.name);
+    console.log('clip dur',g.animations[0].duration.toFixed(2));
   }
   const box=new THREE.Box3().setFromObject(o),c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3());
   const d=Math.max(s.x,s.y,s.z),ang=+(q.get('a')||0);

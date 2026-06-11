@@ -98,12 +98,29 @@ placeProp('military_crate.glb',1.1,[[-1.6,-1.6],[-2.4,-1.1]],[.4,1.2]);
 const P={x:0,z:-2,yaw:0,pitch:0,hp:100,ammo:5,reserve:25,fireCd:0,boltT:0,reloadT:0,kills:0,dead:false,scoped:false};
 const EYE=1.7,FOV=55,SCOPE_FOV=13;
 
-/* the user's SCAR, baked from its exploded skin to one honest rifle (walk-demo recipe) */
+/* the user's rifle, baked from its exploded skin to one honest gun (walk-demo recipe) */
 let rifle=null,rifleKick=0;
-loader.load('assets/models/scar.glb',gltf=>{
+const GUN=(new URLSearchParams(location.search)).get('gun')||'sniper';
+loader.load('assets/models/'+GUN+'.glb',gltf=>{
+  const q=new URLSearchParams(location.search);
+  if(GUN==='sniper'&&!q.get('bare')){ // the whole rig: her hands came with the rifle
+    const rig=skClone(gltf.scene);
+    rig.traverse(o=>{if(o.isSkinnedMesh)o.frustumCulled=false;});
+    const mx=new THREE.AnimationMixer(rig);
+    const a2=mx.clipAction(gltf.animations[0]);
+    a2.play();mx.update(+(q.get('t')??.2));      // frozen at the hold
+    const holder=new THREE.Group();
+    holder.add(rig);
+    holder.scale.setScalar(+(q.get('s')??.1));
+    holder.position.set(+(q.get('px')??.18),+(q.get('py')??-.02),+(q.get('pz')??-.3));
+    holder.rotation.set(+(q.get('rx')??0),+(q.get('ry')??1.5),+(q.get('rz')??0));
+    holder.userData.rx0=holder.rotation.x;holder.userData.pz0=holder.position.z;
+    camera.add(holder);rifle=holder;
+    return;
+  }
   gltf.scene.updateMatrixWorld(true);
   const body=new THREE.Group();
-  const junk=/glove|sleeve|crosshair|shape/i; // the FPS arms live a kilometer away in raw space
+  const junk=/glove|sleeve|crosshair|shape|TEXTURA/i; // the FPS arms are not the rifle
   gltf.scene.traverse(o=>{
     if(!o.isMesh&&!o.isSkinnedMesh)return;
     if(junk.test((o.material&&o.material.name)||''))return;
@@ -122,10 +139,12 @@ loader.load('assets/models/scar.glb',gltf=>{
   body.position.copy(ctr).multiplyScalar(-1);
   const holder=new THREE.Group();
   holder.add(body);
-  holder.scale.setScalar(.95/L);                 // ~95cm of long rifle
-  const q=new URLSearchParams(location.search);  // tuning params while the mount settles
+  holder.scale.setScalar((GUN==='sniper'?1.18:.95)/L);   // a proper long rifle
+  // tuning params while the mount settles
   holder.position.set(+(q.get('px')??.27),+(q.get('py')??-.26),+(q.get('pz')??-.62));
-  holder.rotation.set(+(q.get('rx')??Math.PI/2),+(q.get('ry')??-.12),+(q.get('rz')??0)); // laid forward, muzzle toward the work
+  const RY0=Math.PI-.12;                       // both makers called the stock 'forward'
+  const RZ0=GUN==='scar'?Math.PI:0;            // and the scar hangs its mag from the sky
+  holder.rotation.set(+(q.get('rx')??Math.PI/2),+(q.get('ry')??RY0),+(q.get('rz')??RZ0));
   holder.userData.rx0=holder.rotation.x;holder.userData.pz0=holder.position.z;
   camera.add(holder);
   rifle=holder;
