@@ -55,6 +55,8 @@ scene.add(sun);
 
 const group=new THREE.Group();scene.add(group);
 let mixer=null,act={},cur='Idle';
+if(location.protocol==='file:')
+  document.getElementById('hint').innerHTML='open this over http(s), not file:// — browsers refuse to fetch the model locally.<br>try: https://favstats.github.io/trenchfall/walk-demo.html';
 new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
   const model=gltf.scene;
   model.traverse(o=>{if(o.isMesh){o.castShadow=true;}});
