@@ -969,6 +969,56 @@ function pushOut2(o,rad,pools){
     if(d2<rr*rr&&d2>1e-4){const dd=Math.sqrt(d2);o.x=c.x+dx/dd*rr;o.z=c.z+dz/dd*rr;}
   }
 }
+/* collider grid: a hundred dead can ask "what's near me" without touching a thousand trees */
+const COLGRID={cell:8,map:new Map()};
+function rebuildColGrid(){
+  COLGRID.map.clear();
+  const cs=COLGRID.cell;
+  for(const c of COLLIDERS){
+    const m=c.r+3.2;  // fat insert: a query reads only its own cell
+    const x0=Math.floor((c.x-m)/cs),x1=Math.floor((c.x+m)/cs),
+          z0=Math.floor((c.z-m)/cs),z1=Math.floor((c.z+m)/cs);
+    for(let gx=x0;gx<=x1;gx++)for(let gz=z0;gz<=z1;gz++){
+      const k=gx*4096+gz;
+      let arr=COLGRID.map.get(k);if(!arr){arr=[];COLGRID.map.set(k,arr);}
+      arr.push(c);
+    }
+  }
+}
+const _noCols=[];
+function nearColliders(x,z){
+  return COLGRID.map.get(Math.floor(x/COLGRID.cell)*4096+Math.floor(z/COLGRID.cell))||_noCols;
+}
+function pushOutGrid(o,rad){
+  for(const c of nearColliders(o.x,o.z)){
+    const dx=o.x-c.x,dz=o.z-c.z,rr=c.r+rad,d2=dx*dx+dz*dz;
+    if(d2<rr*rr&&d2>1e-4){const dd=Math.sqrt(d2);o.x=c.x+dx/dd*rr;o.z=c.z+dz/dd*rr;}
+  }
+}
+const _steer={x:0,z:0};
+function steerAvoid(x,z,dx,dz,look=2.6,agent=null){ // see the obstacle coming, curve around its shoulder
+  let avx=0,avz=0,blk=0,nd=1e9,nside=1;
+  const blend=(c)=>{
+    const ox=c.x-x,oz=c.z-z,rr=c.r+look,od2=ox*ox+oz*oz;
+    if(od2>rr*rr)return;
+    const od=Math.sqrt(od2)||1;
+    if((ox*dx+oz*dz)/od<.15)return;          // behind or far beside: ignore
+    const side=(ox*dz-oz*dx)>0?-1:1;         // pass on the open side
+    const w=clamp(1-(od-c.r)/look,0,1.3);
+    blk+=w;
+    if(od-c.r<nd){nd=od-c.r;nside=side;}
+    avx+=dz*w*side;avz-=dx*w*side;
+  };
+  for(const c of nearColliders(x,z))blend(c);
+  for(const c of CAMP_COLLIDERS)blend(c);
+  if(blk>.5&&Math.hypot(avx,avz)<blk*.35){   // a flat face dead ahead: the sides cancel. commit.
+    const side=agent?(agent._wallSide??(agent._wallSide=nside)):nside;
+    avx=dz*blk*side;avz=-dx*blk*side;
+  }else if(agent&&blk<.2)agent._wallSide=undefined; // open ground again: forget the wall
+  const bl=Math.hypot(dx+avx*1.6,dz+avz*1.6)||1;
+  _steer.x=(dx+avx*1.6)/bl;_steer.z=(dz+avz*1.6)/bl;
+  return _steer;
+}
 function clothWave(mat,amp){ // vertex ripple for cloth-like planes
   mat.onBeforeCompile=s=>{
     s.uniforms.uWindT=WindU;
@@ -2757,9 +2807,10 @@ let zGeoBody,zGeoHead;
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,1,1.14,1.04),0,1.69,.1,.25);
   add(flesh,blob(.085,1,.55,1.2),0,1.52,.22,.5);
-  add(flesh,blob(.05,1.2,.8,1),-.15,1.18,.16);
+  add(cloth,blob(.05,1.2,.8,1),-.15,1.18,.16); // the bare rib stays with the torso so the head can loll free
   zGeoBody=mergeGeometries(cloth);
   zGeoHead=mergeGeometries(flesh);
+  zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
 }
 const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance tint survives
   const c=document.createElement('canvas');c.width=c.height=256;
@@ -2770,8 +2821,14 @@ const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance 
     const vein=Math.abs(fbm2(x*.025+60,y*.025+19,3)-.5);
     v-=Math.pow(Math.max(0,1-vein*7),2)*55;            // dark vein web
     v+=(hash(x*7,y*5)-.5)*16;                          // pore-fine grain the old map blurred over
-    v-=(hash(x*11,y*17)<.012?60:0);                    // lesions
-    img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.9;img.data[i+3]=255;
+    let r=v,gn=v*.96,b=v*.9;
+    const br=fbm2(x*.02+140,y*.02+77,3);
+    if(br>.6){const k=Math.min(1,(br-.6)*2.6);r-=k*40;gn-=k*14;b+=k*6;}    // livid bruising
+    if(br<.4){const k=Math.min(1,(.4-br)*2.6);r-=k*30;gn+=k*2;b-=k*22;}    // gangrene creeping under the skin
+    const raw=fbm2(x*.06+31,y*.06+200,3);
+    if(raw>.7){const k=Math.min(1,(raw-.7)*3.4);r+=k*26;gn-=k*34;b-=k*38;} // skin worn through to meat
+    if(hash(x*11,y*17)<.014){r*=.34;gn*=.18;b*=.16;}                       // weeping lesions
+    img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
   const t=new THREE.CanvasTexture(c);t.anisotropy=4;
@@ -2780,35 +2837,71 @@ const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance 
 })();
 const zMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,
   map:fleshTex,bumpMap:fleshTex,bumpScale:.6});
-const zMesh=new THREE.InstancedMesh(zGeoBody,zMat,MAXZ);
+const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter gone black
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d'),img=g.createImageData(128,128);
+  for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+    const i=(y*128+x)*4;
+    let v=212+fbm2(x*.09+300,y*.09+11,3)*44-22;
+    v-=(x%5<1?9:0)+(y%5<1?7:0);                              // the weave
+    v-=Math.max(0,fbm2(x*.035+9,y*.035+44,3)-.52)*240;       // grime soaked in
+    let r=v,gn=v*.97,b=v*.9;
+    if(hash(x*13,y*7)<.02){r*=.42;gn*=.3;b*=.3;}             // old blood, dried dark
+    img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
+  }
+  g.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+})();
+const zClothMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.97,
+  map:zClothTex,bumpMap:zClothTex,bumpScale:.45});
+const zMesh=new THREE.InstancedMesh(zGeoBody,zClothMat,MAXZ);
 zMesh.castShadow=true;zMesh.frustumCulled=false;
 scene.add(zMesh);
 const zHead=new THREE.InstancedMesh(zGeoHead,zMat,MAXZ);
 zHead.castShadow=true;zHead.frustumCulled=false;
 scene.add(zHead);
-/* articulated limbs, four extra instanced meshes, posed per-frame */
-const armGeo=(()=>{ // wasted arm ending in a grasping hand
-  const a=new THREE.CylinderGeometry(.048,.066,.5,10);a.rotateX(Math.PI/2);a.translate(0,0,.25);
-  const h=new THREE.SphereGeometry(.062,10,7);h.scale(1,.75,1.35);h.translate(0,-.01,.53);
-  return mergeGeometries([a,h]);})();
-const legGeo=(()=>{
-  const l=new THREE.CylinderGeometry(.075,.058,.68,10);l.translate(0,-.34,0);
-  const f=new THREE.SphereGeometry(.07,10,7);f.scale(.9,.5,1.6);f.translate(0,-.7,.06);
+/* articulated limbs: eight instanced meshes — upper and lower segment per limb, elbows and knees posed per-frame */
+const armUpGeo=(()=>{ // shoulder to elbow
+  const a=new THREE.CylinderGeometry(.052,.062,.28,10);a.rotateX(Math.PI/2);a.translate(0,0,.14);
+  const e=new THREE.SphereGeometry(.05,8,6);e.translate(0,0,.28);
+  return mergeGeometries([a,e]);})();
+const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thumb
+  const a=new THREE.CylinderGeometry(.04,.05,.26,10);a.rotateX(Math.PI/2);a.translate(0,0,.13);
+  const h=new THREE.SphereGeometry(.058,10,7);h.scale(1,.62,1.35);h.translate(0,-.01,.3);
+  const parts=[a,h];
+  for(let i=-1;i<2;i++){const f=new THREE.CylinderGeometry(.012,.009,.11,5);
+    f.rotateX(Math.PI/2-.55);f.translate(i*.032,-.04,.41);parts.push(f);}
+  {const th=new THREE.CylinderGeometry(.013,.01,.09,5);
+   th.rotateX(Math.PI/2-.9);th.rotateY(.7);th.translate(.06,-.03,.34);parts.push(th);}
+  return mergeGeometries(parts);})();
+const legUpGeo=(()=>{ // hip to knee
+  const l=new THREE.CylinderGeometry(.078,.06,.4,10);l.translate(0,-.2,0);
+  const k=new THREE.SphereGeometry(.058,8,6);k.translate(0,-.4,0);
+  return mergeGeometries([l,k]);})();
+const legLoGeo=(()=>{ // knee to the dragging foot
+  const l=new THREE.CylinderGeometry(.052,.044,.36,10);l.translate(0,-.18,0);
+  const f=new THREE.SphereGeometry(.068,10,7);f.scale(.9,.5,1.6);f.translate(0,-.37,.07);
   return mergeGeometries([l,f]);})();
 const LIMBS=[];
-function makeLimb(geo){
-  const m=new THREE.InstancedMesh(geo,zMat,MAXZ);
+function makeLimb(geo,mat){
+  const m=new THREE.InstancedMesh(geo,mat||zMat,MAXZ);
   m.castShadow=true;m.frustumCulled=false;
   scene.add(m);LIMBS.push(m);return m;
 }
-const zArmL=makeLimb(armGeo),zArmR=makeLimb(armGeo),zLegL=makeLimb(legGeo),zLegR=makeLimb(legGeo);
+const zArmL=makeLimb(armUpGeo),zArmR=makeLimb(armUpGeo);
+const zArmL2=makeLimb(armLoGeo),zArmR2=makeLimb(armLoGeo);
+const zLegL=makeLimb(legUpGeo,zClothMat),zLegR=makeLimb(legUpGeo,zClothMat); // trousers end at the knee
+const zLegL2=makeLimb(legLoGeo),zLegR2=makeLimb(legLoGeo);                   // bare rotten shin and foot
 let zEyes;
 {
   const e1=new THREE.SphereGeometry(.04,8,6);e1.scale(1,.75,.55);e1.translate(-.085,1.7,.26);
   const e2=new THREE.SphereGeometry(.04,8,6);e2.scale(1,.75,.55);e2.translate(.085,1.7,.26);
   const eyeMat=new THREE.MeshBasicMaterial();
   eyeMat.color.setRGB(1,1,1);   // per-instance HDR colors decide the glow
-  zEyes=new THREE.InstancedMesh(mergeGeometries([e1,e2]),eyeMat,MAXZ);
+  const eg=mergeGeometries([e1,e2]);eg.translate(0,-1.5,-.08); // eyes ride the head pivot
+  zEyes=new THREE.InstancedMesh(eg,eyeMat,MAXZ);
   zEyes.frustumCulled=false;scene.add(zEyes);
 }
 let zHats;
@@ -2816,45 +2909,60 @@ let zHats;
   const dome=new THREE.SphereGeometry(.2,14,9,0,TAU,0,1.5);
   dome.scale(1,.8,1.05);dome.translate(0,1.78,.09);
   const brim=new THREE.CylinderGeometry(.24,.26,.02,16);brim.translate(0,1.71,.09);
-  zHats=new THREE.InstancedMesh(mergeGeometries([dome,brim]),
+  const hg=mergeGeometries([dome,brim]);hg.translate(0,-1.5,-.08); // hats ride the head pivot
+  zHats=new THREE.InstancedMesh(hg,
     new THREE.MeshStandardMaterial({color:0x3a3b2c,roughness:.95}),MAXZ);
   zHats.castShadow=true;zHats.frustumCulled=false;scene.add(zHats);
 }
 const zombies=[];
 const _M=new THREE.Matrix4(),_Q=new THREE.Quaternion(),_E=new THREE.Euler(),_S=new THREE.Vector3(),_P=new THREE.Vector3();
 _E.order='YXZ';   // yaw first, then the hunch: bodies bend forward, not sideways
-const _C=new THREE.Color();
-const _M2=new THREE.Matrix4(),_M3=new THREE.Matrix4(),_MZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
-function limbTo(mesh,mi,M,ox,oy,oz,ang){
+const _C=new THREE.Color(),_C2=new THREE.Color();
+const _M2=new THREE.Matrix4(),_M3=new THREE.Matrix4(),_M4=new THREE.Matrix4(),_HM=new THREE.Matrix4(),_MZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
+function limb2To(up,lo,mi,M,ox,oy,oz,ang,ang2,arm){
   _M2.makeTranslation(ox,oy,oz);
   _M3.copy(M).multiply(_M2);
   _M2.makeRotationX(ang);
   _M3.multiply(_M2);
-  mesh.setMatrixAt(mi,_M3);
-  mesh.setColorAt(mi,_C);
+  up.setMatrixAt(mi,_M3);up.setColorAt(mi,_C);
+  if(arm)_M2.makeTranslation(0,0,.28);else _M2.makeTranslation(0,-.4,0);
+  _M4.copy(_M3).multiply(_M2);
+  _M2.makeRotationX(ang2);
+  _M4.multiply(_M2);
+  lo.setMatrixAt(mi,_M4);lo.setColorAt(mi,_C2);
+}
+function limbHide(up,lo,mi,M){
+  _M3.copy(M).multiply(_MZ);
+  up.setMatrixAt(mi,_M3);lo.setMatrixAt(mi,_M3);
+  up.setColorAt(mi,_C);lo.setColorAt(mi,_C2);
 }
 /* every revenant gets its own eyes and its own shade of rot */
 const EYE_COL={walker:[7,.9,.45],runner:[8,5,2.4],crawler:[2.6,.5,.3],spitter:[1.6,7,.7],
   exploder:[8,1.4,.2],screamer:[5.5,1.2,7],brute:[9,.5,.3],colossus:[11,.4,.2]};
 const _EC=new THREE.Color();
-function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null){
-  if(hat)zHats.setMatrixAt(mi,M);
+function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0){
+  /* the skull rides its own pivot: pitch hX, roll hZ — the loll */
+  _M2.makeTranslation(0,1.5,.08);_HM.copy(M).multiply(_M2);
+  if(hX){_M2.makeRotationX(hX);_HM.multiply(_M2);}
+  if(hZ){_M2.makeRotationZ(hZ);_HM.multiply(_M2);}
+  if(hat)zHats.setMatrixAt(mi,_HM);
   else{_M3.copy(M).multiply(_MZ);zHats.setMatrixAt(mi,_M3);}
   zMesh.setMatrixAt(mi,M);
   zMesh.setColorAt(mi,_C.set(colC).multiplyScalar(tint));      // the coat
-  zHead.setMatrixAt(mi,M);
+  zHead.setMatrixAt(mi,_HM);
   zHead.setColorAt(mi,_C.set(colF).multiplyScalar(tint));      // the skin
-  _C.set(colF).multiplyScalar(tint);                           // bare arms
-  if(gone==='aL'){_M3.copy(M).multiply(_MZ);zArmL.setMatrixAt(mi,_M3);zArmL.setColorAt(mi,_C);}
-  else limbTo(zArmL,mi,M,-.3,1.42,.08,aL);
-  if(gone==='aR'){_M3.copy(M).multiply(_MZ);zArmR.setMatrixAt(mi,_M3);zArmR.setColorAt(mi,_C);}
-  else limbTo(zArmR,mi,M,.3,1.42,.08,aR);
+  _C.set(colF).multiplyScalar(tint);_C2.copy(_C);              // bare arms, bare hands
+  if(gone==='aL')limbHide(zArmL,zArmL2,mi,M);
+  else limb2To(zArmL,zArmL2,mi,M,-.3,1.42,.08,aL,eL,true);
+  if(gone==='aR')limbHide(zArmR,zArmR2,mi,M);
+  else limb2To(zArmR,zArmR2,mi,M,.3,1.42,.08,aR,eR,true);
+  _C2.set(colF).multiplyScalar(tint*.92);                      // shins a shade dirtier
   _C.set(colC).multiplyScalar(tint*.72);                       // trousers, darker
-  limbTo(zLegL,mi,M,-.14,.78,0,lL);
-  limbTo(zLegR,mi,M,.14,.78,0,lR);
+  limb2To(zLegL,zLegL2,mi,M,-.14,.78,0,lL,kL,false);
+  limb2To(zLegR,zLegR2,mi,M,.14,.78,0,lR,kR,false);
   if(hideEyes){_M3.copy(M).multiply(_MZ);zEyes.setMatrixAt(mi,_M3);}
   else{
-    zEyes.setMatrixAt(mi,M);
+    zEyes.setMatrixAt(mi,_HM);
     const e=eye||EYE_COL.walker;
     zEyes.setColorAt(mi,_EC.setRGB(e[0],e[1],e[2]));
   }
@@ -2903,6 +3011,10 @@ function spawnZombie(kindIn){
     phase:rand(TAU),atkT:0,deadT:0,alive:true,rise:1,screamed:false,
     groanT:rand(2,9),spitT:rand(2,4),screamT:rand(4,7),burnT:0,frenzyT:0,
     tint:rand(.74,1.22),hunch:rand(.1,.4),hat:Math.random()<.3,gone:Math.random()<.16?(Math.random()<.5?'aL':'aR'):null,
+    limp:Math.random()<.6?(Math.random()<.5?-1:1)*rand(.3,.9):0, // one bad leg, hauled after the good one
+    drag:Math.random()<.35,                                      // the bad foot never leaves the ground
+    loll:rand(-.55,.55),lollSp:rand(.5,1.4),                     // the neck gave out long ago
+    twitchT:rand(2,8),twitching:0,reach:0,armS:Math.random(),
     cloth:[0x5a5347,0x4a3e33,0x39402c,0x57424a,0x3e4654,0x6a604a][Math.floor(Math.random()*6)],
     flesh:[0x8d8a76,0x9a8f7c,0x7e8a72,0xa39383,0x76705e][Math.floor(Math.random()*5)],// no two rot alike
     quirk:kind==='walker'&&Math.random()<.12?'stare':null,// some of them remember
@@ -2915,6 +3027,7 @@ function spawnZombie(kindIn){
   return zb;
 }
 function zombieTarget(zb){
+  if(zb.detour)return{x:zb.detour.x,z:zb.detour.z,kind:'waypoint',range:1}; // going around, not through
   for(const f of flarePool){
     if(!f.live||!f.p.landed)continue;
     if(Math.hypot(zb.x-f.p.x,zb.z-f.p.z)<46)return{x:f.p.x,z:f.p.z,kind:'flare',range:2.4};
@@ -2963,7 +3076,10 @@ function updateZombies(dt,t){
       _P.set(zb.x,heightAt(zb.x,zb.z)+.15*(1-k)+.05-Math.min(.45,Math.max(0,zb.deadT-16)*.04),zb.z);
       _S.setScalar(Math.max(.001,zb.scale*melt));
       _M.compose(_P,_Q,_S);
-      writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,-.15,-.2,.12,-.08,true,zb.tint);
+      {const s1=Math.sin(zb.phase*5),s2=Math.sin(zb.phase*9); // each corpse falls its own way
+       writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,
+         -.5+s1*.5,-.6-s2*.5,.15+s2*.25,-.1+s1*.25,true,zb.tint,null,false,zb.gone,
+         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,s1>0?.8:-.8);}
       mi++;continue;
     }
     if(zb.sleeping){
@@ -2971,7 +3087,8 @@ function updateZombies(dt,t){
       _E.set(-1.45,zb.face||0,0);_Q.setFromEuler(_E);
       _P.set(zb.x,heightAt(zb.x,zb.z)+.12,zb.z);_S.setScalar(zb.scale);
       _M.compose(_P,_Q,_S);
-      writeZombie(mi,_M,zb.cloth||0x39402c,zb.flesh||0x6a6258,-.1,-.1,0,0,true,zb.tint);
+      writeZombie(mi,_M,zb.cloth||0x39402c,zb.flesh||0x6a6258,-.1,-.1,0,0,true,zb.tint,null,false,zb.gone,
+        .9,.9,.3,.3,-.3,zb.loll||0);
       mi++;continue;
     }
     if(zb.rise>0){
@@ -2985,7 +3102,8 @@ function updateZombies(dt,t){
       _E.set(.22,zb.face||0,Math.sin(t*9+zb.phase)*.1);_Q.setFromEuler(_E);
       _P.set(zb.x,gy-1.9*zb.scale*clamp(zb.rise,0,1),zb.z);_S.setScalar(zb.scale);
       _M.compose(_P,_Q,_S);
-      writeZombie(mi,_M,0x4a4030,0x5d5444,-1.3+zb.rise*.5,-1.2+zb.rise*.5,0,0,false,zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone);
+      writeZombie(mi,_M,0x4a4030,0x5d5444,-1.3+zb.rise*.5,-1.2+zb.rise*.5,0,0,false,zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone,
+        .3+zb.rise*.9,.4+zb.rise*.8,.2,.2,-.35,Math.sin(t*7+zb.phase)*.15); // clawing out, head cranked up
       mi++;continue;
     }
     /* burn DoT */
@@ -3005,6 +3123,7 @@ function updateZombies(dt,t){
     const spMul=(zb.frenzyT>0?1.5:1)*(wxFrenzy?1.25:1)*(zb.stagT>0?.4:1)*(zb.march&&zb.x<-58?1.85:1);
     const moveWith=(mx,mz,sp)=>{
       sp*=spMul;
+      {const av=steerAvoid(zb.x,zb.z,mx,mz,2.2,zb);mx=av.x;mz=av.z;} // even the dead walk around trees
       const stepx=zb.x+mx*sp*dt,stepz=zb.z+mz*sp*dt;
       for(const bg of bags)
         if(Math.hypot(stepx-bg.x,stepz-bg.z)<1.5){
@@ -3028,6 +3147,17 @@ function updateZombies(dt,t){
       if(od<1.2&&od>0){zb.x+=ox/od*dt*1.2;zb.z+=oz/od*dt*1.2;}
     }
     pushOut2(zb,.3,[CAMP_COLLIDERS]);
+    pushOutGrid(zb,.3);
+    // a body that hasn't moved in two seconds picks a way around, not through
+    zb._stk=((zb._lx===undefined||Math.hypot(zb.x-zb._lx,zb.z-zb._lz)>.5*dt)?0:(zb._stk||0)+dt);
+    zb._lx=zb.x;zb._lz=zb.z;
+    if(zb._stk>2&&!zb.detour&&d>3){
+      const px2=-dz/d,pz2=dx/d,sgn=Math.random()<.5?1:-1;
+      zb.detour={x:zb.x+px2*sgn*rand(4,7)+dx/d*2,z:zb.z+pz2*sgn*rand(4,7)+dz/d*2,t:4};
+      zb._stk=0;
+    }
+    if(zb.detour){zb.detour.t-=dt;
+      if(zb.detour.t<=0||Math.hypot(zb.detour.x-zb.x,zb.detour.z-zb.z)<1.2)zb.detour=null;}
     if(!zb.alive){mi++;continue;}
     if(zb.kind==='exploder'&&d<2.9&&tg.kind!=='flare'){
       zb.alive=false;zb.deadT=13.9;
@@ -3104,16 +3234,48 @@ function updateZombies(dt,t){
     const gy=heightAt(zb.x,zb.z);
     const crawl=zb.kind==='crawler';
     const animSp=(zb.kind==='runner'?4.4:zb.speed*2.4)*spMul;
-    const sway=Math.sin(t*animSp+zb.phase)*(zb.kind==='runner'?.11:.06);
-    const bob=Math.abs(Math.sin(t*animSp+zb.phase))*(crawl?.04:.08);
-    _E.set(crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22),zb.face,sway);_Q.setFromEuler(_E);
+    /* the lurch: a bad leg shortens one half of the stride cycle */
+    let tt=t*animSp+zb.phase;
+    if(zb.limp)tt+=Math.sin(tt)*Math.abs(zb.limp)*.45;
+    const wk=Math.sin(tt),ck=Math.cos(tt);
+    /* spasms: every few seconds the nerves fire wrong */
+    zb.twitchT-=dt;
+    if(zb.twitchT<=0){zb.twitchT=rand(2.5,9);zb.twitching=rand(.2,.5);}
+    const spz=zb.twitching>0?(zb.twitching-=dt,Math.sin(t*43+zb.phase)*.1):0;
+    /* the grasp: arms come up as it closes on meat */
+    const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')&&d<8&&!crawl;
+    zb.reach+=((meat?1:0)-zb.reach)*Math.min(1,dt*2.5);
+    const sway=ck*(zb.kind==='runner'?.1:.06)*(1+Math.abs(zb.limp))+spz;
+    const bob=Math.abs(wk)*(crawl?.04:.07)*(zb.drag?.5:1);
+    _E.set((crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4,zb.face,sway);_Q.setFromEuler(_E);
     _P.set(zb.x,gy+bob+(crawl?-.25:0),zb.z);
     crawl?_S.set(zb.scale,zb.scale,zb.scale*.9):_S.setScalar(zb.scale);
     _M.compose(_P,_Q,_S);
-    const wk=Math.sin(t*animSp+zb.phase);
-    const legAmp=crawl?.25:zb.kind==='runner'?.85:.55;
-    const armBase=crawl?.9:-.12;
-    const armAmp=crawl?.6:.28;
+    /* legs: the good one steps, the bad one is hauled after it */
+    const legAmp=crawl?.25:zb.kind==='runner'?.8:.5;
+    const badL=zb.limp<0,hurt=Math.abs(zb.limp);
+    const ampL=legAmp*(badL?1-hurt*.65:1),ampR=legAmp*(!badL&&zb.limp?1-hurt*.65:1);
+    const lL=wk*ampL,lR=-wk*ampR;
+    /* knees flex through the forward swing; a dragged foot never straightens */
+    const kBend=crawl?.35:zb.kind==='runner'?.95:.7;
+    let kL=.12+Math.max(0,-ck)*kBend*(ampL/legAmp);
+    let kR=.12+Math.max(0,ck)*kBend*(ampR/legAmp);
+    if(zb.drag&&zb.limp){if(badL)kL=.55+wk*.08;else kR=.55-wk*.08;}
+    /* arms: some still reach, some hang dead, a few are one of each */
+    const armAmp=crawl?.6:.26;
+    const upL=zb.armS<.45||zb.armS>=.85,upR=zb.armS<.45;
+    let aL=(crawl?.9:upL?-.15:1.2)+wk*armAmp*((upL||crawl)?1:.35);
+    let aR=(crawl?.9:upR?-.1:1.25)-wk*armAmp*((upR||crawl)?1:.35);
+    let eLb=(crawl?.5:upL?.5:.3)+Math.max(0,-wk)*.25;
+    let eRb=(crawl?.5:upR?.55:.3)+Math.max(0,wk)*.25;
+    if(zb.reach>.02){ // hands out, elbows opening, a tremor in the wrists
+      const tr=Math.sin(t*12+zb.phase)*.07;
+      aL=lerp(aL,-1.38+tr,zb.reach);aR=lerp(aR,-1.32-tr,zb.reach);
+      eLb=lerp(eLb,.16-tr,zb.reach);eRb=lerp(eRb,.2+tr,zb.reach);
+    }
+    /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
+    const hX2=(crawl?-.55:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4;
+    const hZ2=zb.loll*(1-zb.reach*.55)+Math.sin(t*zb.lollSp*.73+zb.phase*2)*.07;
     const flash=zb.hitT&&zb.hitT>0;
     if(flash)zb.hitT-=dt;
     let colC,colF;
@@ -3125,8 +3287,8 @@ function updateZombies(dt,t){
     else if(zb.kind==='spitter'){colC=zb.cloth;colF=0x6e8a48;}      // the sickness shows in the skin
     else{colC=zb.frenzyT>0?0x8a6a45:zb.cloth;colF=zb.flesh;}
     writeZombie(mi,_M,colC,colF,
-      armBase+wk*armAmp,armBase-wk*armAmp,
-      wk*legAmp,-wk*legAmp,false,flash?1:zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone);
+      aL,aR,lL,lR,false,flash?1:zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone,
+      eLb,eRb,kL,kR,hX2,hZ2);
     mi++;
   }
   zMesh.count=mi;zEyes.count=mi;zHats.count=mi;zHats.instanceMatrix.needsUpdate=true;
@@ -3814,7 +3976,10 @@ function updateAllies(dt,t){
       a.tx=ax+Math.cos(a.ang)*rand(rr[0],rr[1])+rand(-2.5,2.5);
       a.tz=az+Math.sin(a.ang)*rand(rr[0],rr[1])+rand(-2.5,2.5);
     }
-    const mdx=(a.tx??a.x)-a.x,mdz=(a.tz??a.z)-a.z,md=Math.hypot(mdx,mdz);
+    if(a.detour){a.detour.t-=dt;
+      if(a.detour.t<=0||Math.hypot(a.detour.x-a.x,a.detour.z-a.z)<1.2)a.detour=null;}
+    const tgx=a.detour?a.detour.x:(a.tx??a.x),tgz=a.detour?a.detour.z:(a.tz??a.z);
+    const mdx=tgx-a.x,mdz=tgz-a.z,md=Math.hypot(mdx,mdz);
     let best=null,bd=45*45;
     for(const zb of zombies){
       if(!zb.alive||zb.rise>0)continue;
@@ -3824,31 +3989,19 @@ function updateAllies(dt,t){
     let stepping=false;
     if(md>.6&&!best){
       const asp=md>14?6.2:2.4;
-      let dx2=mdx/md,dz2=mdz/md;
-      // steering: see the obstacle coming, curve around its shoulder
-      let avx=0,avz=0;
-      for(const pool of[COLLIDERS,CAMP_COLLIDERS])for(const c of pool){
-        const ox=c.x-a.x,oz=c.z-a.z,od2=ox*ox+oz*oz,rr=c.r+1.2;
-        if(od2>rr*rr*5)continue;
-        const od=Math.sqrt(od2)||1;
-        if((ox*dx2+oz*dz2)/od<.2)continue;        // behind or far beside: ignore
-        const side=(ox*dz2-oz*dx2)>0?-1:1;        // pass on the open side
-        const w2=clamp(1-(od-c.r)/2.4,0,1.2)*side;
-        avx+=dz2*w2;avz-=dx2*w2;
-      }
-      const bl=Math.hypot(dx2+avx*1.5,dz2+avz*1.5)||1;
-      dx2=(dx2+avx*1.5)/bl;dz2=(dz2+avz*1.5)/bl;
+      const av=steerAvoid(a.x,a.z,mdx/md,mdz/md,2.8,a);
+      const dx2=av.x,dz2=av.z;
       a.x+=dx2*asp*dt;a.z+=dz2*asp*dt;
       a.face=Math.atan2(dx2,dz2);
       a.walkPh=(a.walkPh||0)+dt*(md>14?11:6.5);stepping=true;
-      // last-resort unstick: hop sideways hard and re-plan
+      // stuck against something flat: walk the wall sideways until it ends
       const moved=Math.hypot(a.x-(a._lx??a.x),a.z-(a._lz??a.z));
       a._stuck=moved<asp*dt*.2?(a._stuck||0)+dt:0;
-      if(a._stuck>1.4){
-        a._stuck=0;a.wanderT=0;
-        const j=Math.random()<.5?1:-1;
-        a.x+=Math.cos(a.face)*j*2.6;a.z-=Math.sin(a.face)*j*2.6;
-        pushOut2(a,.35,[COLLIDERS,CAMP_COLLIDERS]);  // never hop INTO a wall
+      if(a._stuck>1.2){
+        a._stuck=0;
+        const side=a._wallSide??(Math.random()<.5?1:-1);
+        a.detour={x:a.x+(mdz/md)*side*9+(mdx/md)*1.5,
+                  z:a.z-(mdx/md)*side*9+(mdz/md)*1.5,t:3.2};
       }
       a._lx=a.x;a._lz=a.z;}
     const ud=a.mesh.userData;
@@ -4347,6 +4500,7 @@ function buildWorld(legSeed){
   mapDirty=true;roadCheck();
   scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterCity();
   scatterDeer();
+  rebuildColGrid();
   sea.visible=!!BIOME.shore;
   mountainRing.visible=BIOME.rugged>=1.3;   // the rough countries live in the shadow of rougher ones
   for(const d of decals)d.material.opacity=0;
@@ -7796,6 +7950,31 @@ function wanderUpdate(dt){
 }
 window.startWander=startWander;
 window.WANDER=WANDER; // dev: the open country, inspectable
+window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to reach you
+  return new Promise(res=>{
+    if(!WANDER.on)return res({ok:false,why:'start wander first'});
+    zombies.length=0;WANDER.spawnT=600;WANDER.colT=600;
+    const a=allies[0]||spawnAlly(player.x+2,player.z+2);
+    if(!a)return res({ok:false,why:'no ally'});
+    const px=player.x,pz=player.z;
+    a.x=px+26;a.z=pz;a.tx=null;a.tz=null;a.wanderT=0;a._stuck=0;
+    for(let i=-5;i<=5;i++)COLLIDERS.push({x:px+13,z:pz+i*1.7,r:1.3,_test:1});
+    rebuildColGrid();
+    const t0=performance.now(),trail=[];
+    (function poll(){
+      const d=Math.hypot(a.x-player.x,a.z-player.z);
+      trail.push([Math.round((a.x-px)*10)/10,Math.round((a.z-pz)*10)/10,
+        a.detour?1:0,Math.round((a._stuck||0)*10)/10]);
+      if(d<7){
+        for(let i=COLLIDERS.length-1;i>=0;i--)if(COLLIDERS[i]._test)COLLIDERS.splice(i,1);
+        rebuildColGrid();
+        return res({ok:true,secs:Math.round((performance.now()-t0)/100)/10});
+      }
+      if(performance.now()-t0>30000)return res({ok:false,dist:Math.round(d),trail:trail.filter((_,i)=>i%4===0)});
+      setTimeout(poll,250);
+    })();
+  });
+};
 window.devWorld=name=>{ // dev: preview any biome from the console
   const b=BIOMES.find(b2=>b2.name.toLowerCase().includes(String(name).toLowerCase()));
   if(!b)return BIOMES.map(b2=>b2.name);
@@ -7815,6 +7994,7 @@ function frame(now){
   qTimer-=dt;
   if(qTimer<=0){
     qTimer=3;
+    rebuildColGrid();          // sites and explosions edit COLLIDERS after worldgen
     const target=Math.min(devicePixelRatio,1.5);
     if(!lowRes&&frameAvg>26){lowRes=true;gtaoPass.enabled=false;renderer.setPixelRatio(1);composer.setPixelRatio(1);composer.setSize(innerWidth,innerHeight);}
     else if(lowRes&&frameAvg<13){lowRes=false;gtaoPass.enabled=true;renderer.setPixelRatio(target);composer.setPixelRatio(target);composer.setSize(innerWidth,innerHeight);}
