@@ -2796,6 +2796,16 @@ ghost.visible=false;scene.add(ghost);
 
 /* ---------------- zombies ---------------- */
 const MAXZ=110;
+function witherGeo(geo,amt){ // the flesh has shrunk onto the bone: no clean tubes anywhere
+  const p=geo.attributes.position,nr=geo.attributes.normal;
+  for(let i=0;i<p.count;i++){
+    // hash on quantized position, not index: seam twins displace together, no cracks
+    const k=(hash(Math.round(p.getX(i)*913+p.getY(i)*389),Math.round(p.getZ(i)*571))-.5)*amt;
+    p.setXYZ(i,p.getX(i)+nr.getX(i)*k,p.getY(i)+nr.getY(i)*k,p.getZ(i)+nr.getZ(i)*k);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
 function shadeGeo(geo,fn){ // bake light into the body itself: grime below, pallor above
   const p=geo.attributes.position,n=p.count,col=new Float32Array(n*3);
   for(let i=0;i<n;i++){const v=fn(p.getX(i),p.getY(i),p.getZ(i));col[i*3]=v;col[i*3+1]=v;col[i*3+2]=v;}
@@ -2825,6 +2835,7 @@ let zGeoBody,zGeoHead;
   add(flesh,blob(.035,1.1,.6,.8),.1,1.63,.17);         // cheekbone, right
   add(flesh,blob(.022,.7,1.2,.9),0,1.66,.26);          // what's left of a nose
   zGeoBody=mergeGeometries(cloth);
+  witherGeo(zGeoBody,.02);                               // the coat hangs unevenly off what's left
   shadeGeo(zGeoBody,(x,y)=>clamp(.6+(y-.6)*.42,.6,1));   // the hem has been dragged through the mud
   zGeoHead=mergeGeometries(flesh);
   zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
@@ -2870,7 +2881,7 @@ function deathlit(mat){ // a cold rim the dusk can't account for: the dead read 
   return mat;
 }
 const zMat=deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:1.15,
-  map:fleshTex,bumpMap:fleshTex,bumpScale:.6,vertexColors:true,
+  map:fleshTex,bumpMap:fleshTex,bumpScale:.85,vertexColors:true,
   roughnessMap:fleshTex})); // raw patches run low in green: exposed meat glistens, dry skin doesn't
 const zClothTex=(()=>{ // rotted field coat at 256: weave, seams, grime soak, spatter gone black
   const c=document.createElement('canvas');c.width=c.height=256;
@@ -2904,7 +2915,7 @@ scene.add(zHead);
 const armUpGeo=(()=>{ // shoulder to elbow
   const a=new THREE.CylinderGeometry(.052,.062,.28,10);a.rotateX(Math.PI/2);a.translate(0,0,.14);
   const e=new THREE.SphereGeometry(.042,8,6);e.translate(0,0,.28); // fills the elbow without bulging past it
-  return shadeGeo(mergeGeometries([a,e]),(x,y,z)=>1-z*.35);})();
+  return shadeGeo(witherGeo(mergeGeometries([a,e]),.016),(x,y,z)=>1-z*.35);})();
 const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thumb
   const a=new THREE.CylinderGeometry(.04,.05,.26,10);a.rotateX(Math.PI/2);a.translate(0,0,.13);
   const h=new THREE.SphereGeometry(.048,10,7);h.scale(1,.55,1.45);h.translate(0,-.01,.31); // a flat mitt, not a ball
@@ -2913,15 +2924,15 @@ const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thum
     f.rotateX(Math.PI/2-.55);f.translate(i*.034,-.05,.43);parts.push(f);} // long enough to read as claws
   {const th=new THREE.CylinderGeometry(.013,.01,.09,5);
    th.rotateX(Math.PI/2-.9);th.rotateY(.7);th.translate(.06,-.03,.34);parts.push(th);}
-  return shadeGeo(mergeGeometries(parts),(x,y,z)=>clamp(.95-z*.65,.6,1));})(); // grave dirt on the hands
+  return shadeGeo(witherGeo(mergeGeometries(parts),.013),(x,y,z)=>clamp(.95-z*.65,.6,1));})(); // grave dirt on the hands
 const legUpGeo=(()=>{ // hip to knee
   const l=new THREE.CylinderGeometry(.078,.06,.4,10);l.translate(0,-.2,0);
   const k=new THREE.SphereGeometry(.052,8,6);k.translate(0,-.4,0); // knee cap flush with the thigh
-  return shadeGeo(mergeGeometries([l,k]),(x,y)=>1+y*.5);})();
+  return shadeGeo(witherGeo(mergeGeometries([l,k]),.018),(x,y)=>1+y*.5);})();
 const legLoGeo=(()=>{ // knee to the dragging foot
   const l=new THREE.CylinderGeometry(.052,.044,.36,10);l.translate(0,-.18,0);
   const f=new THREE.SphereGeometry(.068,10,7);f.scale(.9,.5,1.6);f.translate(0,-.37,.07);
-  return shadeGeo(mergeGeometries([l,f]),(x,y)=>clamp(.88+y*1.0,.4,.9));})(); // mud to the knee
+  return shadeGeo(witherGeo(mergeGeometries([l,f]),.018),(x,y)=>clamp(.88+y*1.0,.4,.9));})(); // mud to the knee
 const LIMBS=[];
 function makeLimb(geo,mat){
   const m=new THREE.InstancedMesh(geo,mat||zMat,MAXZ);

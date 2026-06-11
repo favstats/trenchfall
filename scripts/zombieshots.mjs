@@ -28,7 +28,7 @@ await page.evaluate(()=>{
   });
   P.hp=Infinity;
   if(window.SCENE)window.SCENE.traverse(o=>{ // studio lights for the QA stills
-    if(o.isHemisphereLight||o.isDirectionalLight)o.intensity*=3.5;});
+    if(o.isHemisphereLight||o.isDirectionalLight)o.intensity*=2.2;});
 });
 for(let s=0;s<4;s++){
   await page.evaluate(()=>{window.PLAYER.hp=Infinity;});
