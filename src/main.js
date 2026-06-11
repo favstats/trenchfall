@@ -2150,6 +2150,7 @@ function scatterSetpieces(){
   }
 }
 scatterSetpieces();
+const DEV_RUINS=[]; // QA: where the architecture landed this world
 function scatterRuins(){ // the country keeps its dead architecture
   const concrete=frostable(new THREE.MeshStandardMaterial({color:0x8d897e,roughness:.95,bumpMap:brickTex,bumpScale:.25}));
   const brickM=frostable(new THREE.MeshStandardMaterial({color:0xb09a86,roughness:.92,map:brickTex,bumpMap:brickTex,bumpScale:.35}));
@@ -2250,12 +2251,14 @@ function scatterRuins(){ // the country keeps its dead architecture
     },
   };
   const keys=Object.keys(builders);
+  DEV_RUINS.length=0;
   const n=3+(srnd()*4|0);
   for(let i=0;i<n;i++){
     const kind=keys[Math.floor(srnd()*keys.length)];
     const sp=spot(kind==='bunker'||kind==='cavemouth'?34:30);
     if(!sp)continue;
     const g=builders[kind](sp.x,sp.z);
+    DEV_RUINS.push({kind,x:Math.round(sp.x),z:Math.round(sp.z)});
     if(kind!=='bunker'){g.position.set(sp.x,heightAt(sp.x,sp.z),sp.z);g.rotation.y=kind==='silo'||kind==='watertower'?0:srand(TAU);}
     else g.position.set(sp.x,0,sp.z);
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
@@ -9730,6 +9733,14 @@ window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to 
     })();
   });
 };
+window.devFly=(x,z,h=26,tx,tz)=>{ // dev: hoist the lens over any coordinate
+  tx=tx??x;tz=tz??z+1;
+  window.__fly={x:x+14,y:heightAt(x,z)+h,z:z+14,tx,ty:heightAt(tx,tz)+2,tz};
+  return 'flying over '+x+','+z;
+};
+window.devFlyOff=()=>{window.__fly=null;};
+window.devSpots=()=>({river:RIVER.on?[Math.round(riverX(0)),0]:null,
+  ruins:DEV_RUINS.slice(),fort:BAST.on?BAST.fort:null});
 window.devWorld=name=>{ // dev: preview any biome from the console
   const b=BIOMES.find(b2=>b2.name.toLowerCase().includes(String(name).toLowerCase()));
   if(!b)return BIOMES.map(b2=>b2.name);
@@ -9890,6 +9901,11 @@ function frame(now){
 
   updateHUD(dt);
   drawMap();
+  if(window.__fly){ // dev: the lens leaves the body
+    const f=window.__fly;
+    camera.position.set(f.x,f.y,f.z);
+    camera.lookAt(f.tx,f.ty,f.tz);
+  }
   composer.render();
 }
 /* IBL: every PBR material drinks from the baked sky, tuned so it
