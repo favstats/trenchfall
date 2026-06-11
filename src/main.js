@@ -9976,7 +9976,7 @@ requestAnimationFrame(frame);
 /* expose for debugging / tests */
 window.G=G;window.PLAYER=player;window.ZOMBIES=zombies;window.TURRETS=turrets;window.TRUCK=truck;
 window.CAMERA=camera; // dev: screenshot QA zooms through this
-window.spawnZombie=spawnZombie;window.modifyTerrain=modifyTerrain;window.heightAt=heightAt;
+window.spawnZombie=spawnZombie;window.damageZombie=damageZombie;window.modifyTerrain=modifyTerrain;window.heightAt=heightAt;
 window.startGame=startCampaign;window.placeTurret=placeTurret;window.damagePlayer=damagePlayer;
 window.CAMP=CAMP;window.startCampaign=startCampaign;window.beginLeg=beginLeg;window.arriveCamp=arriveCamp;
 window.CONVOY=convoy;window.leadTruck=leadTruck;window.openEvent=openEvent;window.pickRoadEvent=pickRoadEvent;
