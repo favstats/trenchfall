@@ -848,7 +848,7 @@ function makeTex(fill){
   const g=c.getContext('2d'),img=g.createImageData(GS,GS);
   fill(img.data);
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8; // the ground is all grazing angle
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(40,40);
   return t;
 }
@@ -1011,7 +1011,7 @@ const burlapTex=(()=>{ // hessian weave for the bags on every parapet
     img.data[i]=v;img.data[i+1]=v*.92;img.data[i+2]=v*.72;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -1174,7 +1174,7 @@ const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   /
       img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.88;img.data[i+3]=255;
     }
     g.putImageData(img,0,0);
-    const t=new THREE.CanvasTexture(c);
+    const t=new THREE.CanvasTexture(c);t.anisotropy=4;
     t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   const rockM=frostable(new THREE.MeshStandardMaterial({color:0x8a8268,roughness:.95,
@@ -2759,7 +2759,7 @@ const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance 
     img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.9;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
