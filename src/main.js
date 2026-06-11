@@ -1097,13 +1097,13 @@ const depot=new THREE.Group();
     bag.rotation.y=-a+rand(-.15,.15);bag.castShadow=true;depot.add(bag);
     CAMP_COLLIDERS.push({x:Math.cos(a)*8.2,z:Math.sin(a)*8.2+9.5,r:.7});
   }
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,9,6),
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,9,10),
     new THREE.MeshStandardMaterial({color:0x4a4438,roughness:.6,metalness:.4}));
   mast.position.set(-4,4.65,-4);depot.add(mast);
   CAMP_COLLIDERS.push({x:-4,z:5.5,r:.4});
   const lantM=new THREE.MeshBasicMaterial();lantM.color.setRGB(4,2.6,1);
   for(const[lx,lz]of[[6,5],[-6,-5],[5,-6]]){
-    const post=new THREE.Mesh(new THREE.CylinderGeometry(.04,.05,2.6,5),
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.04,.05,2.6,9),
       new THREE.MeshStandardMaterial({color:0x3a342a}));
     post.position.set(lx,2.3,lz);depot.add(post);
     const bulb=new THREE.Mesh(new THREE.SphereGeometry(.07,6,5),lantM);
@@ -1129,7 +1129,7 @@ const depot=new THREE.Group();
   for(const ts of[-1,1]){                         // watchtowers flanking the gate
     const tw=new THREE.Group();
     for(const[lx,lz]of[[-.8,-.8],[.8,-.8],[-.8,.8],[.8,.8]]){
-      const leg=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,4.6,6),palM);
+      const leg=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,4.6,10),palM);
       leg.position.set(lx,2.3,lz);leg.castShadow=true;tw.add(leg);
     }
     const deck=new THREE.Mesh(new THREE.BoxGeometry(2.4,.18,2.4),palM);
@@ -1148,7 +1148,7 @@ const depot=new THREE.Group();
     CAMP_COLLIDERS.push({x:ts*8,z:4.9,r:1.6});
   }
   for(const gs of[-1,1]){                         // gate posts where the road runs through
-    const post=new THREE.Mesh(new THREE.CylinderGeometry(.18,.22,4.2,7),palM);
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.18,.22,4.2,11),palM);
     post.position.set(gs*5.6,2.1,-13.7);post.castShadow=true;depot.add(post);
     CAMP_COLLIDERS.push({x:gs*5.6,z:-4.2,r:.4});
   }
@@ -6850,7 +6850,7 @@ function buildFort(){
   }
   // the searchlight: one long white finger reading the dark
   {
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,5,6),
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,5,10),
       new THREE.MeshStandardMaterial({color:0x3a342a,roughness:.6,metalness:.4}));
     pole.position.set(-22,heightAt(-22,roadZ(-24)+7)+2.5,roadZ(-24)+7);
     pole.castShadow=true;setpieces.add(pole);
