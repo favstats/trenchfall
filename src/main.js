@@ -2803,6 +2803,15 @@ let zGeoBody,zGeoHead;
   add(cloth,blob(.3,1.0,1.2,.62),0,1.1,0,.15);
   add(cloth,blob(.3,1.08,.42,.55),0,1.42,.05,.1);
   add(cloth,blob(.24,.88,.52,.6),0,.76,0);
+  // the body under the coat: shoulder blades, rib ridges, spine knobs, a sagging gut
+  add(cloth,blob(.09,1.1,1.4,.5),-.13,1.32,-.16,.1);   // left scapula
+  add(cloth,blob(.09,1.1,1.4,.5),.13,1.32,-.16,.1);    // right scapula
+  for(let i=0;i<4;i++)add(cloth,blob(.035,1,.8,.9),0,1.36-i*.13,-.19+i*.012); // spine, knob by knob
+  add(cloth,blob(.06,2.4,.35,.7),-.02,1.16,.15,.2);    // a rib ridge pushing at the cloth
+  add(cloth,blob(.06,2.2,.32,.7),.01,1.04,.14,.2);     // another, lower
+  add(cloth,blob(.13,1.25,.7,.9),.02,.9,.07);          // the gut, sagging off-centre
+  add(cloth,blob(.07,1.5,.5,.8),-.11,.72,-.05);        // hip bone, left
+  add(cloth,blob(.07,1.5,.5,.8),.12,.73,-.04);         // hip bone, right
   // what's left of a person: neck, skull, one bare rib — the jaw hangs on its own hinge now
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,1,1.14,1.04),0,1.69,.1,.25);
@@ -2837,8 +2846,9 @@ const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance 
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
-const zMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,
-  map:fleshTex,bumpMap:fleshTex,bumpScale:.6});
+const zMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1.15,
+  map:fleshTex,bumpMap:fleshTex,bumpScale:.6,
+  roughnessMap:fleshTex}); // raw patches run low in green: exposed meat glistens, dry skin doesn't
 const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter gone black
   const c=document.createElement('canvas');c.width=c.height=128;
   const g=c.getContext('2d'),img=g.createImageData(128,128);
@@ -8150,7 +8160,7 @@ requestAnimationFrame(frame);
 
 /* expose for debugging / tests */
 window.G=G;window.PLAYER=player;window.ZOMBIES=zombies;window.TURRETS=turrets;window.TRUCK=truck;
-window.SCENE=scene; // dev: screenshot QA cranks the lights through this
+window.CAMERA=camera; // dev: screenshot QA zooms through this
 window.spawnZombie=spawnZombie;window.modifyTerrain=modifyTerrain;window.heightAt=heightAt;
 window.startGame=startCampaign;window.placeTurret=placeTurret;window.damagePlayer=damagePlayer;
 window.CAMP=CAMP;window.startCampaign=startCampaign;window.beginLeg=beginLeg;window.arriveCamp=arriveCamp;
