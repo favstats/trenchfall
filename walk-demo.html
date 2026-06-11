@@ -2,18 +2,33 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>TRENCHFALL · walk demo (after webgl_animation_walk)</title>
-<style>body{margin:0;overflow:hidden;background:#0d0e10}#hint{position:fixed;left:12px;top:10px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000}</style>
+<title>TRENCHFALL · combat demo (after webgl_animation_walk)</title>
+<style>
+body{margin:0;overflow:hidden;background:#0d0e10;cursor:crosshair}
+#hint{position:fixed;left:12px;top:10px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000}
+#hud{position:fixed;right:14px;top:10px;color:#e8e0c8;font:15px/1.6 monospace;text-align:right;text-shadow:0 1px 2px #000}
+#cross{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none}
+#cross:before,#cross:after{content:'';position:absolute;background:#e8e0c8;box-shadow:0 0 2px #000}
+#cross:before{left:6px;top:0;width:2px;height:14px}
+#cross:after{left:0;top:6px;width:14px;height:2px}
+#hurt{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(160,20,10,.55));opacity:0;transition:opacity .25s}
+#dead{position:fixed;inset:0;display:none;place-items:center;background:rgba(10,4,4,.78);color:#e8e0c8;font:22px monospace;text-align:center}
+</style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
 "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 </head>
 <body>
-<div id="hint">WASD move &middot; SHIFT run &middot; drag to orbit<br>same rig &amp; blending as the in-game zombies</div>
+<div id="hint">WASD move &middot; SHIFT run &middot; drag to orbit &middot; CLICK to fire</div>
+<div id="hud"></div>
+<div id="cross"></div>
+<div id="hurt"></div>
+<div id="dead"><div>THE DEAD REMEMBER YOU<br><br><span style="font-size:15px">click to go again</span></div></div>
 <script type="module">
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as skClone} from 'three/addons/utils/SkeletonUtils.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
@@ -24,81 +39,242 @@ renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x16181c);
-scene.fog=new THREE.Fog(0x16181c,18,60);
+scene.background=new THREE.Color(0x14161a);
+scene.fog=new THREE.Fog(0x14161a,20,70);
 
 const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,200);
-camera.position.set(0,2,-4);
+camera.position.set(0,2.2,-4.5);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.enablePan=false;
-controls.maxPolarAngle=Math.PI/2-.05;controls.target.set(0,1,0);
+controls.maxPolarAngle=Math.PI/2-.05;controls.minDistance=2.5;controls.maxDistance=8;
+controls.target.set(0,1,0);
 
-scene.add(new THREE.HemisphereLight(0xbfc8e0,0x33302a,1.4));
-const sun=new THREE.DirectionalLight(0xfff2dd,3.2);
-sun.position.set(6,10,4);sun.castShadow=true;
+scene.add(new THREE.HemisphereLight(0xbfc8e0,0x33302a,1.3));
+const sun=new THREE.DirectionalLight(0xfff2dd,3);
+sun.position.set(8,12,5);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
-sun.shadow.camera.left=-12;sun.shadow.camera.right=12;
-sun.shadow.camera.top=12;sun.shadow.camera.bottom=-12;
+sun.shadow.camera.left=-18;sun.shadow.camera.right=18;
+sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;
 scene.add(sun);
 
-{ // the example's checkerboard, drawn by hand
+{ // checkerboard, as the example intended
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d');
   for(let y=0;y<8;y++)for(let x=0;x<8;x++){
-    g.fillStyle=(x+y)%2?'#3c4046':'#2b2e33';g.fillRect(x*32,y*32,32,32);}
+    g.fillStyle=(x+y)%2?'#3a3e44':'#292c31';g.fillRect(x*32,y*32,32,32);}
   const t=new THREE.CanvasTexture(c);
-  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(16,16);t.anisotropy=8;
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(120,120),
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(20,20);t.anisotropy=8;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(160,160),
     new THREE.MeshStandardMaterial({map:t,roughness:.85}));
   floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
 }
 
-const group=new THREE.Group();scene.add(group);
-let mixer=null,act={},cur='Idle';
-if(location.protocol==='file:')
-  document.getElementById('hint').innerHTML='open this over http(s), not file:// — browsers refuse to fetch the model locally.<br>try: https://favstats.github.io/trenchfall/walk-demo.html';
+/* ---------- state ---------- */
+const player={group:new THREE.Group(),mixer:null,act:{},hp:100,ammo:12,reloadT:0,fireCd:0,kills:0,dead:false};
+scene.add(player.group);
+const ZN=8,zombies=[];
+let baseGltf=null;
+
+const gunGrp=new THREE.Group(); // the rifle, built from the game's joinery
+{
+  const wood=new THREE.MeshStandardMaterial({color:0x5c4226,roughness:.75});
+  const steel=new THREE.MeshStandardMaterial({color:0x60605a,roughness:.4,metalness:.6});
+  const dark=new THREE.MeshStandardMaterial({color:0x33332b,roughness:.5,metalness:.45});
+  const part=(geo,m,x,y,z,rx=0)=>{const me=new THREE.Mesh(geo,m);me.position.set(x,y,z);me.rotation.x=rx;me.castShadow=true;gunGrp.add(me);return me;};
+  const stock=part(new THREE.CylinderGeometry(.035,.045,.34,12),wood,0,0,.22,Math.PI/2);
+  stock.scale.x=.8;
+  part(new THREE.BoxGeometry(.05,.06,.16),dark,0,.01,.02);
+  const brl=part(new THREE.CylinderGeometry(.013,.011,.5,12),steel,0,.012,-.3,Math.PI/2);
+  part(new THREE.CylinderGeometry(.03,.03,.02,12),steel,0,.005,-.1,Math.PI/2);
+  part(new THREE.BoxGeometry(.01,.04,.01),steel,0,.045,-.5);
+  part(new THREE.BoxGeometry(.012,.014,.06),steel,.03,.012,.04);
+}
+const muzzleFlash=new THREE.PointLight(0xffb050,0,8);scene.add(muzzleFlash);
+const tracerMat=new THREE.LineBasicMaterial({color:0xffd080,transparent:true,opacity:0});
+const tracerGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+const tracer=new THREE.Line(tracerGeo,tracerMat);scene.add(tracer);
+let tracerT=0;
+
 new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
-  const model=gltf.scene;
+  baseGltf=gltf;
+  // the player
+  const model=skClone(gltf.scene);
   model.traverse(o=>{if(o.isMesh){o.castShadow=true;}});
   model.rotation.y=Math.PI;
-  group.add(model);
-  mixer=new THREE.AnimationMixer(model);
-  for(const c2 of gltf.animations){act[c2.name]=mixer.clipAction(c2);}
-  for(const k of['Idle','Walk','Run']){act[k].play();act[k].setEffectiveWeight(k==='Idle'?1:0);}
+  player.group.add(model);
+  player.mixer=new THREE.AnimationMixer(model);
+  for(const c of gltf.animations)player.act[c.name]=player.mixer.clipAction(c);
+  for(const k of['Idle','Walk','Run']){player.act[k].play();player.act[k].setEffectiveWeight(k==='Idle'?1:0);}
+  let hand=null;
+  model.traverse(o=>{if(o.isBone&&/RightHand$/.test(o.name)&&!hand)hand=o;});
+  if(hand){
+    hand.add(gunGrp);
+    gunGrp.position.set(.02,.18,.04);   // settled by eye against the grip
+    gunGrp.rotation.set(-Math.PI/2+.15,0,Math.PI/2);
+  }else{gunGrp.position.set(.25,1.25,.2);player.group.add(gunGrp);}
+  // the dead
+  for(let i=0;i<ZN;i++)spawnZombie(i,true);
+},undefined,e=>{
+  document.getElementById('hint').innerHTML=
+    'open this over http(s), not file:// — browsers refuse to fetch the model locally.<br>try: https://favstats.github.io/trenchfall/walk-demo.html';
 });
 
+function spawnZombie(i,first){
+  const z=first?{}:zombies[i];
+  if(first){
+    const rig=skClone(baseGltf.scene);
+    const mats=[];let head=null;
+    rig.traverse(o=>{
+      if(o.isMesh){o.material=o.material.clone();
+        o.material.color.set(0x7e8a72);o.material.roughness=.95;
+        mats.push(o.material);o.castShadow=true;}
+      if(o.isBone&&/Head$/.test(o.name)&&!head)head=o;
+    });
+    rig.rotation.y=Math.PI;
+    z.group=new THREE.Group();z.group.add(rig);scene.add(z.group);
+    z.rig=rig;z.mats=mats;z.head=head;
+    z.mixer=new THREE.AnimationMixer(rig);z.act={};
+    for(const c of baseGltf.animations){z.act[c.name]=z.mixer.clipAction(c);}
+    for(const k of['Idle','Walk','Run']){z.act[k].play();z.act[k].setEffectiveWeight(0);}
+    // embers in the sockets
+    for(const sx of[-1,1]){
+      const eye=new THREE.Mesh(new THREE.SphereGeometry(.016,8,6),
+        new THREE.MeshBasicMaterial({color:new THREE.Color(3.2,.45,.2)}));
+      eye.position.set(sx*.035,.085,.095);
+      if(head)head.add(eye);
+    }
+    zombies[i]=z;
+  }
+  const a=Math.random()*Math.PI*2,r=16+Math.random()*8;
+  z.group.position.set(Math.cos(a)*r,0,Math.sin(a)*r);
+  z.hp=30;z.dead=false;z.fall=0;z.atkT=0;z.stagT=0;z.respawnT=0;
+  z.speed=.9+Math.random()*1.6;
+  z.group.visible=true;
+  z.group.rotation.set(0,0,0);
+  for(const m of z.mats)m.color.set(0x7e8a72).multiplyScalar(.8+Math.random()*.45);
+  return z;
+}
+
+/* ---------- input ---------- */
 const keys={};
 addEventListener('keydown',e=>keys[e.code]=true);
 addEventListener('keyup',e=>keys[e.code]=false);
+let wantFire=false;
+addEventListener('mousedown',e=>{if(e.button===0)wantFire=true;});
+addEventListener('mouseup',e=>{if(e.button===0)wantFire=false;});
+document.getElementById('dead').addEventListener('click',()=>location.reload());
 
+/* ---------- shooting ---------- */
+const _rayO=new THREE.Vector3(),_rayD=new THREE.Vector3(),_tp=new THREE.Vector3(),_hp=new THREE.Vector3(),_mz=new THREE.Vector3();
+function fire(){
+  player.ammo--;player.fireCd=.16;
+  camera.getWorldDirection(_rayD);
+  _rayO.copy(camera.position);
+  let best=null,bestT=1e9,bestHead=false;
+  for(const z of zombies){
+    if(!z||z.dead)continue;
+    for(const[hy,rr,isH]of[[1.25,.42,false],[1.62,.22,true]]){
+      _tp.copy(z.group.position);_tp.y+=hy;
+      const t=_tp.clone().sub(_rayO).dot(_rayD);
+      if(t<0||t>bestT)continue;
+      const d=_tp.distanceTo(_rayO.clone().addScaledVector(_rayD,t));
+      if(d<rr){bestT=t;best=z;bestHead=isH;}
+    }
+  }
+  gunGrp.getWorldPosition(_mz);
+  const end=best?_hp.copy(_rayO).addScaledVector(_rayD,bestT):_hp.copy(_rayO).addScaledVector(_rayD,60);
+  tracer.geometry.setFromPoints([_mz.clone(),end.clone()]);
+  tracerMat.opacity=.9;tracerT=.08;
+  muzzleFlash.position.copy(_mz);muzzleFlash.intensity=30;
+  if(best){
+    best.hp-=bestHead?30:11;
+    best.stagT=.22;
+    for(const m of best.mats){m.color.multiplyScalar(1.6);} // flash
+    setTimeout(()=>{if(!best.dead)for(const m of best.mats)m.color.multiplyScalar(1/1.6);},70);
+    if(best.hp<=0){best.dead=true;best.fall=0;best.respawnT=4;player.kills++;}
+  }
+}
+
+/* ---------- loop ---------- */
 const clock=new THREE.Clock();
-const _dir=new THREE.Vector3(),_q=new THREE.Quaternion(),_e=new THREE.Euler();
+const _dir=new THREE.Vector3(),_q=new THREE.Quaternion(),_e=new THREE.Euler(),_zt=new THREE.Vector3();
+const hud=document.getElementById('hud'),hurt=document.getElementById('hurt');
 function animate(){
   requestAnimationFrame(animate);
   const dt=Math.min(.05,clock.getDelta());
+  /* player */
   let fx=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
   let sx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
-  const moving=fx!==0||sx!==0;
-  const run=!!keys.ShiftLeft||!!keys.ShiftRight;
+  const moving=(fx!==0||sx!==0)&&!player.dead;
+  const run=(keys.ShiftLeft||keys.ShiftRight)&&moving;
   const want=moving?(run?'Run':'Walk'):'Idle';
-  if(mixer){
+  if(player.mixer){
     for(const k of['Idle','Walk','Run']){
-      const a=act[k],w=a.getEffectiveWeight();
+      const a=player.act[k],w=a.getEffectiveWeight();
       a.setEffectiveWeight(w+((k===want?1:0)-w)*Math.min(1,dt*6));
     }
-    mixer.update(dt);
+    player.mixer.update(dt);
   }
+  const az=controls.getAzimuthalAngle();
   if(moving){
-    const az=controls.getAzimuthalAngle();
-    const ang=az+Math.atan2(sx,fx)+Math.PI;          // face where you're going, camera-relative
+    const ang=az+Math.atan2(-sx,fx)+Math.PI; // W goes where the camera looks; D goes right
     _e.set(0,ang,0);_q.setFromEuler(_e);
-    group.quaternion.rotateTowards(_q,dt*8);
-    const v=run?5:1.8;                                // the example's velocities
-    _dir.set(Math.sin(ang+Math.PI),0,Math.cos(ang+Math.PI));
-    group.position.addScaledVector(_dir,v*dt);
+    player.group.quaternion.rotateTowards(_q,dt*9);
+    const v=run?5:1.9;
+    _dir.set(Math.sin(ang),0,Math.cos(ang));
+    player.group.position.addScaledVector(_dir,v*dt);
   }
-  controls.target.lerp(new THREE.Vector3(group.position.x,1,group.position.z),Math.min(1,dt*10));
+  /* firing */
+  player.fireCd-=dt;player.reloadT-=dt;
+  if(wantFire&&!player.dead&&player.fireCd<=0&&player.reloadT<=0){
+    if(player.ammo<=0){player.reloadT=1.3;}
+    else{
+      // square up to the camera before the shot leaves
+      _e.set(0,az+Math.PI,0);_q.setFromEuler(_e);
+      player.group.quaternion.rotateTowards(_q,1.2);
+      fire();
+    }
+  }
+  if(player.reloadT>0&&player.ammo<=0&&player.reloadT-dt<=0)player.ammo=12;
+  muzzleFlash.intensity*=Math.pow(.001,dt);
+  tracerT-=dt;if(tracerT<=0)tracerMat.opacity=Math.max(0,tracerMat.opacity-dt*12);
+  /* zombies */
+  for(const z of zombies){
+    if(!z)continue;
+    if(z.dead){
+      z.fall=Math.min(1,z.fall+dt*2.4);
+      z.group.rotation.x=-z.fall*Math.PI/2*.94;       // down it goes
+      z.group.position.y=-z.fall*.06;
+      z.respawnT-=dt;
+      if(z.respawnT<=0)spawnZombie(zombies.indexOf(z),false);
+      continue;
+    }
+    z.stagT=Math.max(0,z.stagT-dt);
+    _zt.copy(player.group.position).sub(z.group.position);_zt.y=0;
+    const d=_zt.length();
+    const spd=(z.stagT>0?.25:1)*z.speed*(d>10?1.9:1);
+    if(d>1.2&&!player.dead){
+      _zt.normalize();
+      z.group.position.addScaledVector(_zt,spd*dt);
+      _e.set(0,Math.atan2(_zt.x,_zt.z)+Math.PI,0);_q.setFromEuler(_e);
+      z.group.quaternion.rotateTowards(_q,dt*5);
+    }else if(!player.dead){
+      z.atkT-=dt;
+      if(z.atkT<=0){z.atkT=1;player.hp-=9;hurt.style.opacity=.9;setTimeout(()=>hurt.style.opacity=0,260);}
+    }
+    const runK=Math.min(1,Math.max(0,(spd-1.6)/1.4));
+    const walkK=(1-runK)*(d>1.2?1:.25);
+    const tw={Idle:Math.max(0,1-walkK-runK),Walk:walkK,Run:runK};
+    for(const k in tw){const a=z.act[k];const w=a.getEffectiveWeight();
+      a.setEffectiveWeight(w+(tw[k]-w)*Math.min(1,dt*6));}
+    if(z.act.Walk)z.act.Walk.setEffectiveTimeScale(spd/1.6);
+    z.mixer.update(dt);
+  }
+  if(player.hp<=0&&!player.dead){player.dead=true;document.getElementById('dead').style.display='grid';}
+  /* camera + hud */
+  controls.target.lerp(_tp.set(player.group.position.x,1.05,player.group.position.z),Math.min(1,dt*10));
   controls.update();
+  hud.textContent=`HP ${Math.max(0,Math.round(player.hp))} · KILLS ${player.kills} · ${player.reloadT>0&&player.ammo<=0?'RELOADING':'AMMO '+player.ammo}`;
   renderer.render(scene,camera);
 }
 animate();
