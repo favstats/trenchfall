@@ -1160,9 +1160,9 @@ scene.add(depot);
 let scatterForest=null;
 const DESTRUCT=[];
 const stumps=[];
-const stumpGeo=new THREE.CylinderGeometry(.16,.24,.55,7);
+const stumpGeo=new THREE.CylinderGeometry(.16,.24,.55,10);
 stumpGeo.translate(0,.27,0);
-const stumpMat=new THREE.MeshStandardMaterial({color:0x231a10,roughness:1});   // declared ahead of the first scatterForest() run: every felled thing registers here
+const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughness:1}));   // declared ahead of the first scatterForest() run: every felled thing registers here
 {
   const rockG=new THREE.IcosahedronGeometry(1,1);
   const rockTex=(()=>{ // granite grain: speckle and shadowed pits
@@ -3565,7 +3565,7 @@ function damageBag(bg,d){
 }
 function placeWire(x,z,yaw){
   const grp=new THREE.Group();
-  const m=new THREE.MeshStandardMaterial({color:0x26261f,roughness:.4,metalness:.7});
+  const m=frostable(new THREE.MeshStandardMaterial({color:0x26261f,roughness:.4,metalness:.7}));
   for(let i=-1;i<=1;i++){
     const post=new THREE.Mesh(new THREE.BoxGeometry(.08,.8,.08),m);
     post.position.set(i*1.4,.4,0);grp.add(post);
@@ -3897,8 +3897,8 @@ function updateAllies(dt,t){
 /* ---------------- turrets ---------------- */
 function buildTurretMesh(){
   const g=new THREE.Group();
-  const m=new THREE.MeshStandardMaterial({color:0x5b5f45});
-  const md=new THREE.MeshStandardMaterial({color:0x3a3d2c});
+  const m=frostable(new THREE.MeshStandardMaterial({color:0x5b5f45}));
+  const md=frostable(new THREE.MeshStandardMaterial({color:0x3a3d2c}));
   const base=new THREE.Mesh(new THREE.CylinderGeometry(.75,1,.9,14),md);base.position.y=.45;base.castShadow=true;
   const head=new THREE.Group();head.position.y=1.25;
   const hb=new THREE.Mesh(new THREE.BoxGeometry(.8,.5,1),m);hb.castShadow=true;
