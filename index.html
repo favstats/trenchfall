@@ -66,6 +66,7 @@
     <div class="mItem" id="contBtn" style="display:none">CONTINUE THE ROAD</div>
     <div class="mItem" id="startBtn">NEW CAMPAIGN<span class="ms">the convoy · permadeath · always different</span></div>
     <div class="mItem" id="bastBtn">THE BASTION<span class="ms" id="bastBest">horde hold · one wall · endless nights</span></div>
+    <div class="mItem" id="coopBtn">CO-OP WALL<span class="ms">2-4 players · one host · shared cache</span></div>
     <div class="mItem" id="contB" style="display:none">CONTINUE THE WALL<span class="ms" id="contBms"></span></div>
     <div class="mItem" id="wandBtn">WANDER<span class="ms">open country · no road · just you and the dark</span></div>
     <div class="mItem" id="contW" style="display:none">CONTINUE THE WANDER<span class="ms" id="contWms"></span></div>
@@ -82,6 +83,32 @@
     </div>
   </div>
 
+</div>
+
+<div id="coop" class="ov">
+  <h1 class="stencil" style="font-size:44px">CO-OP WALL</h1>
+  <div class="tag2">one room · one host · one wall</div>
+  <div id="coopCard">
+    <div class="coopRow">
+      <label>CALLSIGN</label>
+      <input id="coopName" maxlength="24" autocomplete="off" placeholder="Rifleman">
+    </div>
+    <div class="coopRow">
+      <label>RELAY</label>
+      <input id="coopRelay" autocomplete="off" value="ws://127.0.0.1:8787">
+    </div>
+    <div class="coopJoin">
+      <button class="go" id="coopHost">HOST</button>
+      <div class="coopRoom">
+        <input id="coopRoom" maxlength="5" autocomplete="off" placeholder="CODE">
+        <button class="go" id="coopJoin">JOIN</button>
+      </div>
+    </div>
+    <div id="coopStatus">start the relay with npm run coop</div>
+    <div id="coopPeers"></div>
+    <button class="go" id="coopStart" style="display:none">START THE WALL</button>
+    <button class="go" id="coopBack">BACK</button>
+  </div>
 </div>
 <div id="respawn" class="ov">
   <h1 class="stencil" style="font-size:54px">OVERRUN</h1>
