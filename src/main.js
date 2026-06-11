@@ -103,8 +103,8 @@ moonHalo.scale.setScalar(55);
 scene.add(moonDisc);scene.add(moonHalo);
 const rim=new THREE.DirectionalLight(0x7a93c8,.45);   // cool back-light for silhouettes
 rim.position.set(60,40,70);scene.add(rim);
-const DUSK={fog:new THREE.Color(0x70755c),sun:new THREE.Color(0xffb070),sunI:3.1,hemiI:.45};
-const NIGHT={fog:new THREE.Color(0x131826),sun:new THREE.Color(0x8fa6d8),sunI:1.15,hemiI:.34};
+const DUSK={fog:new THREE.Color(0x70755c),sun:new THREE.Color(0xffb070),sunI:3.1,hemiI:.6};   // sky fill: real shade is never black
+const NIGHT={fog:new THREE.Color(0x131826),sun:new THREE.Color(0x8fa6d8),sunI:1.15,hemiI:.4};
 scene.fog=new THREE.Fog(0x70755c,34,150);   // luminous mist: the world dissolves into light
 
 /* sky dome: gradient + stars + blood moon */
