@@ -1088,7 +1088,7 @@ const burlapTex=(()=>{ // hessian weave for the bags on every parapet
     img.data[i]=v;img.data[i+1]=v*.92;img.data[i+2]=v*.72;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -1251,7 +1251,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
       img.data[i]=v;img.data[i+1]=v*.96;img.data[i+2]=v*.88;img.data[i+3]=255;
     }
     g.putImageData(img,0,0);
-    const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+    const t=new THREE.CanvasTexture(c);t.anisotropy=8;
     t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   const rockM=frostable(new THREE.MeshStandardMaterial({color:0x8a8268,roughness:.95,
@@ -1275,7 +1275,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
       g.fillStyle='rgba(60,54,46,'+rand(.25,.5)+')';
       g.fillRect(Math.random()*128,Math.random()*256,rand(4,10),1.4);
     }
-    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;
     t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   const firBark=(()=>{
@@ -1288,7 +1288,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
       g.fillStyle='rgba(10,8,6,'+rand(.3,.6)+')';
       g.fillRect(Math.random()*128,Math.random()*256,rand(2,5),rand(2,7));
     }
-    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;
     t.colorSpace=THREE.SRGBColorSpace;return t;
   })();
   // foliage sprites
@@ -1310,7 +1310,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
       g.beginPath();g.ellipse(128+Math.cos(a)*r,128+Math.sin(a)*r*.8,rand(4,10),rand(3,7),Math.random()*TAU,0,TAU);
       g.fill();g.restore();
     }
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;
   })();
   const pineTex=(()=>{ // drooping needle fronds
     const c=document.createElement('canvas');c.width=c.height=256;
@@ -1329,7 +1329,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
         g.strokeStyle=`rgba(${gr*.5|0},${gr},${gr*.45|0},.7)`;g.lineWidth=1.2;
         g.beginPath();g.moveTo(nx,ny);g.lineTo(nx+rand(-12,12),ny+rand(4,16));g.stroke();}
     }
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;
   })();
   const swayLeaf=m=>{m.onBeforeCompile=s=>{
     s.uniforms.uWindT=WindU;
@@ -1542,7 +1542,7 @@ let fernMesh=null,bushMesh=null,scatterUnderbrush=null;
     const img=g.getImageData(0,0,128,128),d=img.data;
     for(let i=0;i<d.length;i+=4){if(d[i+3]>0)continue;d[i]=30;d[i+1]=58;d[i+2]=26;}
     g.putImageData(img,0,0);
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;
   })();
   const bushTex=(()=>{ // a thick leafy heap
     const c=document.createElement('canvas');c.width=c.height=128;
@@ -1558,7 +1558,7 @@ let fernMesh=null,bushMesh=null,scatterUnderbrush=null;
     const img=g.getImageData(0,0,128,128),d=img.data;
     for(let i=0;i<d.length;i+=4){if(d[i+3]>0)continue;d[i]=26;d[i+1]=50;d[i+2]=24;}
     g.putImageData(img,0,0);
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;
   })();
   const mkCross=(wd,ht,y0)=>{
     const p1=new THREE.PlaneGeometry(wd,ht,1,2);p1.translate(0,y0,0);
@@ -2860,7 +2860,7 @@ const gunModels=[];
       img.data[i]=v;img.data[i+1]=v;img.data[i+2]=v*1.02;img.data[i+3]=255;
     }
     g2.putImageData(img,0,0);
-    const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+    const t=new THREE.CanvasTexture(c);t.anisotropy=8;
     t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
     return t;
   })();
@@ -3188,7 +3188,7 @@ const fleshTex=(()=>{ // mottled necrotic skin at 512 — the geometry went smoo
     img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -3220,7 +3220,7 @@ const zClothTex=(()=>{ // rotted field coat at 256: weave, seams, grime soak, sp
     img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
   }
   g.putImageData(img,0,0);
-  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=8;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
   return t;
 })();
@@ -3314,6 +3314,113 @@ const zHair=(()=>{ // a matted scalp jittered into clumps, strands hanging at te
   m.castShadow=true;m.frustumCulled=false;scene.add(m);LIMBS.push(m);return m;
 })();
 const HAIR_COL=[0x241c12,0x382a1a,0x4a4234,0x16140f,0x6a6258,0x52331f];
+/* ---- the skinned near-pool: real skeletons for the closest dead ----
+   per the three.js skinning examples, but procedural: 13 bones, two-bone ramp
+   weights across elbow/knee/spine, geometry shared, fresh bones per rig.
+   Research note: ~100 cloned skinned meshes hit ~370 draw calls (forum case),
+   so only the nearest SKIN_N wear a skeleton; the rest stay instanced. */
+const SKIN_N=18,SKIN_R=30;
+const SKINS=[];
+{
+  const mk=(geo,tx,ty,tz)=>{const g2=geo.clone();g2.translate(tx,ty,tz);return g2;};
+  const ramp=(v,a,b)=>clamp((v-a)/(b-a),0,1);
+  const skinPart=(geo,fn)=>{
+    const p=geo.attributes.position,n=p.count;
+    const si=new Uint16Array(n*4),sw=new Float32Array(n*4);
+    for(let i=0;i<n;i++){
+      const r=fn(p.getX(i),p.getY(i),p.getZ(i));
+      si[i*4]=r[0];sw[i*4]=r[1];si[i*4+1]=r[2]||0;sw[i*4+1]=r[3]||0;
+    }
+    geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));
+    geo.setAttribute('skinWeight',new THREE.BufferAttribute(sw,4));
+    return geo;
+  };
+  // bones: 0 pelvis 1 spine 2 chest 3 neck 4 jaw 5 shL 6 elbL 7 shR 8 elbR 9 hipL 10 kneeL 11 hipR 12 kneeR
+  const parts=[
+    skinPart(zGeoBody.clone(),(x,y)=>{ // pelvis-spine-chest: the back finally bends
+      if(y<=.78)return[0,1];
+      if(y<1.1){const t=ramp(y,.78,1.1);return[0,1-t,1,t];}
+      const t=ramp(y,1.1,1.42);return[1,1-t,2,t];}),
+    skinPart(mk(zGeoHead,0,1.5,.08),(x,y)=>{const t=ramp(y,1.4,1.52);return[2,1-t,3,t];}),
+    skinPart(mk(zJawGeo,0,1.574,.098),()=>[4,1]),
+    skinPart(mk(armUpGeo,-.27,1.44,.06),(x,y,z)=>{const t=ramp(z,.26,.4);return[5,1-t,6,t];}),
+    skinPart(mk(armLoGeo,-.27,1.44,.34),(x,y,z)=>{const t=ramp(z,.26,.4);return[5,1-t,6,t];}),
+    skinPart(mk(armUpGeo,.27,1.44,.06),(x,y,z)=>{const t=ramp(z,.26,.4);return[7,1-t,8,t];}),
+    skinPart(mk(armLoGeo,.27,1.44,.34),(x,y,z)=>{const t=ramp(z,.26,.4);return[7,1-t,8,t];}),
+    skinPart(mk(legUpGeo,-.14,.78,0),(x,y)=>{const t=ramp(.46-y,0,.14);return[9,1-t,10,t];}),
+    skinPart(mk(legLoGeo,-.14,.38,0),(x,y)=>{const t=ramp(.46-y,0,.14);return[9,1-t,10,t];}),
+    skinPart(mk(legUpGeo,.14,.78,0),(x,y)=>{const t=ramp(.46-y,0,.14);return[11,1-t,12,t];}),
+    skinPart(mk(legLoGeo,.14,.38,0),(x,y)=>{const t=ramp(.46-y,0,.14);return[11,1-t,12,t];}),
+  ];
+  const skinGeo=mergeGeometries(parts,true);
+  const mkBones=()=>{
+    const B=[];
+    const nb=(px,py,pz,parent)=>{const b=new THREE.Bone();b.position.set(px,py,pz);if(parent)parent.add(b);B.push(b);return b;};
+    const pelv=nb(0,.78,0,null);
+    const spine=nb(0,.32,0,pelv);
+    const chest=nb(0,.32,0,spine);
+    const neck=nb(0,.08,.08,chest);
+    nb(0,.074,.018,neck);                                  // jaw
+    const shL=nb(-.27,.02,.06,chest);nb(0,0,.28,shL);
+    const shR=nb(.27,.02,.06,chest);nb(0,0,.28,shR);
+    const hipL=nb(-.14,0,0,pelv);nb(0,-.4,0,hipL);
+    const hipR=nb(.14,0,0,pelv);nb(0,-.4,0,hipR);
+    return B;
+  };
+  for(let i=0;i<SKIN_N;i++){
+    const bones=mkBones();
+    const matC=deathlit(zClothMat.clone()),matCt=deathlit(zClothMat.clone()),matF=deathlit(zMat.clone());
+    const mats=[matC,matF,matF,matF,matF,matF,matF,matCt,matF,matCt,matF];
+    const mesh=new THREE.SkinnedMesh(skinGeo,mats);
+    mesh.add(bones[0]);
+    mesh.updateMatrixWorld(true);
+    mesh.bind(new THREE.Skeleton(bones));
+    mesh.castShadow=true;mesh.frustumCulled=false;mesh.visible=false;
+    mesh.rotation.order='YXZ';
+    scene.add(mesh);
+    SKINS.push({mesh,bones,matC,matCt,matF,zb:null});
+  }
+}
+function freeSkin(zb){
+  if(zb._skin==null)return;
+  const sl=SKINS[zb._skin];
+  if(sl&&sl.zb===zb){sl.zb=null;sl.mesh.visible=false;}
+  zb._skin=null;
+}
+function assignSkins(){
+  for(const sl of SKINS)
+    if(sl.zb&&(!sl.zb.alive||sl.zb.rise>0||sl.zb.sleeping||
+      Math.hypot(sl.zb.x-player.x,sl.zb.z-player.z)>SKIN_R+6))freeSkin(sl.zb);
+  let free=null;
+  for(const zb of zombies){
+    if(!zb.alive||zb.rise>0||zb.sleeping||zb._skin!=null)continue;
+    if(Math.hypot(zb.x-player.x,zb.z-player.z)>SKIN_R)continue;
+    if(free===null){free=[];for(let i=0;i<SKINS.length;i++)if(!SKINS[i].zb)free.push(i);}
+    if(!free.length)break;
+    const i=free.pop();zb._skin=i;SKINS[i].zb=zb;
+  }
+}
+function poseSkin(sl,zb,pitch,sway,px,py,pz,aL,aR,eL,eR,lL,lR,kL,kR,hX,hZ,jaw,colC,colF,tint){
+  const m=sl.mesh,B=sl.bones;
+  m.visible=true;
+  m.position.set(px,py,pz);
+  m.rotation.set(pitch*.55,zb.face||0,sway);
+  {const w=zb.wide||1;m.scale.set(zb.scale*w,zb.scale,zb.scale*Math.max(.92,w*.96));}
+  B[1].rotation.x=pitch*.27;B[2].rotation.x=pitch*.22;     // the spine curves instead of hinging
+  B[3].rotation.x=hX;B[3].rotation.z=hZ;
+  B[4].rotation.x=jaw;
+  B[5].rotation.x=aL;B[6].rotation.x=eL;
+  B[7].rotation.x=aR;B[8].rotation.x=eR;
+  B[9].rotation.x=lL;B[10].rotation.x=kL;
+  B[11].rotation.x=lR;B[12].rotation.x=kR;
+  B[5].scale.setScalar(zb.gone==='aL'?.0001:1);
+  B[7].scale.setScalar(zb.gone==='aR'?.0001:1);
+  sl.matC.color.set(colC).multiplyScalar(tint);
+  sl.matCt.color.set(colC).multiplyScalar(tint*.72);
+  sl.matF.color.set(colF).multiplyScalar(tint);
+  m.updateMatrixWorld(true);
+  return B[3].matrixWorld;                                  // the head's world matrix, for the eyes to ride
+}
 let zHats;
 {
   const dome=new THREE.SphereGeometry(.2,14,9,0,TAU,0,1.5);
@@ -3350,33 +3457,43 @@ function limbHide(up,lo,mi,M){
 const EYE_COL={walker:[7,.9,.45],runner:[8,5,2.4],crawler:[2.6,.5,.3],spitter:[1.6,7,.7],
   exploder:[8,1.4,.2],screamer:[5.5,1.2,7],brute:[9,.5,.3],colossus:[11,.4,.2]};
 const _EC=new THREE.Color(),_eyeFl=[0,0,0]; // scratch for the guttering glow
-function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1,hairC=null){
-  /* the skull rides its own pivot: pitch hX, roll hZ — the loll */
-  _M2.makeTranslation(0,1.5,.08);_HM.copy(M).multiply(_M2);
-  if(hX){_M2.makeRotationX(hX);_HM.multiply(_M2);}
-  if(hZ){_M2.makeRotationZ(hZ);_HM.multiply(_M2);}
+function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1,hairC=null,shm=null){
+  /* the skull rides its own pivot: pitch hX, roll hZ — the loll. a skinned rig hands us its head instead */
+  if(shm)_HM.copy(shm);
+  else{
+    _M2.makeTranslation(0,1.5,.08);_HM.copy(M).multiply(_M2);
+    if(hX){_M2.makeRotationX(hX);_HM.multiply(_M2);}
+    if(hZ){_M2.makeRotationZ(hZ);_HM.multiply(_M2);}
+  }
   if(hat)zHats.setMatrixAt(mi,_HM);
   else{_M3.copy(M).multiply(_MZ);zHats.setMatrixAt(mi,_M3);}
   zDark.setMatrixAt(mi,_HM);                                   // the sockets never close
   if(hairC&&!hat){zHair.setMatrixAt(mi,_HM);zHair.setColorAt(mi,_C.set(hairC).multiplyScalar(tint));}
   else{_M3.copy(M).multiply(_MZ);zHair.setMatrixAt(mi,_M3);}
-  zMesh.setMatrixAt(mi,M);
-  zMesh.setColorAt(mi,_C.set(colC).multiplyScalar(tint));      // the coat
-  zHead.setMatrixAt(mi,_HM);
-  zHead.setColorAt(mi,_C.set(colF).multiplyScalar(tint));      // the skin
-  _M2.makeTranslation(0,.074,.018);_M3.copy(_HM).multiply(_M2);  // the jaw hinge, below the ears (.92-scaled with the skull)
-  _M2.makeRotationX(jaw);_M3.multiply(_M2);
-  zJaw.setMatrixAt(mi,_M3);
-  zJaw.setColorAt(mi,_C.set(colF).multiplyScalar(tint*.82));   // shadowed, wet
-  _C.set(colF).multiplyScalar(tint);_C2.copy(_C);              // bare arms, bare hands
-  if(gone==='aL')limbHide(zArmL,zArmL2,mi,M);
-  else limb2To(zArmL,zArmL2,mi,M,-.27,1.44,.06,aL,eL,true);
-  if(gone==='aR')limbHide(zArmR,zArmR2,mi,M);
-  else limb2To(zArmR,zArmR2,mi,M,.27,1.44,.06,aR,eR,true);
-  _C2.set(colF).multiplyScalar(tint*.92);                      // shins a shade dirtier
-  _C.set(colC).multiplyScalar(tint*.72);                       // trousers, darker
-  limb2To(zLegL,zLegL2,mi,M,-.14,.78,0,lL,kL,false);
-  limb2To(zLegR,zLegR2,mi,M,.14,.78,0,lR,kR,false);
+  if(shm){ // the skinned rig wears the body; the instanced parts step aside
+    _M3.copy(M).multiply(_MZ);
+    zMesh.setMatrixAt(mi,_M3);zHead.setMatrixAt(mi,_M3);zJaw.setMatrixAt(mi,_M3);
+    limbHide(zArmL,zArmL2,mi,M);limbHide(zArmR,zArmR2,mi,M);
+    limbHide(zLegL,zLegL2,mi,M);limbHide(zLegR,zLegR2,mi,M);
+  }else{
+    zMesh.setMatrixAt(mi,M);
+    zMesh.setColorAt(mi,_C.set(colC).multiplyScalar(tint));      // the coat
+    zHead.setMatrixAt(mi,_HM);
+    zHead.setColorAt(mi,_C.set(colF).multiplyScalar(tint));      // the skin
+    _M2.makeTranslation(0,.074,.018);_M3.copy(_HM).multiply(_M2);  // the jaw hinge, below the ears (.92-scaled with the skull)
+    _M2.makeRotationX(jaw);_M3.multiply(_M2);
+    zJaw.setMatrixAt(mi,_M3);
+    zJaw.setColorAt(mi,_C.set(colF).multiplyScalar(tint*.82));   // shadowed, wet
+    _C.set(colF).multiplyScalar(tint);_C2.copy(_C);              // bare arms, bare hands
+    if(gone==='aL')limbHide(zArmL,zArmL2,mi,M);
+    else limb2To(zArmL,zArmL2,mi,M,-.27,1.44,.06,aL,eL,true);
+    if(gone==='aR')limbHide(zArmR,zArmR2,mi,M);
+    else limb2To(zArmR,zArmR2,mi,M,.27,1.44,.06,aR,eR,true);
+    _C2.set(colF).multiplyScalar(tint*.92);                      // shins a shade dirtier
+    _C.set(colC).multiplyScalar(tint*.72);                       // trousers, darker
+    limb2To(zLegL,zLegL2,mi,M,-.14,.78,0,lL,kL,false);
+    limb2To(zLegR,zLegR2,mi,M,.14,.78,0,lR,kR,false);
+  }
   if(hideEyes){_M3.copy(M).multiply(_MZ);zEyes.setMatrixAt(mi,_M3);}
   else{
     zEyes.setMatrixAt(mi,_HM);
@@ -3501,6 +3618,7 @@ function zombieTarget(zb){
   return{x:0,z:9.5,kind:'depot',range:8.2};
 }
 function updateZombies(dt,t){
+  assignSkins();
   let mi=0;
   for(const zb of zombies){
     if(!zb.alive){
@@ -3767,9 +3885,14 @@ function updateZombies(dt,t){
       if(Math.sin(t*1.7+zb.phase*3)>.975)fl*=.12;
       _eyeFl[0]=e[0]*fl;_eyeFl[1]=e[1]*fl;_eyeFl[2]=e[2]*fl;
     }
+    let shm=null;
+    if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb)
+      shm=poseSkin(SKINS[zb._skin],zb,
+        (crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,sway,
+        _P.x,_P.y,_P.z,aL,aR,eLb,eRb,lL,lR,kL,kR,hX2,hZ2,jaw,colC,colF,flash?1:zb.tint);
     writeZombie(mi,_M,colC,colF,
       aL,aR,lL,lR,false,flash?1:zb.tint,_eyeFl,zb.hat&&!zb.brute,zb.gone,
-      eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC);
+      eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC,shm);
     mi++;
   }
   zMesh.count=mi;zEyes.count=mi;zHats.count=mi;zHats.instanceMatrix.needsUpdate=true;
@@ -3796,6 +3919,7 @@ function damageZombie(zb,dmg,hitPos,isHead){
   if(hitPos)burst(hitPos.x,hitPos.y,hitPos.z,7,0xa32417,3,3);
   if(zb.hp<=0){
     zb.alive=false;zb.deadT=0;
+    freeSkin(zb); // the rig moves on to the next walker
     zb.dieFwd=Math.random()<.45;zb.dieHead=!!isHead; // some pitch onto their faces; a headshot snaps the neck
     G.kills++;chain++;chainT=3;
     if(zb.questTarget&&WANDER.quest){WANDER.quest.objDone=true;
@@ -4684,7 +4808,7 @@ function nameTex(name){
     g.beginPath();const y=Math.random()*256;g.moveTo(Math.random()*160,y);
     g.lineTo(160+Math.random()*340,y+(Math.random()*60-30));g.stroke();
   }
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;
 }
 function buildTruckMesh(name){
   const g=new THREE.Group();
