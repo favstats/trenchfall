@@ -2519,7 +2519,8 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyC'&&(BAST.on||WANDER.on||CAMP.on)&&G.state==='play'&&!shopOpen&&!perkOpen&&!invOpen)cmdUI(!cmdOpen);
   if(cmdOpen){const dg=/^Digit([1-5])$/.exec(e.code);if(dg)giveOrder(+dg[1],e.shiftKey);}
   if(e.code==='KeyU'&&G.state==='play')document.body.classList.toggle('hudmin');
-  if(e.code==='KeyM'){AU.muted=!AU.muted;if(AU.master)AU.master.gain.value=AU.muted?0:.5;}
+  if(e.code==='KeyN'){AU.muted=!AU.muted;if(AU.master)AU.master.gain.value=AU.muted?0:.5;}
+  if(e.code==='KeyM'&&WANDER.on&&G.state==='play')toggleBigMap();
   if(G.state!=='play')return;
   if(e.code==='KeyB'){toggleShop();return;}
   if(shopOpen||perkOpen)return;
@@ -6676,6 +6677,99 @@ function initSlots(){
     s.appendChild(d);
   }
 }
+/* ---- the walker's map: what you've walked, you know (M, wander only) ---- */
+const SEEN_N=48;
+function markSeen(wx,wz,r){
+  if(!WANDER.seen)return;
+  const cs=TER.size/SEEN_N;
+  const g0x=Math.max(0,Math.floor((wx-r+half)/cs)),g1x=Math.min(SEEN_N-1,Math.floor((wx+r+half)/cs));
+  const g0z=Math.max(0,Math.floor((wz-r+half)/cs)),g1z=Math.min(SEEN_N-1,Math.floor((wz+r+half)/cs));
+  for(let gz=g0z;gz<=g1z;gz++)for(let gx=g0x;gx<=g1x;gx++){
+    const cx=(gx+.5)*cs-half,cz=(gz+.5)*cs-half;
+    if((cx-wx)*(cx-wx)+(cz-wz)*(cz-wz)<r*r)WANDER.seen[gz*SEEN_N+gx]=1;
+  }
+}
+function seenAt(wx,wz){
+  if(!WANDER.seen)return true;
+  const gx=Math.floor((wx+half)/(TER.size/SEEN_N)),gz=Math.floor((wz+half)/(TER.size/SEEN_N));
+  if(gx<0||gz<0||gx>=SEEN_N||gz>=SEEN_N)return false;
+  return !!WANDER.seen[gz*SEEN_N+gx];
+}
+let bigMapOn=false,bigMapEl=null,bigMapC=null,bigMapTerr=null;
+function toggleBigMap(force){
+  const on=force!==undefined?force:!bigMapOn;
+  if(!bigMapEl){
+    bigMapEl=document.createElement('div');
+    bigMapEl.style.cssText='position:fixed;inset:0;z-index:24;display:none;background:rgba(8,7,5,.9);'+
+      'align-items:center;justify-content:center;flex-direction:column;font-family:"Special Elite",monospace';
+    const cap=document.createElement('div');cap.id='bigMapCap';
+    cap.style.cssText='color:#c9bd92;letter-spacing:.22em;margin:10px;font-size:14px';
+    const cv=document.createElement('canvas');cv.width=cv.height=640;
+    cv.style.cssText='width:min(82vmin,640px);height:min(82vmin,640px);'+
+      'border:1px solid rgba(201,189,146,.4);box-shadow:0 20px 80px rgba(0,0,0,.7)';
+    const leg=document.createElement('div');
+    leg.style.cssText='color:#7a7d55;margin:9px;font-size:12px;letter-spacing:.08em;text-align:center';
+    leg.innerHTML='&#8962; HERMIT &middot; ? WORK &middot; + DRIFTER &middot; ! STRANDED &middot; &#9662; CACHE &middot; &#9760; DEN &middot; &#10038; LANDMARK &middot; &#9670; OBJECTIVE<br>[M] CLOSE &middot; the dark parts you have not walked yet';
+    bigMapEl.appendChild(cap);bigMapEl.appendChild(cv);bigMapEl.appendChild(leg);
+    document.body.appendChild(bigMapEl);
+    bigMapC=cv.getContext('2d');
+    bigMapTerr=document.createElement('canvas');bigMapTerr.width=bigMapTerr.height=160;
+  }
+  bigMapOn=on;
+  bigMapEl.style.display=on?'flex':'none';
+  if(on){document.exitPointerLock&&document.exitPointerLock();drawBigMap();}
+  else if(G.state==='play')tryLock();
+}
+function drawBigMap(){
+  if(!bigMapOn)return;
+  $('bigMapCap').textContent='REGION '+WANDER.region+' \u00b7 '+BIOME.name.toUpperCase()+
+    (WANDER.road?' \u00b7 AN OLD ROAD CROSSES HERE':' \u00b7 NO ROADS OUT HERE');
+  const tc=bigMapTerr.getContext('2d');
+  const img=tc.createImageData(160,160);
+  const gr=BIOME.ground;
+  for(let py=0;py<160;py++)for(let px=0;px<160;px++){
+    const wx=(px/160-.5)*TER.size,wz=(py/160-.5)*TER.size;
+    const i=(py*160+px)*4;
+    if(!seenAt(wx,wz)){img.data[i]=24;img.data[i+1]=21;img.data[i+2]=16;img.data[i+3]=255;continue;}
+    let r,g,b;
+    const h=heightAt(wx,wz);
+    if(isRoad(wx,wz)){r=74;g=68;b=57;}
+    else if(gr){const k=clamp((h+1.5)/4,.3,1);r=gr[0]*210*k;g=gr[1]*210*k;b=gr[2]*210*k;}
+    else{const k=clamp((h+1.5)/4,0,1);r=54+k*34;g=62+k*34;b=32+k*16;}
+    r*=BIOME.tint[0];g*=BIOME.tint[1];b*=BIOME.tint[2];
+    img.data[i]=r;img.data[i+1]=g;img.data[i+2]=b;img.data[i+3]=255;
+  }
+  tc.putImageData(img,0,0);
+  const S=640,c=bigMapC,sc=S/TER.size;
+  c.clearRect(0,0,S,S);
+  c.imageSmoothingEnabled=true;
+  c.drawImage(bigMapTerr,0,0,S,S);
+  const P=(wx,wz)=>[(wx+half)*sc,(wz+half)*sc];
+  const glyph=(wx,wz,ch,col,size=20)=>{
+    const[x,y]=P(wx,wz);
+    c.font='bold '+size+'px "Special Elite",monospace';c.textAlign='center';c.textBaseline='middle';
+    c.fillStyle='rgba(0,0,0,.7)';c.fillText(ch,x+1.5,y+1.5);
+    c.fillStyle=col;c.fillText(ch,x,y);
+  };
+  for(const L of WANDER.loot)if(!L.taken&&seenAt(L.x,L.z))
+    glyph(L.x,L.z,'\u25be',L.rich?'#e8742c':'#9dff70',16);
+  for(const st of WANDER.sites)if(!st.used&&seenAt(st.x,st.z))
+    glyph(st.x,st.z,st.kind==='hermit'?'\u2302':st.kind==='quester'?'?':st.kind==='drifter'?'+':'!',
+      st.kind==='hermit'?'#e8c050':st.kind==='quester'?'#d8c878':st.kind==='drifter'?'#9dd8a8':'#7fa0c8');
+  if(WANDER.den&&!WANDER.den.woken&&seenAt(WANDER.den.x,WANDER.den.z))
+    glyph(WANDER.den.x,WANDER.den.z,'\u2620','#a3271e');
+  const lm=WANDER.landmark;
+  if(lm)glyph(lm.x,lm.z,'\u2736',lm.found?'#8a8068':'#9fb4d8'); // every map carries its rumor
+  const q=WANDER.quest;
+  if(q&&q.taken&&!q.turned)glyph(q.objDone?q.gx:q.x,q.objDone?q.gz:q.z,'\u25c6','#ffd060');
+  for(const a of allies)glyph(a.x,a.z,'\u2022','#9dd8a8',18);
+  { // you, and the way you face
+    const[x,y]=P(player.x,player.z);
+    c.save();c.translate(x,y);c.rotate(-player.yaw+Math.PI);
+    c.fillStyle='#f0e8c8';c.beginPath();c.moveTo(0,-7);c.lineTo(4.6,5.4);c.lineTo(0,2.6);c.lineTo(-4.6,5.4);c.closePath();c.fill();
+    c.restore();
+  }
+}
 const mapC=$('map').getContext('2d');
 const mapBg=document.createElement('canvas');mapBg.width=mapBg.height=170;
 function renderMapBg(){
@@ -7815,6 +7909,10 @@ function captureRegionState(){
     quest:WANDER.quest?{taken:WANDER.quest.taken,objDone:WANDER.quest.objDone,turned:WANDER.quest.turned}:null,
     lm:!!(WANDER.landmark&&WANDER.landmark.found),
     rung:!!(WANDER.landmark&&WANDER.landmark.rung),
+    seen:(()=>{if(!WANDER.seen)return null;const out=[];
+      for(let i=0;i<WANDER.seen.length;i+=8){let b=0;
+        for(let j=0;j<8;j++)b|=(WANDER.seen[i+j]?1:0)<<j;out.push(b);}
+      return out;})(),
   };
 }
 function saveWander(){
@@ -7856,6 +7954,7 @@ function buildWanderRegion(idx){
   WANDER.road=srnd()<.55;
   for(const o of WANDER._meshes||[])scene.remove(o);
   WANDER._meshes=[];WANDER.loot=[];WANDER.quest=null;WANDER.landmark=null;
+  WANDER.seen=new Uint8Array(SEEN_N*SEEN_N);
   for(const s of WANDER.sites){if(s.mesh)scene.remove(s.mesh);}
   WANDER.sites=[];
   zombies.length=0;
@@ -7893,6 +7992,8 @@ function applyRegionState(st){
     const s=WANDER.sites.find(s2=>s2.kind===e.k&&!s2.used); // one site per kind per region
     if(s){s.used=true;if(s.kind==='stranded'||s.kind==='drifter')scene.remove(s.mesh);}
   }
+  if(st.seen&&WANDER.seen)for(let i=0;i<st.seen.length;i++)
+    for(let j=0;j<8;j++)WANDER.seen[i*8+j]=(st.seen[i]>>j)&1;
   if(st.quest&&WANDER.quest)Object.assign(WANDER.quest,st.quest);
   if(WANDER.landmark){WANDER.landmark.found=!!st.lm;WANDER.landmark.rung=!!st.rung;}
   if(!(WANDER.den&&WANDER.den.woken)){ // sleepers only if the den never woke
@@ -8124,6 +8225,9 @@ function wanderUpdate(dt){
     WANDER.story.push('Found '+lm2.name.toLowerCase()+' in region '+WANDER.region+'.');
     saveWander();
   }
+  WANDER.seenT=(WANDER.seenT??0)-dt;
+  if(WANDER.seenT<=0){WANDER.seenT=.5;markSeen(player.x,player.z,26);
+    if(bigMapOn)drawBigMap();}
   WANDER.saveT=(WANDER.saveT??30)-dt;
   if(WANDER.saveT<=0){WANDER.saveT=30;saveWander();}
   if(Math.abs(player.x)>half-5||Math.abs(player.z)>half-5)travelRegion();
