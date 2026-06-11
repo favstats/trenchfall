@@ -1,0 +1,132 @@
+<!doctype html><meta charset="utf-8"><title>auto-skin experiment</title><body style="margin:0">
+<script type="module">
+/* binds the static T-posed assault mesh to the Soldier.glb mixamo skeleton by
+   nearest-bone-segment weights. ?clip=Walk picks the animation, ?t=seconds the pose. */
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(innerWidth,innerHeight);
+r.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(r.domElement);
+const sc=new THREE.Scene();sc.background=new THREE.Color(0x232a33);
+const cam=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.05,80);
+sc.add(new THREE.HemisphereLight(0xffffff,0x445566,1.3));
+const dl=new THREE.DirectionalLight(0xfff0dd,2.4);dl.position.set(3,5,4);sc.add(dl);
+sc.add(new THREE.GridHelper(8,16,0x445566,0x2e3845));
+const q=new URLSearchParams(location.search);
+const L=u=>new Promise((res,rej)=>new GLTFLoader().load(u,res,undefined,rej));
+const [sold,ass]=await Promise.all([L('assets/models/Soldier.glb'),L('assets/models/assault.glb')]);
+// --- the donor skeleton, its own skin hidden ---
+sc.add(sold.scene);
+let skel=null,donor=null;
+sold.scene.traverse(o=>{if(o.isSkinnedMesh){o.visible=false;
+  if(!skel||o.skeleton.bones.length>skel.bones.length){skel=o.skeleton;donor=o;}}});
+skel.pose(); // rest position: the T we will measure against
+sold.scene.updateMatrixWorld(true);
+const donorInv=donor.matrixWorld.clone().invert(); // the frame the bone inverses live in
+// candidate bones: the body, not the fingers
+const CAND=[];
+const zoneOf=n=>/Head/.test(n)?'head':/Neck/.test(n)?'neck':
+  /LeftArm|LeftForeArm|LeftHand|LeftShoulder/.test(n)?'armL':
+  /RightArm|RightForeArm|RightHand|RightShoulder/.test(n)?'armR':
+  /LeftUpLeg|LeftLeg|LeftFoot/.test(n)?'legL':
+  /RightUpLeg|RightLeg|RightFoot/.test(n)?'legR':'spine';
+skel.bones.forEach((b,i)=>{
+  if(/Hips|Spine|Neck|Head|Arm|ForeArm|Hand$|UpLeg|^.*Leg$|Foot/.test(b.name)&&b.parent&&b.parent.isBone)
+    CAND.push({i,zone:zoneOf(b.name),
+      a:b.parent.getWorldPosition(new THREE.Vector3()),b:b.getWorldPosition(new THREE.Vector3())});
+});
+// body landmarks, measured off the rest skeleton itself
+const LM={};
+for(const c of CAND){
+  if(c.zone==='neck')LM.neckY=Math.max(LM.neckY||0,c.a.y,c.b.y);
+  if(c.zone==='spine')LM.hipY=Math.min(LM.hipY??9,c.a.y);
+  if(c.zone==='armL')LM.shoulderX=Math.max(LM.shoulderX||0,Math.min(Math.abs(c.a.x),Math.abs(c.b.x)));
+}
+LM.shoulderX=Math.max(.14,(LM.shoulderX||.18)*.85);
+// soldier rest height for scale matching
+const sBox=new THREE.Box3();
+for(const c of CAND){sBox.expandByPoint(c.a);sBox.expandByPoint(c.b);}
+const targetH=sBox.max.y-sBox.min.y;
+donor.geometry.computeBoundingBox();
+const db=donor.geometry.boundingBox.clone().applyMatrix4(donor.matrixWorld);
+window.__boneNames=skel.bones.map(b=>b.name).join('|');console.log('bones:',window.__boneNames);console.log('boneBox',JSON.stringify(sBox.min.toArray().map(v=>+v.toFixed(3))),JSON.stringify(sBox.max.toArray().map(v=>+v.toFixed(3))),
+  'meshH',(db.max.y-db.min.y).toFixed(3),'cand',CAND.length);
+// --- the recruit: middle soldier of the three, normalized onto the skeleton ---
+ass.scene.updateMatrixWorld(true);
+const aBox=new THREE.Box3().setFromObject(ass.scene);
+const aC=aBox.getCenter(new THREE.Vector3()),aS=aBox.getSize(new THREE.Vector3());
+const parts=[];
+ass.scene.traverse(o=>{
+  if(!o.isMesh)return;
+  const bb=new THREE.Box3().setFromObject(o),c=bb.getCenter(new THREE.Vector3());
+  if(Math.abs(c.x-aC.x)>aS.x*.16)return; // keep only the middle of the three brothers
+  parts.push(o);
+});
+// bake world transforms, THEN measure what actually came out
+const baked=parts.map(src=>{const g2=src.geometry.clone();g2.applyMatrix4(src.matrixWorld);return g2;});
+const bBox=new THREE.Box3();
+for(const g2 of baked){g2.computeBoundingBox();bBox.union(g2.boundingBox);}
+const bC=bBox.getCenter(new THREE.Vector3());
+const s=targetH/(bBox.max.y-bBox.min.y)*1.04;  // gear adds height; near-true scale
+const norm=new THREE.Matrix4().makeScale(s,s,s);
+norm.setPosition(-bC.x*s,-bBox.min.y*s,-bC.z*s); // feet to floor, centered
+for(const g2 of baked)g2.applyMatrix4(norm);
+console.log('baked size',(bBox.max.y-bBox.min.y).toFixed(2),'scale',s.toFixed(3));
+const segDist=(p,A,B)=>{ // distance from p to segment AB and the parameter t
+  const ab=B.clone().sub(A),t=Math.max(0,Math.min(1,p.clone().sub(A).dot(ab)/ab.lengthSq()));
+  return p.distanceTo(A.clone().lerp(B,t));
+};
+const recruits=[];
+if(q.get('bones')){const sh=new THREE.SkeletonHelper(sold.scene);sc.add(sh);}
+for(let pi=0;pi<parts.length;pi++){
+  const src=parts[pi],geo=baked[pi];
+  const pos=geo.attributes.position;
+  const idx=new Uint16Array(pos.count*4),wgt=new Float32Array(pos.count*4);
+  const p=new THREE.Vector3();
+  for(let v=0;v<pos.count;v++){
+    p.fromBufferAttribute(pos,v);
+    // which families may claim this vertex
+    const aboveNeck=p.y>LM.neckY-.03,belowHip=p.y<LM.hipY+.04;
+    const out=Math.abs(p.x)>LM.shoulderX&&p.y>LM.hipY+.2;
+    const allow=cd=>{
+      if(aboveNeck)return cd.zone==='head'||cd.zone==='neck';
+      if(out)return p.x>0?cd.zone==='armR'||cd.zone==='armL':cd.zone==='armL'||cd.zone==='armR'; // arms only
+      if(belowHip)return cd.zone==='legL'||cd.zone==='legR'||cd.zone==='spine';
+      return cd.zone!=='head'; // the torso may use anything but the skull
+    };
+    let b1=null,b2=null,d1=1e9,d2=1e9;
+    for(const cd of CAND){
+      if(!allow(cd))continue;
+      const d=segDist(p,cd.a,cd.b);
+      if(d<d1){d2=d1;b2=b1;d1=d;b1=cd;}else if(d<d2){d2=d;b2=cd;}
+    }
+    if(!b1){b1=CAND[0];d1=1;}
+    const w1=1/Math.pow(d1+.015,4),w2=1/Math.pow(d2+.015,4);
+    const sum=w1+w2;
+    idx[v*4]=b1.i;idx[v*4+1]=b2?b2.i:b1.i;
+    wgt[v*4]=w1/sum;wgt[v*4+1]=w2?w2/sum:0;
+  }
+  geo.setAttribute('skinIndex',new THREE.BufferAttribute(idx,4));
+  geo.setAttribute('skinWeight',new THREE.BufferAttribute(wgt,4));
+  if(q.get('noskin')){ // placement check: no bones, just the baked geometry
+    const pm=new THREE.Mesh(geo,src.material);sc.add(pm);recruits.push(pm);continue;
+  }
+  geo.applyMatrix4(donorInv); // into the donor skin's bind frame
+  const sm=new THREE.SkinnedMesh(geo,src.material);
+  sm.applyMatrix4(donor.matrixWorld); // and the node back where the donor stood
+  sm.matrixAutoUpdate=false;
+  sm.bind(skel,donor.bindMatrix.clone());
+  sm.frustumCulled=false;sc.add(sm);recruits.push(sm);
+}
+// --- pose it ---
+const mixer=new THREE.AnimationMixer(sold.scene);
+const clipName=q.get('clip')||'Walk';
+const clip=sold.animations.find(c=>c.name===clipName)||sold.animations[0];
+mixer.clipAction(clip).play();
+mixer.update(+(q.get('t')||.4));
+const ang=+(q.get('a')||.6);
+cam.position.set(Math.sin(ang)*3.4,1.6,Math.cos(ang)*3.4);
+cam.lookAt(0,1,0);
+window.__loaded=true;
+console.log('parts:',recruits.length,'clips:',sold.animations.map(c=>c.name).join(','));
+(function loop(){requestAnimationFrame(loop);r.render(sc,cam);})();
+</script>
