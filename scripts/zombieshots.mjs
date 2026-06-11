@@ -26,17 +26,17 @@ await page.evaluate(()=>{
     const a=i/kinds.length*Math.PI*2;
     z.x=P.x+Math.sin(a)*4.5;z.z=P.z+Math.cos(a)*4.5;z.rise=0;
   });
-  P.hp=99999;
+  P.hp=Infinity;
   if(window.SCENE)window.SCENE.traverse(o=>{ // studio lights for the QA stills
     if(o.isHemisphereLight||o.isDirectionalLight)o.intensity*=3.5;});
 });
 for(let s=0;s<4;s++){
-  await page.evaluate(()=>{window.PLAYER.hp=99999;});
+  await page.evaluate(()=>{window.PLAYER.hp=Infinity;});
   await page.waitForTimeout(1700);
   await page.screenshot({path:`/tmp/tf-zomb-${s}.png`,timeout:120000}).catch(()=>console.log('shot failed',s));
 }
 await page.evaluate(()=>{ // the portrait lens: tight on the nearest face
-  window.PLAYER.hp=99999;
+  window.PLAYER.hp=Infinity;
   if(window.CAMERA){window.CAMERA.fov=26;window.CAMERA.updateProjectionMatrix();}
 });
 for(let s=0;s<2;s++){

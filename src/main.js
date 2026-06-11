@@ -2814,7 +2814,11 @@ let zGeoBody,zGeoHead;
   add(cloth,blob(.07,1.5,.5,.8),.12,.73,-.04);         // hip bone, right
   // what's left of a person: neck, skull, one bare rib — the jaw hangs on its own hinge now
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
-  add(flesh,blob(.17,1,1.14,1.04),0,1.69,.1,.25);
+  add(flesh,blob(.17,.94,1.2,1.04),0,1.69,.1,.25);     // the cranium, gone gaunt
+  add(flesh,blob(.055,2.2,.5,.9),0,1.745,.2,.35);      // a heavy brow: the sockets fall into shadow under it
+  add(flesh,blob(.05,1.2,.7,1),-.105,1.63,.2);         // cheekbone, left
+  add(flesh,blob(.05,1.2,.7,1),.105,1.63,.2);          // cheekbone, right
+  add(flesh,blob(.03,.8,1.5,1),0,1.66,.27);            // what's left of a nose
   add(cloth,blob(.05,1.2,.8,1),-.15,1.18,.16); // the bare rib stays with the torso so the head can loll free
   zGeoBody=mergeGeometries(cloth);
   zGeoHead=mergeGeometries(flesh);
@@ -3077,8 +3081,20 @@ function zombieTarget(zb){
         return{x:s.x,z:s.z,kind:'waypoint',range:.9};
     return{x:player.x,z:player.z,kind:'player',range:1.5};
   }
-  if(BAST.on&&zb.gate&&zb.x<-23)
-    return{x:-21,z:roadZ(-24),kind:'waypoint',range:.8};   // make for the gate
+  if(BAST.on){
+    if(zb.gate&&zb.x<-23)
+      return{x:-21,z:roadZ(-24),kind:'waypoint',range:.8}; // make for the gate
+    if(FORT.gaps.length&&zb.x<FORT.lineX-1){ // a wall you cannot climb: find where it failed
+      let gz=FORT.gaps[0],gd=1e9;
+      for(const g of FORT.gaps){const dd=Math.abs(zb.z-g);if(dd<gd){gd=dd;gz=g;}}
+      if(gd>2.4)return{x:FORT.lineX+3,z:gz,kind:'waypoint',range:1.6};
+    }
+    if(FORT.line2X&&FORT.gaps2.length&&zb.x<FORT.line2X-1&&zb.x>FORT.lineX-1){
+      let gz=FORT.gaps2[0],gd=1e9;
+      for(const g of FORT.gaps2){const dd=Math.abs(zb.z-g);if(dd<gd){gd=dd;gz=g;}}
+      if(gd>2.4)return{x:FORT.line2X+3,z:gz,kind:'waypoint',range:1.6};
+    }
+  }
   return{x:0,z:9.5,kind:'depot',range:8.2};
 }
 function updateZombies(dt,t){
@@ -3265,8 +3281,10 @@ function updateZombies(dt,t){
     zb.reach+=((meat?1:0)-zb.reach)*Math.min(1,dt*2.5);
     const sway=ck*(zb.kind==='runner'?.1:.06)*(1+Math.abs(zb.limp))+spz;
     const bob=Math.abs(wk)*(crawl?.04:.07)*(zb.drag?.5:1);
+    /* the weight goes over the stance leg: the whole body ferries side to side */
+    const lat=crawl?0:ck*.05*(1+Math.abs(zb.limp)*1.6);
     _E.set((crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4,zb.face,sway);_Q.setFromEuler(_E);
-    _P.set(zb.x,gy+bob+(crawl?-.25:0),zb.z);
+    _P.set(zb.x+Math.cos(zb.face)*lat,gy+bob+(crawl?-.25:0),zb.z-Math.sin(zb.face)*lat);
     crawl?_S.set(zb.scale,zb.scale,zb.scale*.9):_S.setScalar(zb.scale);
     _M.compose(_P,_Q,_S);
     /* legs: the good one steps, the bad one is hauled after it */
@@ -6950,25 +6968,123 @@ function buildGunMesh(type){
   g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
   scene.add(g);return g;
 }
-function buildFort(){
-  // the great berm: raised with the same shovels that dig the graves
-  for(let pass=0;pass<6;pass++)
-    for(let z=-58;z<=58;z+=3.5)
-      modifyTerrain(-24,z,5.5,.55);
-  // the moat: dug before the first night, deep enough to slow a tide
-  for(let pass=0;pass<4;pass++)
-    for(let z=-56;z<=56;z+=3.5){
-      if(Math.abs(z-roadZ(-33))<5)continue;
-      modifyTerrain(-33,z,4.5,-.6);
+const FORT={kind:'ridge',lineX:-24,gaps:[],line2X:null,gaps2:[]};
+const FORT_NAMES={ridge:'THE RIDGE',helm:'THE HORNWALL',tiers:'THE THREE STEPS',twins:'THE TWINS'};
+function buildFort(kind){
+  kind=kind||'ridge';
+  Object.assign(FORT,{kind,lineX:-24,gaps:[],line2X:null,gaps2:[]});
+  const gateZ=roadZ(-24);
+  const crestBags=(wx,z0,z1,gz,step=2.6)=>{
+    for(let z=z0;z<=z1;z+=step){
+      if(gz!==null&&Math.abs(z-gz)<4.5)continue;  // the gate stays open
+      const b=new THREE.Mesh(bagGeo,bagMat);
+      b.scale.set(1.35,1,.8);
+      b.position.set(wx+rand(-.4,.4),heightAt(wx,z)+.18,z);
+      b.rotation.y=rand(-.2,.2);b.castShadow=true;
+      setpieces.add(b);
     }
-  // crest bags
-  for(let z=-54;z<=54;z+=2.6){
-    if(Math.abs(z-roadZ(-24))<4.5)continue;       // the gate stays open
-    const b=new THREE.Mesh(bagGeo,bagMat);
-    b.scale.set(1.35,1,.8);
-    b.position.set(-24+rand(-.4,.4),heightAt(-24,z)+.18,z);
-    b.rotation.y=rand(-.2,.2);b.castShadow=true;
-    setpieces.add(b);
+  };
+  const stoneM=frostable(new THREE.MeshStandardMaterial({color:0xb4ab9c,roughness:.95,
+    map:brickTex,bumpMap:brickTex,bumpScale:.4}));
+  const stoneSeg=(x,z,w,h,d)=>{ // one course of fitted masonry, settled
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),stoneM);
+    seg.position.set(x+rand(-.1,.1),heightAt(x,z)+h/2,z);
+    seg.rotation.y=rand(-.015,.015);
+    seg.castShadow=seg.receiveShadow=true;setpieces.add(seg);
+    return seg;
+  };
+  if(kind==='ridge'){
+    // the great berm: raised with the same shovels that dig the graves
+    for(let pass=0;pass<6;pass++)
+      for(let z=-58;z<=58;z+=3.5)
+        modifyTerrain(-24,z,5.5,.55);
+    // the moat: dug before the first night, deep enough to slow a tide
+    for(let pass=0;pass<4;pass++)
+      for(let z=-56;z<=56;z+=3.5){
+        if(Math.abs(z-roadZ(-33))<5)continue;
+        modifyTerrain(-33,z,4.5,-.6);
+      }
+    crestBags(-24,-54,54,gateZ);
+  }else if(kind==='helm'){
+    // the hornwall: one deep stone curtain anchored in raised rock shoulders
+    for(const sz of[-58,58])for(let p=0;p<7;p++)modifyTerrain(-24,sz,6.5,.8);
+    const breach=gateZ+(srnd()<.5?-26:26);     // last winter's loss, never rebuilt
+    FORT.gaps=[gateZ,breach];
+    for(let z=-54;z<=54;z+=5.6){
+      if(Math.abs(z-gateZ)<4.4)continue;
+      const broken=Math.abs(z-breach)<3.2;
+      if(broken){ // rubble where the wall came down
+        for(let r2=0;r2<4;r2++){
+          const rk=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(.5,1.1),1),stoneM);
+          rk.position.set(-24+rand(-2,2),heightAt(-24,z)+.3,z+rand(-2,2));
+          rk.rotation.set(rand(TAU),rand(TAU),0);rk.castShadow=true;setpieces.add(rk);
+        }
+        continue;
+      }
+      const h=5.4+rand(-.4,.7);
+      stoneSeg(-24,z,2.4,h,5.9);
+      const par=new THREE.Mesh(new THREE.BoxGeometry(.6,1,5.9),stoneM); // parapet lip, west edge
+      par.position.set(-25,heightAt(-24,z)+h+.5,z);par.castShadow=true;setpieces.add(par);
+      COLLIDERS.push({x:-24,z,r:3.1});
+    }
+    for(const s of[-1,1]){ // the gate: two pillars and a lintel you drive under
+      stoneSeg(-24,gateZ+s*3.6,2.6,6.6,2.2);
+      COLLIDERS.push({x:-24,z:gateZ+s*3.6,r:1.7});
+    }
+    const lin=new THREE.Mesh(new THREE.BoxGeometry(3,1.5,9.4),stoneM);
+    lin.position.set(-24,heightAt(-24,gateZ)+7.1,gateZ);lin.castShadow=true;setpieces.add(lin);
+    placeBag(-22.6,breach-1.2,0);placeBag(-22.6,breach+1.2,0); // the breach is bagged, barely
+  }else if(kind==='tiers'){
+    // the three steps: outer timber, raised ground, inner stone. gates never align.
+    for(let p=0;p<5;p++)for(let z=-42;z<=42;z+=3.5)modifyTerrain(-8,z,8,.5);
+    const outZ=roadZ(-30),inZ=roadZ(-16),inGate=inZ+9;
+    const breach=outZ+(srnd()<.5?-22:22);
+    FORT.lineX=-30;FORT.gaps=[outZ,breach];
+    FORT.line2X=-16;FORT.gaps2=[inGate];
+    const palM2=frostable(new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,
+      bumpMap:woodTex,bumpScale:.3}));
+    for(let z=-50;z<=50;z+=2.3){ // outer ring: sharpened timber
+      if(Math.abs(z-outZ)<4||Math.abs(z-breach)<2.6)continue;
+      const h=2.9+rand(-.3,.4);
+      const seg=new THREE.Mesh(new THREE.CylinderGeometry(.42,.5,h,9),palM2);
+      seg.position.set(-30+rand(-.25,.25),heightAt(-30,z)+h/2,z);
+      seg.rotation.z=rand(-.04,.04);seg.castShadow=true;setpieces.add(seg);
+      if(z%4.6<2.3)COLLIDERS.push({x:-30,z,r:1.5});
+    }
+    for(let z=-40;z<=40;z+=5.6){ // inner ring: stone, taller, on the high step
+      if(Math.abs(z-inGate)<4)continue;
+      const h=4.4+rand(-.3,.5);
+      stoneSeg(-16,z,2.2,h,5.9);
+      COLLIDERS.push({x:-16,z,r:3});
+    }
+    crestBags(-16,-40,40,inGate,3.4);
+    placeBag(-28.6,breach-1.2,0);placeBag(-28.6,breach+1.2,0);
+  }else{ // twins: two towers astride the road, a bridge between, walls running out
+    const breachN=gateZ+24,breachS=gateZ-24;
+    FORT.gaps=[gateZ,breachN,breachS];
+    for(const s of[-1,1]){ // the towers themselves
+      const tz=gateZ+s*7;
+      const tw=new THREE.Mesh(new THREE.BoxGeometry(7,11,7),stoneM);
+      tw.position.set(-24,heightAt(-24,tz)+5.5,tz);
+      tw.castShadow=tw.receiveShadow=true;setpieces.add(tw);
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(8,1,8),stoneM);
+      cap.position.set(-24,heightAt(-24,tz)+11.4,tz);cap.castShadow=true;setpieces.add(cap);
+      COLLIDERS.push({x:-24,z:tz,r:4.6});
+      for(let off=8.2;off<=46;off+=5.6){ // curtain walls running to the field's edge
+        const zz=tz+s*off;
+        if(Math.abs(zz)>54)break;
+        if(Math.abs(zz-(s>0?breachN:breachS))<3.2)continue;
+        const h=3.6+rand(-.3,.4);
+        stoneSeg(-24,zz,2.2,h,5.9);
+        COLLIDERS.push({x:-24,z:zz,r:3});
+      }
+    }
+    const bridge=new THREE.Mesh(new THREE.BoxGeometry(3.4,1.8,8),stoneM); // the road runs under it
+    bridge.position.set(-24,heightAt(-24,gateZ)+7.6,gateZ);
+    bridge.castShadow=true;setpieces.add(bridge);
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(.4,.9,8),stoneM);
+    rail.position.set(-25.5,heightAt(-24,gateZ)+8.9,gateZ);setpieces.add(rail);
+    placeBag(-22.6,breachN,0);placeBag(-22.6,breachS,0);
   }
   // the field remembers: craters, an abandoned trench line, the convoy that never arrived
   for(let i=0;i<14;i++){
@@ -7193,7 +7309,7 @@ function cleanupModes(){ // no mode inherits another's furniture
 function saveBastion(){
   if(!BAST.on)return;
   try{localStorage.setItem('tlr_bastion_run',JSON.stringify({v:1,
-    runSeed:BAST.runSeed,wave:BAST.wave,cache:BAST.cache,shells:BAST.shells,
+    runSeed:BAST.runSeed,wave:BAST.wave,cache:BAST.cache,shells:BAST.shells,fort:BAST.fort,
     depotHp:G.depotHp,scrap:G.scrap,kills:G.kills,score:G.score,items:G.items,
     p:{hp:player.hp,maxhp:player.maxhp,reserve:player.reserve,wid:player.wid,
        owned:player.owned,mags:player.mags},
@@ -7215,7 +7331,8 @@ function startBastion(load){
   setBiome(BIOMES[Math.floor(srnd()*BIOMES.length)]);  // tonight's theater, drawn from the deck
   buildWorld((BAST.runSeed^0x9e3779b9)>>>0);
   setSeed((BAST.runSeed^0x51ed2701)>>>0);   // the fort dresses the same way every time
-  buildFort();
+  BAST.fort=sv?(sv.fort||'ridge'):spick(['ridge','helm','tiers','twins']);
+  buildFort(BAST.fort);
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
     items:{nade:3,molotov:1,mine:2,medkit:1,flare:2,rocket:2},
     dmgMul:1,reloadMul:1,speedMul:1,scrapMul:1,steadyMul:1,
@@ -7247,7 +7364,11 @@ function startBastion(load){
   $('start').classList.remove('show');$('gameover').classList.remove('show');
   $('hud').classList.add('on');
   initSlots();refreshVM();
-  announce('THE BASTION · '+BIOME.name.toUpperCase(),'they come from the west. the wall is yours.');
+  announce('THE BASTION · '+FORT_NAMES[BAST.fort]+' · '+BIOME.name.toUpperCase(),
+    {ridge:'they come from the west. the berm is yours.',
+     helm:'one wall, anchored in stone. it has never been taken while it was watched.',
+     tiers:'two rings, two gates, no straight road in. make them walk all of it.',
+     twins:'two towers astride the road. everything west passes between or not at all.'}[BAST.fort]);
   tryLock();
 }
 function bastionWave(){
