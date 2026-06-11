@@ -2796,6 +2796,12 @@ ghost.visible=false;scene.add(ghost);
 
 /* ---------------- zombies ---------------- */
 const MAXZ=110;
+function shadeGeo(geo,fn){ // bake light into the body itself: grime below, pallor above
+  const p=geo.attributes.position,n=p.count,col=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const v=fn(p.getX(i),p.getY(i),p.getZ(i));col[i*3]=v;col[i*3+1]=v;col[i*3+2]=v;}
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  return geo;
+}
 let zGeoBody,zGeoHead;
 {
   const cloth=[],flesh=[];
@@ -2819,28 +2825,32 @@ let zGeoBody,zGeoHead;
   add(flesh,blob(.035,1.1,.6,.8),.1,1.63,.17);         // cheekbone, right
   add(flesh,blob(.022,.7,1.2,.9),0,1.66,.26);          // what's left of a nose
   zGeoBody=mergeGeometries(cloth);
+  shadeGeo(zGeoBody,(x,y)=>clamp(.6+(y-.6)*.42,.6,1));   // the hem has been dragged through the mud
   zGeoHead=mergeGeometries(flesh);
   zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
   zGeoHead.scale(.92,.92,.92);       // human proportion ≈ 7.5 heads — shrink toward it
+  shadeGeo(zGeoHead,(x,y)=>clamp(.95+y*.3,.82,1.04));    // dark under the jawline, pale at the crown
 }
 const zJawGeo=(()=>{ // the lower jaw, hinged below the ears: it gapes
   const j=new THREE.SphereGeometry(.085,14,10);j.scale(1,.55,1.2);j.rotateX(.5);j.translate(0,-.06,.12);
   j.scale(.92,.92,.92); // matches the skull
-  return j;})();
-const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance tint survives
-  const c=document.createElement('canvas');c.width=c.height=256;
-  const g=c.getContext('2d'),img=g.createImageData(256,256);
-  for(let y=0;y<256;y++)for(let x=0;x<256;x++){
-    const i=(y*256+x)*4;
-    let v=205+fbm2(x*.045,y*.045,4)*70-35;
-    const vein=Math.abs(fbm2(x*.025+60,y*.025+19,3)-.5);
+  return shadeGeo(j,()=>.78);})(); // always in shadow
+const fleshTex=(()=>{ // mottled necrotic skin at 512 — the geometry went smooth, the skin carries the detail now
+  const c=document.createElement('canvas');c.width=c.height=512;
+  const g=c.getContext('2d'),img=g.createImageData(512,512);
+  for(let y=0;y<512;y++)for(let x=0;x<512;x++){
+    const i=(y*512+x)*4;
+    const X=x*.5,Y=y*.5;                               // keep feature scale, double the resolution
+    let v=205+fbm2(X*.045,Y*.045,4)*70-35;
+    const vein=Math.abs(fbm2(X*.025+60,Y*.025+19,3)-.5);
     v-=Math.pow(Math.max(0,1-vein*7),2)*55;            // dark vein web
     v+=(hash(x*7,y*5)-.5)*16;                          // pore-fine grain the old map blurred over
+    v-=Math.max(0,Math.sin(Y*1.1+fbm2(X*.03,Y*.012,2)*7)-.62)*26; // sinew striations pulling at the skin
     let r=v,gn=v*.96,b=v*.9;
-    const br=fbm2(x*.02+140,y*.02+77,3);
+    const br=fbm2(X*.02+140,Y*.02+77,3);
     if(br>.6){const k=Math.min(1,(br-.6)*2.6);r-=k*40;gn-=k*14;b+=k*6;}    // livid bruising
     if(br<.4){const k=Math.min(1,(.4-br)*2.6);r-=k*30;gn+=k*2;b-=k*22;}    // gangrene creeping under the skin
-    const raw=fbm2(x*.06+31,y*.06+200,3);
+    const raw=fbm2(X*.06+31,Y*.06+200,3);
     if(raw>.7){const k=Math.min(1,(raw-.7)*3.4);r+=k*26;gn-=k*34;b-=k*38;} // skin worn through to meat
     if(hash(x*11,y*17)<.014){r*=.34;gn*=.18;b*=.16;}                       // weeping lesions
     img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
@@ -2860,16 +2870,19 @@ function deathlit(mat){ // a cold rim the dusk can't account for: the dead read 
   return mat;
 }
 const zMat=deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:1.15,
-  map:fleshTex,bumpMap:fleshTex,bumpScale:.6,
+  map:fleshTex,bumpMap:fleshTex,bumpScale:.6,vertexColors:true,
   roughnessMap:fleshTex})); // raw patches run low in green: exposed meat glistens, dry skin doesn't
-const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter gone black
-  const c=document.createElement('canvas');c.width=c.height=128;
-  const g=c.getContext('2d'),img=g.createImageData(128,128);
-  for(let y=0;y<128;y++)for(let x=0;x<128;x++){
-    const i=(y*128+x)*4;
-    let v=212+fbm2(x*.09+300,y*.09+11,3)*44-22;
-    v-=(x%5<1?9:0)+(y%5<1?7:0);                              // the weave
-    v-=Math.max(0,fbm2(x*.035+9,y*.035+44,3)-.52)*240;       // grime soaked in
+const zClothTex=(()=>{ // rotted field coat at 256: weave, seams, grime soak, spatter gone black
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d'),img=g.createImageData(256,256);
+  for(let y=0;y<256;y++)for(let x=0;x<256;x++){
+    const i=(y*256+x)*4;
+    const X=x*.5,Y=y*.5;
+    let v=212+fbm2(X*.09+300,Y*.09+11,3)*44-22;
+    v-=(x%5<1?9:0)+(y%5<1?7:0);                              // the weave, twice as fine
+    v-=Math.max(0,fbm2(X*.035+9,Y*.035+44,3)-.52)*240;       // grime soaked in
+    if(y%64<2&&x%6<3)v-=26;                                  // a stitched seam, coming apart
+    if(Math.abs(x-128)<2&&y%7<4)v-=22;                       // the back seam
     let r=v,gn=v*.97,b=v*.9;
     if(hash(x*13,y*7)<.02){r*=.42;gn*=.3;b*=.3;}             // old blood, dried dark
     img.data[i]=r;img.data[i+1]=gn;img.data[i+2]=b;img.data[i+3]=255;
@@ -2880,7 +2893,7 @@ const zClothTex=(()=>{ // rotted field coat: coarse weave, grime soak, spatter g
   return t;
 })();
 const zClothMat=deathlit(new THREE.MeshStandardMaterial({color:0xffffff,roughness:.97,
-  map:zClothTex,bumpMap:zClothTex,bumpScale:.45}));
+  map:zClothTex,bumpMap:zClothTex,bumpScale:.45,vertexColors:true}));
 const zMesh=new THREE.InstancedMesh(zGeoBody,zClothMat,MAXZ);
 zMesh.castShadow=true;zMesh.frustumCulled=false;
 scene.add(zMesh);
@@ -2891,7 +2904,7 @@ scene.add(zHead);
 const armUpGeo=(()=>{ // shoulder to elbow
   const a=new THREE.CylinderGeometry(.052,.062,.28,10);a.rotateX(Math.PI/2);a.translate(0,0,.14);
   const e=new THREE.SphereGeometry(.042,8,6);e.translate(0,0,.28); // fills the elbow without bulging past it
-  return mergeGeometries([a,e]);})();
+  return shadeGeo(mergeGeometries([a,e]),(x,y,z)=>1-z*.35);})();
 const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thumb
   const a=new THREE.CylinderGeometry(.04,.05,.26,10);a.rotateX(Math.PI/2);a.translate(0,0,.13);
   const h=new THREE.SphereGeometry(.048,10,7);h.scale(1,.55,1.45);h.translate(0,-.01,.31); // a flat mitt, not a ball
@@ -2900,15 +2913,15 @@ const armLoGeo=(()=>{ // elbow to a grasping hand: splayed fingers, crooked thum
     f.rotateX(Math.PI/2-.55);f.translate(i*.034,-.05,.43);parts.push(f);} // long enough to read as claws
   {const th=new THREE.CylinderGeometry(.013,.01,.09,5);
    th.rotateX(Math.PI/2-.9);th.rotateY(.7);th.translate(.06,-.03,.34);parts.push(th);}
-  return mergeGeometries(parts);})();
+  return shadeGeo(mergeGeometries(parts),(x,y,z)=>clamp(.95-z*.65,.6,1));})(); // grave dirt on the hands
 const legUpGeo=(()=>{ // hip to knee
   const l=new THREE.CylinderGeometry(.078,.06,.4,10);l.translate(0,-.2,0);
   const k=new THREE.SphereGeometry(.052,8,6);k.translate(0,-.4,0); // knee cap flush with the thigh
-  return mergeGeometries([l,k]);})();
+  return shadeGeo(mergeGeometries([l,k]),(x,y)=>1+y*.5);})();
 const legLoGeo=(()=>{ // knee to the dragging foot
   const l=new THREE.CylinderGeometry(.052,.044,.36,10);l.translate(0,-.18,0);
   const f=new THREE.SphereGeometry(.068,10,7);f.scale(.9,.5,1.6);f.translate(0,-.37,.07);
-  return mergeGeometries([l,f]);})();
+  return shadeGeo(mergeGeometries([l,f]),(x,y)=>clamp(.88+y*1.0,.4,.9));})(); // mud to the knee
 const LIMBS=[];
 function makeLimb(geo,mat){
   const m=new THREE.InstancedMesh(geo,mat||zMat,MAXZ);
