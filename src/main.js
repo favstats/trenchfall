@@ -3268,9 +3268,9 @@ function updateZombies(dt,t){
     let aR=(crawl?.9:upR?-.1:1.25)-wk*armAmp*((upR||crawl)?1:.35);
     let eLb=(crawl?.5:upL?.5:.3)+Math.max(0,-wk)*.25;
     let eRb=(crawl?.5:upR?.55:.3)+Math.max(0,wk)*.25;
-    if(zb.reach>.02){ // hands out, elbows opening, a tremor in the wrists
+    if(zb.reach>.02){ // hands thrust level at the meat, elbows opening, a tremor in the wrists
       const tr=Math.sin(t*12+zb.phase)*.07;
-      aL=lerp(aL,-1.38+tr,zb.reach);aR=lerp(aR,-1.32-tr,zb.reach);
+      aL=lerp(aL,-.42+tr,zb.reach);aR=lerp(aR,-.36-tr,zb.reach);
       eLb=lerp(eLb,.16-tr,zb.reach);eRb=lerp(eRb,.2+tr,zb.reach);
     }
     /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
@@ -7960,7 +7960,7 @@ window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to 
     a.x=px+26;a.z=pz;a.tx=null;a.tz=null;a.wanderT=0;a._stuck=0;
     for(let i=-5;i<=5;i++)COLLIDERS.push({x:px+13,z:pz+i*1.7,r:1.3,_test:1});
     rebuildColGrid();
-    const t0=performance.now(),trail=[];
+    const simT0=WANDER.t,trail=[];   // budget in SIM seconds: headless renders are slow
     (function poll(){
       const d=Math.hypot(a.x-player.x,a.z-player.z);
       trail.push([Math.round((a.x-px)*10)/10,Math.round((a.z-pz)*10)/10,
@@ -7968,9 +7968,9 @@ window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to 
       if(d<7){
         for(let i=COLLIDERS.length-1;i>=0;i--)if(COLLIDERS[i]._test)COLLIDERS.splice(i,1);
         rebuildColGrid();
-        return res({ok:true,secs:Math.round((performance.now()-t0)/100)/10});
+        return res({ok:true,simSecs:Math.round((WANDER.t-simT0)*10)/10});
       }
-      if(performance.now()-t0>30000)return res({ok:false,dist:Math.round(d),trail:trail.filter((_,i)=>i%4===0)});
+      if(WANDER.t-simT0>50)return res({ok:false,dist:Math.round(d),trail:trail.filter((_,i)=>i%8===0)});
       setTimeout(poll,250);
     })();
   });
