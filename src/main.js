@@ -2803,15 +2803,17 @@ let zGeoBody,zGeoHead;
   add(cloth,blob(.3,1.0,1.2,.62),0,1.1,0,.15);
   add(cloth,blob(.3,1.08,.42,.55),0,1.42,.05,.1);
   add(cloth,blob(.24,.88,.52,.6),0,.76,0);
-  // what's left of a person: neck, skull, jaw, one bare rib
+  // what's left of a person: neck, skull, one bare rib — the jaw hangs on its own hinge now
   {const n=new THREE.CylinderGeometry(.07,.095,.2,10);n.translate(0,1.53,.08);flesh.push(n);}
   add(flesh,blob(.17,1,1.14,1.04),0,1.69,.1,.25);
-  add(flesh,blob(.085,1,.55,1.2),0,1.52,.22,.5);
   add(cloth,blob(.05,1.2,.8,1),-.15,1.18,.16); // the bare rib stays with the torso so the head can loll free
   zGeoBody=mergeGeometries(cloth);
   zGeoHead=mergeGeometries(flesh);
   zGeoHead.translate(0,-1.5,-.08);   // recentre on the neck: the skull rides its own pivot now
 }
+const zJawGeo=(()=>{ // the lower jaw, hinged below the ears: it gapes
+  const j=new THREE.SphereGeometry(.085,14,10);j.scale(1,.55,1.2);j.rotateX(.5);j.translate(0,-.06,.12);
+  return j;})();
 const fleshTex=(()=>{ // mottled necrotic skin, near-white base so per-instance tint survives
   const c=document.createElement('canvas');c.width=c.height=256;
   const g=c.getContext('2d'),img=g.createImageData(256,256);
@@ -2894,6 +2896,7 @@ const zArmL=makeLimb(armUpGeo),zArmR=makeLimb(armUpGeo);
 const zArmL2=makeLimb(armLoGeo),zArmR2=makeLimb(armLoGeo);
 const zLegL=makeLimb(legUpGeo,zClothMat),zLegR=makeLimb(legUpGeo,zClothMat); // trousers end at the knee
 const zLegL2=makeLimb(legLoGeo),zLegR2=makeLimb(legLoGeo);                   // bare rotten shin and foot
+const zJaw=makeLimb(zJawGeo); // rides LIMBS for the per-frame bookkeeping
 let zEyes;
 {
   const e1=new THREE.SphereGeometry(.04,8,6);e1.scale(1,.75,.55);e1.translate(-.085,1.7,.26);
@@ -2940,7 +2943,7 @@ function limbHide(up,lo,mi,M){
 const EYE_COL={walker:[7,.9,.45],runner:[8,5,2.4],crawler:[2.6,.5,.3],spitter:[1.6,7,.7],
   exploder:[8,1.4,.2],screamer:[5.5,1.2,7],brute:[9,.5,.3],colossus:[11,.4,.2]};
 const _EC=new THREE.Color();
-function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0){
+function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1){
   /* the skull rides its own pivot: pitch hX, roll hZ — the loll */
   _M2.makeTranslation(0,1.5,.08);_HM.copy(M).multiply(_M2);
   if(hX){_M2.makeRotationX(hX);_HM.multiply(_M2);}
@@ -2951,6 +2954,10 @@ function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=fal
   zMesh.setColorAt(mi,_C.set(colC).multiplyScalar(tint));      // the coat
   zHead.setMatrixAt(mi,_HM);
   zHead.setColorAt(mi,_C.set(colF).multiplyScalar(tint));      // the skin
+  _M2.makeTranslation(0,.08,.02);_M3.copy(_HM).multiply(_M2);  // the jaw hinge, below the ears
+  _M2.makeRotationX(jaw);_M3.multiply(_M2);
+  zJaw.setMatrixAt(mi,_M3);
+  zJaw.setColorAt(mi,_C.set(colF).multiplyScalar(tint*.82));   // shadowed, wet
   _C.set(colF).multiplyScalar(tint);_C2.copy(_C);              // bare arms, bare hands
   if(gone==='aL')limbHide(zArmL,zArmL2,mi,M);
   else limb2To(zArmL,zArmL2,mi,M,-.3,1.42,.08,aL,eL,true);
@@ -3079,7 +3086,7 @@ function updateZombies(dt,t){
       {const s1=Math.sin(zb.phase*5),s2=Math.sin(zb.phase*9); // each corpse falls its own way
        writeZombie(mi,_M,zb.brute?0x4a2620:(zb.cloth||0x39402c),0x6a6258,
          -.5+s1*.5,-.6-s2*.5,.15+s2*.25,-.1+s1*.25,true,zb.tint,null,false,zb.gone,
-         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,s1>0?.8:-.8);}
+         .5+Math.abs(s2)*.6,.4+Math.abs(s1)*.6,.25,.45,-.25,s1>0?.8:-.8,.65);} // jaw fallen open
       mi++;continue;
     }
     if(zb.sleeping){
@@ -3103,7 +3110,8 @@ function updateZombies(dt,t){
       _P.set(zb.x,gy-1.9*zb.scale*clamp(zb.rise,0,1),zb.z);_S.setScalar(zb.scale);
       _M.compose(_P,_Q,_S);
       writeZombie(mi,_M,0x4a4030,0x5d5444,-1.3+zb.rise*.5,-1.2+zb.rise*.5,0,0,false,zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone,
-        .3+zb.rise*.9,.4+zb.rise*.8,.2,.2,-.35,Math.sin(t*7+zb.phase)*.15); // clawing out, head cranked up
+        .3+zb.rise*.9,.4+zb.rise*.8,.2,.2,-.35,Math.sin(t*7+zb.phase)*.15,
+        .4+Math.sin(t*11+zb.phase)*.2); // clawing out, head cranked up, jaw working
       mi++;continue;
     }
     /* burn DoT */
@@ -3276,6 +3284,8 @@ function updateZombies(dt,t){
     /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
     const hX2=(crawl?-.55:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4;
     const hZ2=zb.loll*(1-zb.reach*.55)+Math.sin(t*zb.lollSp*.73+zb.phase*2)*.07;
+    /* the jaw: slack at rest, gaping and working as it closes — chewing on the air */
+    const jaw=.08+Math.abs(spz)*2+zb.reach*(.5+Math.sin(t*9+zb.phase)*.22);
     const flash=zb.hitT&&zb.hitT>0;
     if(flash)zb.hitT-=dt;
     let colC,colF;
@@ -3288,7 +3298,7 @@ function updateZombies(dt,t){
     else{colC=zb.frenzyT>0?0x8a6a45:zb.cloth;colF=zb.flesh;}
     writeZombie(mi,_M,colC,colF,
       aL,aR,lL,lR,false,flash?1:zb.tint,EYE_COL[zb.kind],zb.hat&&!zb.brute,zb.gone,
-      eLb,eRb,kL,kR,hX2,hZ2);
+      eLb,eRb,kL,kR,hX2,hZ2,jaw);
     mi++;
   }
   zMesh.count=mi;zEyes.count=mi;zHats.count=mi;zHats.instanceMatrix.needsUpdate=true;
@@ -8140,6 +8150,7 @@ requestAnimationFrame(frame);
 
 /* expose for debugging / tests */
 window.G=G;window.PLAYER=player;window.ZOMBIES=zombies;window.TURRETS=turrets;window.TRUCK=truck;
+window.SCENE=scene; // dev: screenshot QA cranks the lights through this
 window.spawnZombie=spawnZombie;window.modifyTerrain=modifyTerrain;window.heightAt=heightAt;
 window.startGame=startCampaign;window.placeTurret=placeTurret;window.damagePlayer=damagePlayer;
 window.CAMP=CAMP;window.startCampaign=startCampaign;window.beginLeg=beginLeg;window.arriveCamp=arriveCamp;
