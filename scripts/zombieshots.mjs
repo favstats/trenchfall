@@ -43,5 +43,21 @@ for(let s=0;s<2;s++){
   await page.waitForTimeout(1400);
   await page.screenshot({path:`/tmp/tf-zomb-zoom-${s}.png`,timeout:120000}).catch(()=>console.log('zoom shot failed',s));
 }
+await page.evaluate(()=>{ // the mid-distance read: how they look coming across open ground
+  window.PLAYER.hp=Infinity;
+  if(window.CAMERA){window.CAMERA.fov=72;window.CAMERA.updateProjectionMatrix();}
+  const P=window.PLAYER;
+  const m=window.CAMERA.matrixWorld.elements;          // third column = camera forward
+  let fx=-m[8],fz=-m[10];const fl=Math.hypot(fx,fz)||1;fx/=fl;fz/=fl;
+  window.ZOMBIES.forEach((z,i)=>{
+    if(!z.alive)return;
+    const lane=(i%5-2)*2.4,depth=7+Math.floor(i/5)*3; // two ranks, spread across the view
+    z.x=P.x+fx*depth-fz*lane;z.z=P.z+fz*depth+fx*lane;
+  });
+});
+for(let s=0;s<2;s++){
+  await page.waitForTimeout(1600);
+  await page.screenshot({path:`/tmp/tf-zomb-mid-${s}.png`,timeout:120000}).catch(()=>console.log('mid shot failed',s));
+}
 console.log('errors:',errors.filter(e=>!e.includes('pointer lock')).slice(0,8));
 await browser.close();

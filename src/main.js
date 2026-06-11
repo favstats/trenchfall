@@ -3075,7 +3075,7 @@ function pickKind(){
   return 'walker';
 }
 const ZSTATS={
-  walker:  w=>({hp:26+w*7,        sp:rand(2.0,3.1),sc:rand(.92,1.1)}),
+  walker:  w=>({hp:26+w*7,        sp:rand(2.0,3.1),sc:rand(.86,1.13)}),
   runner:  w=>({hp:(26+w*7)*.55,  sp:rand(4.4,5.4),sc:rand(.85,.95)}),
   crawler: w=>({hp:(26+w*7)*.45,  sp:rand(3.4,4.1),sc:rand(.9,1.05)}),
   spitter: w=>({hp:(26+w*7)*.9,   sp:rand(1.7,2.3),sc:rand(.95,1.1)}),
@@ -3113,6 +3113,7 @@ function spawnZombie(kindIn){
     loll:rand(-.55,.55),lollSp:rand(.5,1.4),                     // the neck gave out long ago
     twitchT:rand(2,8),twitching:0,reach:0,armS:Math.random(),
     lean:rand(-.09,.09),                                         // one shoulder rides higher, always
+    wide:rand(.86,1.18),                                         // the starved and the bloated walk together
     cloth:[0x5a5347,0x4a3e33,0x39402c,0x57424a,0x3e4654,0x6a604a][Math.floor(Math.random()*6)],
     flesh:[0x8d8a76,0x9a8f7c,0x7e8a72,0xa39383,0x76705e][Math.floor(Math.random()*5)],// no two rot alike
     quirk:kind==='walker'&&Math.random()<.12?'stare':null,// some of them remember
@@ -3378,7 +3379,7 @@ function updateZombies(dt,t){
     const lat=crawl?0:ck*.05*(1+Math.abs(zb.limp)*1.6);
     _E.set((crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,zb.face,sway);_Q.setFromEuler(_E);
     _P.set(zb.x+Math.cos(zb.face)*lat,gy+bob+(crawl?-.25:0),zb.z-Math.sin(zb.face)*lat);
-    crawl?_S.set(zb.scale,zb.scale,zb.scale*.9):_S.setScalar(zb.scale);
+    {const w=zb.wide||1;_S.set(zb.scale*w,zb.scale,zb.scale*(crawl?.9:1)*Math.max(.92,w*.96));}
     _M.compose(_P,_Q,_S);
     /* legs: the good one steps, the bad one is hauled after it */
     const legAmp=crawl?.25:zb.kind==='runner'?.8:.5;
