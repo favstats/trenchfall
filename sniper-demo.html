@@ -107,9 +107,27 @@ loader.load('assets/models/'+GUN+'.glb',gltf=>{
     const rig=skClone(gltf.scene);
     rig.traverse(o=>{if(o.isSkinnedMesh)o.frustumCulled=false;});
     const mx=new THREE.AnimationMixer(rig);
-    const a2=mx.clipAction(gltf.animations[0]);
-    a2.play();
-    if(q.get('t'))mx.update(+q.get('t'));else{window.__vmMixer=mx;} // live unless frozen
+    if(q.get('t')){ // scrub tool: freeze the full reel at a moment
+      const a2=mx.clipAction(gltf.animations[0]);a2.play();mx.update(+q.get('t'));
+    }else{ // the reel cut into the moves that matter
+      const full=gltf.animations[0];
+      const sub=(n,a,b)=>THREE.AnimationUtils.subclip(full,n,Math.round(a*30),Math.round(b*30),30);
+      const clips={idle:sub('idle',9.6,11.4),bolt:sub('bolt',19.4,21.6),reload:sub('reload',22.0,25.4)};
+      const act={};
+      for(const k in clips)act[k]=mx.clipAction(clips[k]);
+      act.idle.play();
+      act.bolt.setLoop(THREE.LoopOnce);act.reload.setLoop(THREE.LoopOnce);
+      window.__vm={mixer:mx,act,clips,_t:0,
+        play(n,fade=.12){
+          const a=act[n];if(!a)return 0;
+          act.idle.fadeOut(fade);
+          a.reset().fadeIn(fade).play();
+          const dur=clips[n].duration;
+          clearTimeout(this._t);
+          this._t=setTimeout(()=>{a.fadeOut(.25);act.idle.reset().fadeIn(.25).play();},dur*1000-200);
+          return dur;
+        }};
+    }
     const holder=new THREE.Group();
     holder.add(rig);
     rig.updateMatrixWorld(true);
@@ -179,29 +197,104 @@ loader.load('assets/models/'+GUN+'.glb',gltf=>{
   rifle=holder;
 });
 
-/* ---------- sound: the crack, the bolt, the click ---------- */
+/* ---------- sound: a rifle that means it ---------- */
 const AC=new (window.AudioContext||window.webkitAudioContext)();
-function shot(){
-  const t=AC.currentTime;
-  const nb=AC.createBuffer(1,AC.sampleRate*.3|0,AC.sampleRate);
+let _master=null,_verb=null,_echo=null,shotBuf=null;
+fetch('audio/guns/mosin.m4a').then(r=>r.arrayBuffer())
+  .then(ab=>AC.decodeAudioData(ab)).then(b=>shotBuf=b).catch(()=>{}); // a real mosin, CC0
+function noiseBuf(sec,curve=2){
+  const nb=AC.createBuffer(1,AC.sampleRate*sec|0,AC.sampleRate);
   const d=nb.getChannelData(0);
-  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
-  const n=AC.createBufferSource();n.buffer=nb;
-  const f=AC.createBiquadFilter();f.type='lowpass';
-  f.frequency.setValueAtTime(8000,t);f.frequency.exponentialRampToValueAtTime(500,t+.26);
-  const g=AC.createGain();g.gain.setValueAtTime(.85,t);g.gain.exponentialRampToValueAtTime(.001,t+.32);
-  n.connect(f);f.connect(g);g.connect(AC.destination);n.start();
-  const o=AC.createOscillator();o.type='triangle';
-  o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(38,t+.13);
-  const og=AC.createGain();og.gain.setValueAtTime(.55,t);og.gain.exponentialRampToValueAtTime(.001,t+.18);
-  o.connect(og);og.connect(AC.destination);o.start();o.stop(t+.2);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,curve);
+  return nb;
 }
-function bolt(){ // two metal taps, spaced like working the action
-  for(const[dt0,f0]of[[0,1900],[.13,1200]]){
+function distCurve(k){
+  const c=new Float32Array(256);
+  for(let i=0;i<256;i++){const x=i/128-1;c[i]=(1+k)*x/(1+k*Math.abs(x));}
+  return c;
+}
+function audioBus(){
+  if(_master)return;
+  const comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-14;comp.ratio.value=8;comp.attack.value=.002;comp.release.value=.18;
+  comp.connect(AC.destination);
+  _master=AC.createGain();_master.gain.value=.95;_master.connect(comp);
+  { // the canyon: a generated stereo impulse, long stone decay
+    const len=AC.sampleRate*1.9|0,ir=AC.createBuffer(2,len,AC.sampleRate);
+    for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);
+      for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)*(ch?.85:1);}
+    _verb=AC.createConvolver();_verb.buffer=ir;
+    const wet=AC.createGain();wet.gain.value=.4;
+    _verb.connect(wet);wet.connect(_master);
+  }
+  { // the flats: a slapback that walks away from you
+    _echo=AC.createDelay(1);_echo.delayTime.value=.29;
+    const fb=AC.createGain();fb.gain.value=.34;
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1300;
+    _echo.connect(lp);lp.connect(fb);fb.connect(_echo);fb.connect(_master);
+  }
+}
+function shot(){
+  audioBus();const t=AC.currentTime;
+  const out=AC.createGain();out.gain.value=1;
+  out.connect(_master);out.connect(_verb);out.connect(_echo);
+  if(shotBuf){ // the real thing, pitched a hair differently every time
+    const src=AC.createBufferSource();src.buffer=shotBuf;
+    src.playbackRate.value=.95+Math.random()*.1;
+    const g=AC.createGain();g.gain.value=1.1;
+    src.connect(g);g.connect(out);src.start(t);
+    const o=AC.createOscillator();o.type='sine';   // the recording lacks the chest-thump
+    o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(28,t+.18);
+    const og=AC.createGain();og.gain.setValueAtTime(.8,t);og.gain.exponentialRampToValueAtTime(.001,t+.26);
+    o.connect(og);og.connect(out);o.start(t);o.stop(t+.3);
+    return;
+  }
+  { // 1: the crack -- tight, high, torn at the edges
+    const n=AC.createBufferSource();n.buffer=noiseBuf(.07,1.6);
+    const hp=AC.createBiquadFilter();hp.type='highpass';hp.frequency.value=2400;
+    const ws=AC.createWaveShaper();ws.curve=distCurve(35);
+    const g=AC.createGain();g.gain.setValueAtTime(1,t);g.gain.exponentialRampToValueAtTime(.001,t+.08);
+    n.connect(hp);hp.connect(ws);ws.connect(g);g.connect(out);n.start(t);
+  }
+  { // 2: the body -- the air itself objecting
+    const n=AC.createBufferSource();n.buffer=noiseBuf(.55,2.2);
+    const lp=AC.createBiquadFilter();lp.type='lowpass';
+    lp.frequency.setValueAtTime(3200,t);lp.frequency.exponentialRampToValueAtTime(160,t+.42);
+    const g=AC.createGain();g.gain.setValueAtTime(.85,t);g.gain.exponentialRampToValueAtTime(.001,t+.55);
+    n.connect(lp);lp.connect(g);g.connect(out);n.start(t);
+  }
+  { // 3: the chest-thump
+    const o=AC.createOscillator();o.type='sine';
+    o.frequency.setValueAtTime(115,t);o.frequency.exponentialRampToValueAtTime(27,t+.2);
+    const g=AC.createGain();g.gain.setValueAtTime(.95,t);g.gain.exponentialRampToValueAtTime(.001,t+.3);
+    o.connect(g);g.connect(out);o.start(t);o.stop(t+.32);
+  }
+  { // 4: steel remembering the blow
+    const o=AC.createOscillator();o.type='square';o.frequency.value=3150;
+    const g=AC.createGain();g.gain.setValueAtTime(.16,t+.004);g.gain.exponentialRampToValueAtTime(.001,t+.035);
+    o.connect(g);g.connect(out);o.start(t);o.stop(t+.05);
+  }
+}
+function bolt(){ // the action worked: back-scrape, forward-seat
+  audioBus();
+  for(const[dt0,f0,gv]of[[0,1750,.14],[.05,900,.08],[.16,1150,.16],[.21,520,.1]]){
     const t=AC.currentTime+dt0;
     const o=AC.createOscillator();o.type='square';o.frequency.setValueAtTime(f0,t);
-    const g=AC.createGain();g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
-    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.06);
+    const g=AC.createGain();g.gain.setValueAtTime(gv,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+    o.connect(g);g.connect(_master);o.start(t);o.stop(t+.06);
+  }
+  const n=AC.createBufferSource();n.buffer=noiseBuf(.12,3);
+  const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=2400;bp.Q.value=2;
+  const g2=AC.createGain();g2.gain.setValueAtTime(.1,AC.currentTime);g2.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.14);
+  n.connect(bp);bp.connect(g2);g2.connect(_master);n.start();
+}
+function magSound(){ // out with the spent, in with the fresh
+  audioBus();
+  for(const[dt0,f0,gv]of[[0,640,.16],[.5,820,.12],[1.5,540,.2],[1.62,980,.14],[2.5,1500,.18]]){
+    const t=AC.currentTime+dt0;
+    const o=AC.createOscillator();o.type='square';o.frequency.setValueAtTime(f0,t);
+    const g=AC.createGain();g.gain.setValueAtTime(gv,t);g.gain.exponentialRampToValueAtTime(.001,t+.07);
+    o.connect(g);g.connect(_master);o.start(t);o.stop(t+.08);
   }
 }
 function click(){
@@ -255,7 +348,11 @@ function spawnZombie(i,first){
 /* ---------- input: pointer lock, the sniper's stillness ---------- */
 const keys={};
 addEventListener('keydown',e=>{keys[e.code]=true;
-  if(e.code==='KeyR'&&!P.dead&&P.reloadT<=0&&P.ammo<5&&P.reserve>0){P.reloadT=1.9;bolt();}});
+  if(e.code==='KeyR'&&!P.dead&&P.reloadT<=0&&P.ammo<5&&P.reserve>0){
+    const dur=window.__vm?window.__vm.play('reload'):0;
+    P.reloadT=Math.max(1.9,dur?dur-.2:0);
+    magSound();
+  }});
 addEventListener('keyup',e=>keys[e.code]=false);
 let locked=false;
 renderer.domElement.addEventListener('click',()=>{
@@ -294,7 +391,8 @@ function tryFire(){
   if(P.fireCd>0||P.boltT>0||P.reloadT>0)return;
   if(P.ammo<=0){click();return;}
   P.ammo--;P.fireCd=.12;P.boltT=.85;rifleKick=1;
-  shot();setTimeout(bolt,330);
+  shot();setTimeout(bolt,420);
+  if(window.__vm)window.__vm.play('bolt');
   camera.getWorldDirection(_rayD);_rayO.copy(camera.position);
   let best=null,bestT=1e9,bestHead=false;
   for(const z of zombies){
@@ -352,7 +450,7 @@ function animate(){
     rifle.position.z=rifle.userData.pz0+rifleKick*.12;
     rifle.rotation.x=rifle.userData.rx0+rifleKick*.1;
   }
-  if(window.__vmMixer)window.__vmMixer.update(dt);
+  if(window.__vm)window.__vm.mixer.update(dt);
   P.fireCd-=dt;P.boltT-=dt;
   if(P.reloadT>0){P.reloadT-=dt;
     if(P.reloadT<=0){const take=Math.min(5-P.ammo,P.reserve);P.ammo+=take;P.reserve-=take;}}
