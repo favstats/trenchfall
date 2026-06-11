@@ -1965,7 +1965,7 @@ cityWins.material.color.setRGB(3.4,2.0,.8);   // someone still pays for lamp oil
 cityWins.visible=false;
 scene.add(cityWins);
 const cityBeams=new THREE.InstancedMesh(
-  new THREE.CylinderGeometry(.09,.13,7,5),
+  new THREE.CylinderGeometry(.09,.13,7,8),
   new THREE.MeshStandardMaterial({color:0x17130e,roughness:1}),58);
 cityBeams.castShadow=true;
 scene.add(cityWalls);scene.add(cityRubble);scene.add(cityBeams);
@@ -2346,15 +2346,21 @@ const muzzle=new THREE.PointLight(0xffb050,0,14);scene.add(muzzle);
 const boomLight=new THREE.PointLight(0xffaa55,0,44);scene.add(boomLight);
 /* muzzle flash billboard */
 const flashSpr=(()=>{
-  const c=document.createElement('canvas');c.width=c.height=64;
+  const c=document.createElement('canvas');c.width=c.height=128;
   const g=c.getContext('2d');
-  g.translate(32,32);
-  for(let i=0;i<4;i++){
-    g.rotate(Math.PI/4);
-    const rg=g.createLinearGradient(0,-30,0,30);
+  g.translate(64,64);
+  for(let i=0;i<6;i++){ // ragged spokes, no two alike
+    g.rotate(Math.PI/3+Math.random()*.3);
+    const len=44+Math.random()*18,w=4+Math.random()*5;
+    const rg=g.createLinearGradient(0,-len,0,len);
     rg.addColorStop(0,'rgba(255,220,140,0)');rg.addColorStop(.5,'rgba(255,230,170,.9)');rg.addColorStop(1,'rgba(255,220,140,0)');
-    g.fillStyle=rg;g.fillRect(-3,-30,6,60);
+    g.fillStyle=rg;g.fillRect(-w/2,-len,w,len*2);
   }
+  const core=g.createRadialGradient(0,0,1,0,0,26); // the hot heart of it
+  core.addColorStop(0,'rgba(255,252,230,1)');
+  core.addColorStop(.4,'rgba(255,225,150,.75)');
+  core.addColorStop(1,'rgba(255,190,90,0)');
+  g.fillStyle=core;g.beginPath();g.arc(0,0,26,0,TAU);g.fill();
   const mat=new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,
     opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
   mat.color.setRGB(5,3.4,1.4);
@@ -3961,23 +3967,23 @@ const truckPaint=(()=>{
   t.colorSpace=THREE.SRGBColorSpace;return t;
 })();
 function nameTex(name){
-  const c=document.createElement('canvas');c.width=256;c.height=128;
+  const c=document.createElement('canvas');c.width=512;c.height=256;
   const g=c.getContext('2d');
-  g.fillStyle='#4f5340';g.fillRect(0,0,256,128);
-  for(let i=0;i<700;i++){const v=60+Math.random()*40|0;
-    g.fillStyle=`rgba(${v},${v+6},${v-10},.4)`;g.fillRect(Math.random()*256,Math.random()*128,3,2);}
-  g.strokeStyle='rgba(30,28,20,.5)';g.lineWidth=2;g.strokeRect(3,3,250,122);
-  g.font='44px "Saira Stencil One"';g.textAlign='center';
+  g.fillStyle='#4f5340';g.fillRect(0,0,512,256);
+  for(let i=0;i<2800;i++){const v=60+Math.random()*40|0;
+    g.fillStyle=`rgba(${v},${v+6},${v-10},.4)`;g.fillRect(Math.random()*512,Math.random()*256,4,3);}
+  g.strokeStyle='rgba(30,28,20,.5)';g.lineWidth=4;g.strokeRect(6,6,500,244);
+  g.font='88px "Saira Stencil One"';g.textAlign='center';
   g.fillStyle='rgba(226,216,186,.92)';
-  g.save();g.translate(128,80);g.rotate(-.02);g.fillText(name,0,0);g.restore();
-  g.fillStyle='rgba(140,47,35,.8)';g.font='17px "Special Elite"';
-  g.fillText('GREYFIELD MOTOR POOL',128,108);
+  g.save();g.translate(256,160);g.rotate(-.02);g.fillText(name,0,0);g.restore();
+  g.fillStyle='rgba(140,47,35,.8)';g.font='34px "Special Elite"';
+  g.fillText('GREYFIELD MOTOR POOL',256,216);
   for(let i=0;i<5;i++){ // scars over the paint
-    g.strokeStyle='rgba(25,22,16,.5)';g.lineWidth=1+Math.random()*2;
-    g.beginPath();const y=Math.random()*128;g.moveTo(Math.random()*80,y);
-    g.lineTo(80+Math.random()*170,y+(Math.random()*30-15));g.stroke();
+    g.strokeStyle='rgba(25,22,16,.5)';g.lineWidth=2+Math.random()*4;
+    g.beginPath();const y=Math.random()*256;g.moveTo(Math.random()*160,y);
+    g.lineTo(160+Math.random()*340,y+(Math.random()*60-30));g.stroke();
   }
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
 }
 function buildTruckMesh(name){
   const g=new THREE.Group();
