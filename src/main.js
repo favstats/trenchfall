@@ -6287,6 +6287,66 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
   if(bsv&&bsv.runSeed){$('contB').style.display='';
     $('contBms').textContent='night '+bsv.wave+' held · '+bsv.crew.length+' still on the wall';}
 }catch(e){}
+(function paintCards(){ // each mode wears a postcard of its own weather
+  const paint=(id,fn)=>{const cv=document.getElementById(id);if(!cv)return;
+    fn(cv.getContext('2d'),cv.width,cv.height);};
+  paint('artCamp',(g,w,h)=>{ // the road west at last light
+    const sky=g.createLinearGradient(0,0,0,h);
+    sky.addColorStop(0,'#1c2026');sky.addColorStop(.62,'#7a5a3a');sky.addColorStop(1,'#2e2a20');
+    g.fillStyle=sky;g.fillRect(0,0,w,h);
+    const sun=g.createRadialGradient(w*.2,h*.5,2,w*.2,h*.5,30);
+    sun.addColorStop(0,'rgba(255,190,120,.95)');sun.addColorStop(1,'rgba(255,190,120,0)');
+    g.fillStyle=sun;g.fillRect(0,0,w,h);
+    g.fillStyle='#0c0b08';g.beginPath();g.moveTo(0,h*.66);
+    for(let x=0;x<=w;x+=12)g.lineTo(x,h*.66-Math.random()*11);
+    g.lineTo(w,h*.66);g.closePath();g.fill();
+    g.fillStyle='#15130e';g.fillRect(0,h*.66,w,h*.34);
+    g.fillStyle='#26211a';g.beginPath();
+    g.moveTo(w*.40,h);g.lineTo(w*.51,h*.66);g.lineTo(w*.55,h*.66);g.lineTo(w*.80,h);g.closePath();g.fill();
+    g.fillStyle='#0a0908';g.fillRect(w*.46,h*.50,28,13);g.fillRect(w*.49,h*.44,13,8);
+    g.fillStyle='#ffd9a0';g.fillRect(w*.46,h*.57,3,2);
+  });
+  paint('artBast',(g,w,h)=>{ // the wall under the blood moon
+    const sky=g.createLinearGradient(0,0,0,h);
+    sky.addColorStop(0,'#0a0e18');sky.addColorStop(1,'#1a2030');
+    g.fillStyle=sky;g.fillRect(0,0,w,h);
+    for(let i=0;i<42;i++){g.globalAlpha=Math.random()*.8;g.fillStyle='#fff';
+      g.fillRect(Math.random()*w,Math.random()*h*.45,1.4,1.4);}g.globalAlpha=1;
+    const mr=g.createRadialGradient(w*.8,h*.2,2,w*.8,h*.2,20);
+    mr.addColorStop(0,'rgba(255,110,70,.95)');mr.addColorStop(1,'rgba(255,110,70,0)');
+    g.fillStyle=mr;g.fillRect(0,0,w,h);
+    g.fillStyle='#06070a';g.fillRect(0,h*.58,w,h*.42);
+    for(let x=4;x<w;x+=24)g.fillRect(x,h*.49,13,h*.1);
+    g.fillStyle='#ff9840';for(const bx of[.16,.46,.76])g.fillRect(w*bx,h*.53,3,3);
+  });
+  paint('artWand',(g,w,h)=>{ // one walker under the cold fire
+    const sky=g.createLinearGradient(0,0,0,h);
+    sky.addColorStop(0,'#070a12');sky.addColorStop(1,'#11161f');
+    g.fillStyle=sky;g.fillRect(0,0,w,h);
+    for(let i=0;i<48;i++){g.globalAlpha=Math.random()*.9;g.fillStyle='#fff';
+      g.fillRect(Math.random()*w,Math.random()*h*.6,1.3,1.3);}g.globalAlpha=1;
+    for(let x=0;x<w;x+=4){
+      g.fillStyle='rgba(60,220,140,'+(.09+.09*Math.sin(x*.05))+')';
+      g.fillRect(x,h*.07+Math.sin(x*.03)*9,3,h*.32);
+    }
+    g.fillStyle='#0b0d08';g.fillRect(0,h*.78,w,h*.22);
+    g.fillStyle='#05060a';g.fillRect(w*.5-2,h*.61,4,17);g.fillRect(w*.5-1,h*.58,5,4);
+    g.fillStyle='rgba(255,200,120,.85)';g.fillRect(w*.5+7,h*.74,2,2);
+  });
+})();
+{ // the bastion card remembers its pace
+  const pr=document.getElementById('paceRow');
+  if(pr){
+    const cur=localStorage.getItem('tlr_bast_pace')||'nights';
+    for(const el of pr.querySelectorAll('.paceOpt')){
+      if(el.dataset.pace===cur)el.classList.add('on');
+      el.addEventListener('click',ev=>{ev.stopPropagation();
+        localStorage.setItem('tlr_bast_pace',el.dataset.pace);
+        for(const o of pr.querySelectorAll('.paceOpt'))o.classList.toggle('on',o===el);
+      });
+    }
+  }
+}
 $('wandBtn').addEventListener('click',()=>startWander(false));
 $('contW').addEventListener('click',()=>startWander(true));
 try{const wsv=JSON.parse(localStorage.getItem('tlr_wander'));
@@ -7397,7 +7457,7 @@ function updateHUD(dt){
       :BAST.on?(BAST.wave>0?'NIGHT '+BAST.wave:'STAND TO'):(G.wave>0?'WAVE '+G.wave:'PREPARE');
     $('waveSub').textContent=WANDER.on
       ?Math.floor(WANDER.t/60)+'m walked · '+WANDER.loot.filter(L=>!L.taken).length+' caches left · hostiles '+alive
-      :G.spawnLeft+alive>0?'hostiles: '+(alive+G.spawnLeft+(G.bruteLeft||0)):'next assault '+Math.ceil(BAST.on?BAST.interT:G.intermission)+'s';
+      :G.spawnLeft+alive>0?'hostiles: '+(alive+G.spawnLeft+(G.bruteLeft||0)):'next assault '+Math.ceil(BAST.on?(BAST.pace==='relent'?(BAST._nextT||0):BAST.interT):G.intermission)+'s';
   }
   if(chainT>0){chainT-=dt;if(chainT<=0)chain=0;}
   const ct=$('chainTag');
@@ -7978,6 +8038,7 @@ function startBastion(load){
   buildWorld((BAST.runSeed^0x9e3779b9)>>>0);
   setSeed((BAST.runSeed^0x51ed2701)>>>0);   // the fort dresses the same way every time
   BAST.fort=sv?(sv.fort||'ridge'):(netStart&&netStart.fort?netStart.fort:(window.__fortKind||spick(['ridge','helm','tiers','twins'])));
+  BAST.pace=localStorage.getItem('tlr_bast_pace')||'nights';BAST._nextT=null;
   buildFort(BAST.fort);
   Object.assign(G,{state:'play',wave:0,kills:0,score:0,scrap:60,dirt:0,
     items:{nade:3,molotov:1,mine:2,medkit:1,flare:2,rocket:2},
@@ -8095,8 +8156,18 @@ function bastionUpdate(dt){
     if(BAST.cleared&&BAST.wave>0&&BAST.wave%3===0&&!BAST.reqDone){
       BAST.reqDone=true;bastionRequisition();
     }
-    BAST.interT-=dt;
-    if(BAST.interT<=0){BAST.interT=8;BAST.cleared=false;BAST.reqDone=false;bastionWave();}
+    if(BAST.pace!=='relent'||BAST.wave===0){
+      BAST.interT-=dt;
+      if(BAST.interT<=0){BAST.interT=8;BAST.cleared=false;BAST.reqDone=false;bastionWave();}
+    }
+  }
+  // the tide: the next assault rises on its own clock, quiet or not
+  if(BAST.pace==='relent'&&BAST.wave>0){
+    if(G.spawnLeft<=0&&G.bruteLeft<=0&&BAST._nextT==null)BAST._nextT=16;
+    if(BAST._nextT!=null){
+      BAST._nextT-=dt;
+      if(BAST._nextT<=0){BAST._nextT=null;BAST.cleared=false;BAST.reqDone=false;saveBastion();bastionWave();}
+    }
   }
   // the helicopter
   BAST.heliT-=dt;

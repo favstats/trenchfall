@@ -512,3 +512,18 @@ body.hudmin #waveBox,body.hudmin #depotBox,body.hudmin #compass{display:none!imp
 #convoyBars{background:none;border:none;box-shadow:none;padding:0}
 .tbar .tn{font-size:9px;letter-spacing:.28em;opacity:.7;text-shadow:0 1px 3px #000}
 .tbar .bar{height:4px;background:rgba(8,9,6,.55)}
+
+/* ---- mode title cards ---- */
+#menu.cards{display:flex;gap:18px;justify-content:center;align-items:stretch;flex-wrap:wrap;max-width:980px;margin:0 auto}
+.card{width:280px;background:rgba(14,15,10,.82);border:1px solid rgba(201,189,146,.28);
+  padding:0 0 12px;text-align:center;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card:hover{transform:translateY(-4px);border-color:rgba(232,116,44,.7);box-shadow:0 14px 50px rgba(0,0,0,.55)}
+.cardArt{display:block;width:100%;height:auto;border-bottom:1px solid rgba(201,189,146,.25)}
+.cardTitle{font-family:'Saira Stencil One',sans-serif;font-size:21px;letter-spacing:.14em;color:#e6dcb8;margin:10px 4px 2px}
+.cardSub{font-size:11.5px;color:#8a8068;letter-spacing:.06em;margin:0 10px 8px;line-height:1.5}
+.card .mItem{font-size:15px;margin:2px 12px;padding:7px 4px}
+.paceRow{margin-top:7px;font-size:11px;letter-spacing:.12em;color:#7a7d55}
+.paceOpt{cursor:pointer;padding:2px 7px;border:1px solid rgba(122,125,85,.4);margin:0 3px;color:#9a9576}
+.paceOpt.on{color:#e8742c;border-color:#e8742c}
+.paceOpt:hover{border-color:rgba(232,116,44,.6)}
+.underCards{margin-top:14px;display:flex;gap:26px;justify-content:center}

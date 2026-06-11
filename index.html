@@ -62,16 +62,37 @@
   <div id="bootTag">HOLD THE WALL · WALK THE ROAD WEST</div>
   <h1 class="stencil" id="bootTitle">TRENCHFALL</h1>
   <div class="tag2" id="bootSub">every road is different · the dead remember every one</div>
-  <div id="menu">
-    <div class="mItem" id="contBtn" style="display:none">CONTINUE THE ROAD</div>
-    <div class="mItem" id="startBtn">NEW CAMPAIGN<span class="ms">the convoy · permadeath · always different</span></div>
-    <div class="mItem" id="bastBtn">THE BASTION<span class="ms" id="bastBest">horde hold · one wall · endless nights</span></div>
-    <div class="mItem" id="coopBtn">CO-OP WALL<span class="ms">2-4 players · one host · shared cache</span></div>
-    <div class="mItem" id="contB" style="display:none">CONTINUE THE WALL<span class="ms" id="contBms"></span></div>
-    <div class="mItem" id="wandBtn">WANDER<span class="ms">open country · no road · just you and the dark</span></div>
-    <div class="mItem" id="contW" style="display:none">CONTINUE THE WANDER<span class="ms" id="contWms"></span></div>
+  <div id="menu" class="cards">
+    <div class="card">
+      <canvas class="cardArt" id="artCamp" width="280" height="120"></canvas>
+      <div class="cardTitle">THE ROAD WEST</div>
+      <div class="cardSub">convoy campaign · permadeath · every road different</div>
+      <div class="mItem" id="startBtn">NEW CAMPAIGN</div>
+      <div class="mItem" id="contBtn" style="display:none">CONTINUE THE ROAD</div>
+    </div>
+    <div class="card">
+      <canvas class="cardArt" id="artBast" width="280" height="120"></canvas>
+      <div class="cardTitle">THE BASTION</div>
+      <div class="cardSub" id="bastBest">horde hold · four forts · the long night</div>
+      <div class="mItem" id="bastBtn">STAND TO</div>
+      <div class="mItem" id="contB" style="display:none">CONTINUE THE WALL<span class="ms" id="contBms"></span></div>
+      <div class="mItem" id="coopBtn">CO-OP WALL<span class="ms">2-4 players · one host · shared cache</span></div>
+      <div class="paceRow" id="paceRow">PACE
+        <span class="paceOpt" data-pace="nights" title="assaults with a breath between">NIGHTS</span>
+        <span class="paceOpt" data-pace="relent" title="the next wave rises on a timer, quiet or not">THE TIDE</span>
+      </div>
+    </div>
+    <div class="card">
+      <canvas class="cardArt" id="artWand" width="280" height="120"></canvas>
+      <div class="cardTitle">WANDER</div>
+      <div class="cardSub">open country · the walker's map · no road home</div>
+      <div class="mItem" id="wandBtn">SET OUT</div>
+      <div class="mItem" id="contW" style="display:none">CONTINUE THE WANDER<span class="ms" id="contWms"></span></div>
+    </div>
+  </div>
+  <div class="underCards">
     <div class="mItem" id="mHow">HOW TO PLAY</div>
-    <div class="mItem" onclick="location.href='skirmish.html'" style="font-size:15px;opacity:.75">SKIRMISH<span class="ms">the classic depot defense</span></div>
+    <div class="mItem" onclick="location.href='skirmish.html'" style="opacity:.75">SKIRMISH · the classic depot defense</div>
   </div>
   <div id="howBox" style="display:none">
     <div class="ctl">
