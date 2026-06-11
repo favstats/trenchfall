@@ -3101,6 +3101,7 @@ function spawnZombie(kindIn){
   };
   zb.speed*=.85;zb.maxhp=zb.hp;
   zb.hairC=!zb.hat&&Math.random()<.66?HAIR_COL[Math.floor(Math.random()*HAIR_COL.length)]:null;
+  if(zb.brute)zb.armS=.2; // a brute leads with both hands, always
   burst(x,heightAt(x,z)+.3,z,kind==='colossus'?34:12,0x5a4326,3,4);
   if(kind==='colossus')SFX.colossus();
   zombies.push(zb);
@@ -3297,6 +3298,7 @@ function updateZombies(dt,t){
       if(zb.atkT<=0){
         if(zb.brute){
           zb.atkT=1.6;
+          zb.swingT=.55;            // both fists over the head, then down through the world
           SFX.slam();
           const big=zb.kind==='colossus';
           const sx=zb.x+Math.sin(zb.face)*(big?3:1.6),sz=zb.z+Math.cos(zb.face)*(big?3:1.6);
@@ -3312,6 +3314,7 @@ function updateZombies(dt,t){
           else if(tg.kind==='ally')damageAlly(tg.ref,big?60:28);
         }else{
           zb.atkT=.95;
+          zb.swingT=.42;zb.swingArm=Math.random()<.5?-1:1; // one clawed swipe
           if(tg.kind==='player')mpDamageTarget(tg,8,zb);
           else if(tg.kind==='depot')damageDepot(7);
           else if(tg.kind==='truck')damageTruck(9,tg.ref);
@@ -3338,6 +3341,14 @@ function updateZombies(dt,t){
     zb.twitchT-=dt;
     if(zb.twitchT<=0){zb.twitchT=rand(2.5,9);zb.twitching=rand(.2,.5);}
     const spz=zb.twitching>0?(zb.twitching-=dt,Math.sin(t*43+zb.phase)*.1):0;
+    /* the blow: a windup, then the whole body thrown into it */
+    zb.swingT=Math.max(0,(zb.swingT||0)-dt);
+    let swA=null,swPitch=0;
+    if(zb.swingT>0){
+      const dur=zb.brute?.55:.42,k=clamp(1-zb.swingT/dur,0,1);
+      swA=k<.35?lerp(-.5,-2,k/.35):lerp(-2,.6,(k-.35)/.65);
+      swPitch=k<.35?lerp(0,-.12,k/.35):lerp(-.12,.3,(k-.35)/.65);
+    }
     /* the grasp: arms come up as it closes on meat */
     const meat=(tg.kind==='player'||tg.kind==='ally'||tg.kind==='truck'||tg.kind==='turret')
       &&d<(zb.kind==='runner'?3.5:8)&&!crawl; // a runner pumps its arms until the last stride
@@ -3346,7 +3357,7 @@ function updateZombies(dt,t){
     const bob=Math.abs(wk)*(crawl?.04:.07)*(zb.drag?.5:1);
     /* the weight goes over the stance leg: the whole body ferries side to side */
     const lat=crawl?0:ck*.05*(1+Math.abs(zb.limp)*1.6);
-    _E.set((crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4,zb.face,sway);_Q.setFromEuler(_E);
+    _E.set((crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,zb.face,sway);_Q.setFromEuler(_E);
     _P.set(zb.x+Math.cos(zb.face)*lat,gy+bob+(crawl?-.25:0),zb.z-Math.sin(zb.face)*lat);
     crawl?_S.set(zb.scale,zb.scale,zb.scale*.9):_S.setScalar(zb.scale);
     _M.compose(_P,_Q,_S);
@@ -3379,11 +3390,16 @@ function updateZombies(dt,t){
       aL=lerp(aL,-.42+tr,zb.reach);aR=lerp(aR,-.36-tr,zb.reach);
       eLb=lerp(eLb,.16-tr,zb.reach);eRb=lerp(eRb,.2+tr,zb.reach);
     }
+    if(swA!==null){ // the strike overrides everything else the arms had planned
+      if(zb.brute){aL=swA;aR=swA*.92;eLb=eRb=.18;}
+      else if((zb.swingArm||1)<0){aL=swA;eLb=.28;}
+      else{aR=swA;eRb=.28;}
+    }
     /* the head: a permanent wrong tilt, a slow loll, steadied when it fixes on prey */
     const hX2=(crawl?-.55:sprint?-.32:.06)+Math.sin(t*zb.lollSp+zb.phase)*.1+spz*1.4; // a sprinter's head comes up, eyes on you
     const hZ2=zb.loll*(1-zb.reach*.55)+Math.sin(t*zb.lollSp*.73+zb.phase*2)*.07;
     /* the jaw: slack at rest, gaping and working as it closes — chewing on the air */
-    const jaw=.08+Math.abs(spz)*2+zb.reach*(.5+Math.sin(t*9+zb.phase)*.22);
+    const jaw=.08+Math.abs(spz)*2+zb.reach*(.5+Math.sin(t*9+zb.phase)*.22)+(swA!==null?.45:0); // it screams into the blow
     const flash=zb.hitT&&zb.hitT>0;
     if(flash)zb.hitT-=dt;
     let colC,colF;
