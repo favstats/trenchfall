@@ -3461,6 +3461,28 @@ try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
     scene.add(rig);
     GLBZ.rigs.push({rig,mixer,act,mats,head,bones});
   }
+  // the same soldier, still breathing: six rigs for the riflemen
+  for(let i=0;i<6;i++){
+    const rig=skClone(gltf.scene);
+    const mats=[];let hand=null;
+    rig.traverse(o=>{
+      if(o.isMesh){
+        o.material=o.material.clone();
+        o.material.roughness=.92;
+        deathlit(o.material);
+        mats.push(o.material);
+        o.castShadow=true;o.frustumCulled=false;
+      }
+      if(o.isBone&&/RightHand$/.test(o.name)&&!hand)hand=o;
+    });
+    if(hand)hand.add(buildHandRifle());
+    rig.visible=false;
+    const mixer=new THREE.AnimationMixer(rig);
+    const act={};
+    for(const c of gltf.animations){act[c.name]=mixer.clipAction(c);act[c.name].play();act[c.name].setEffectiveWeight(0);}
+    scene.add(rig);
+    ARIGS.push({rig,mixer,act,mats,a:null});
+  }
   GLBZ.ready=true;
 },undefined,e=>console.warn('Soldier.glb missing; the procedural rigs carry on',e));}
 catch(e){console.warn('no asset loading here; the procedural rigs carry on');}
@@ -3532,6 +3554,35 @@ function clearWounds(i){
     if(w.parent)w.parent.remove(w);
     w.userData.slot=-1;w.visible=false;
   }
+}
+/* ---- the riflemen get the same bones: ally rigs, armor kept, rifle in hand ---- */
+const ARIGS=[];
+function buildHandRifle(){
+  const g=new THREE.Group();
+  const wood=new THREE.MeshStandardMaterial({color:0x5c4226,roughness:.75});
+  const steel=new THREE.MeshStandardMaterial({color:0x60605a,roughness:.4,metalness:.6});
+  const dark=new THREE.MeshStandardMaterial({color:0x33332b,roughness:.5,metalness:.45});
+  const add=(geo,m,x,y,z,rx=0)=>{const me=new THREE.Mesh(geo,m);me.position.set(x,y,z);me.rotation.x=rx;me.castShadow=true;g.add(me);return me;};
+  add(new THREE.CylinderGeometry(.034,.044,.32,10),wood,0,0,.2,Math.PI/2);
+  add(new THREE.BoxGeometry(.048,.055,.15),dark,0,.01,.02);
+  add(new THREE.CylinderGeometry(.012,.01,.46,10),steel,0,.012,-.28,Math.PI/2);
+  g.position.set(.02,.18,.04);
+  g.rotation.set(-Math.PI/2+.15,0,Math.PI/2);
+  return g;
+}
+function poseAllyRig(a,gy,stepping,spd,dt){
+  const AR=ARIGS[a._rig];if(!AR)return;
+  const r=AR.rig;
+  r.visible=true;
+  r.position.set(a.x,a.down?gy+.15:gy,a.z);
+  r.rotation.set(a.down?-1.45:0,(a.face||0)+Math.PI,0);
+  r.scale.setScalar((a.mesh&&a.mesh.scale.x)||1);
+  const runK=clamp((spd-3)/2,0,1),walkK=(1-runK)*(stepping?1:0);
+  const tw={Idle:Math.max(0,1-walkK-runK),Walk:walkK,Run:runK};
+  for(const k in tw){const ac=AR.act[k];if(!ac)continue;
+    const w=ac.getEffectiveWeight();ac.setEffectiveWeight(w+(tw[k]-w)*Math.min(1,dt*6));}
+  if(AR.act.Walk)AR.act.Walk.setEffectiveTimeScale(clamp(spd/1.55,.6,1.6));
+  AR.mixer.update(dt);
 }
 let zHats;
 {
@@ -4685,10 +4736,12 @@ function damageAlly(a,d){
   }
 }
 function updateAllies(dt,t){
+  for(const sl of ARIGS)if(sl.a&&!allies.includes(sl.a)){sl.a=null;sl.rig.visible=false;}
   for(const a of allies){
     if(a.down){ // bleeding out where they fell
       a.downT-=dt;
       a.mesh.position.y=heightAt(a.x,a.z)+.25;
+      if(a._rig!=null&&ARIGS[a._rig]&&ARIGS[a._rig].a===a)poseAllyRig(a,heightAt(a.x,a.z),false,0,dt);
       if(Math.random()<dt*.5)say(a.name,pick(['Still here. Hurry.','Don\'t leave me on this wall.','I can hear them...']),2600);
       if(a.downT<=0){
         scene.remove(a.mesh);allies.splice(allies.indexOf(a),1);
@@ -4824,6 +4877,12 @@ function updateAllies(dt,t){
     const gy=heightAt(a.x,a.z);
     a.mesh.position.set(a.x,gy+(stepping?Math.abs(Math.sin(a.walkPh||0))*.05:0),a.z);
     a.mesh.rotation.y=a.face;
+    if(GLBZ.ready&&a._rig==null) // a soldier's bones for a soldier
+      for(let ri=0;ri<ARIGS.length;ri++)if(!ARIGS[ri].a){ARIGS[ri].a=a;a._rig=ri;break;}
+    if(a._rig!=null&&ARIGS[a._rig]&&ARIGS[a._rig].a===a){
+      a.mesh.visible=false;
+      poseAllyRig(a,gy,stepping,stepping?asp:0,dt);
+    }
     a.mesh.userData.rifle.position.z=(a.mesh.userData.rifleZ??-.32)-a.recoil*.06;
   }
 }
