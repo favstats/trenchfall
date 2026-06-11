@@ -1,7 +1,8 @@
 import {createServer} from 'node:http';
 import {WebSocketServer} from 'ws';
 
-const PORT=Number(process.env.COOP_PORT||8787);
+const PORT=Number(process.env.PORT||process.env.COOP_PORT||8787);
+const HOST=process.env.HOST||(process.env.PORT?'0.0.0.0':'127.0.0.1');
 const RECONNECT_MS=45_000;
 const ROOM_TTL_MS=20*60_000;
 const rooms=new Map();
@@ -136,6 +137,6 @@ wss.on('connection',ws=>{
   });
 });
 
-http.listen(PORT,'127.0.0.1',()=>{
-  console.log(`TRENCHFALL co-op relay listening on ws://127.0.0.1:${PORT}`);
+http.listen(PORT,HOST,()=>{
+  console.log(`TRENCHFALL co-op relay listening on ${HOST}:${PORT}`);
 });

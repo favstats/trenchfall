@@ -5144,8 +5144,12 @@ function mpToken(){
 }
 function mpInitLobby(){
   const tag=document.createElement('div');tag.id='mpTag';tag.style.display='none';document.body.appendChild(tag);
+  const relayParam=new URLSearchParams(location.search).get('relay');
+  const localHost=location.hostname==='127.0.0.1'||location.hostname==='localhost'||location.protocol==='file:';
+  const defaultRelay=localHost?'ws://127.0.0.1:8787':'wss://trenchfall-coop-relay.onrender.com';
   const savedName=localStorage.getItem('trenchfall_mp_name')||'Rifleman';
-  const savedRelay=localStorage.getItem('trenchfall_mp_relay')||'ws://127.0.0.1:8787';
+  const savedRelay=relayParam||localStorage.getItem('trenchfall_mp_relay')||defaultRelay;
+  if(relayParam)localStorage.setItem('trenchfall_mp_relay',relayParam);
   $('coopName').value=savedName;$('coopRelay').value=savedRelay;
   $('coopBtn').addEventListener('click',()=>{$('coop').classList.add('show');mpRenderPeers();});
   $('coopBack').addEventListener('click',()=>{$('coop').classList.remove('show');});

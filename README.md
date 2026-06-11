@@ -50,3 +50,22 @@ Web Audio buffers from the Kenney CC0 packs in `public/audio/kenney/`.
 ## Hosting
 Run `npm run build` and host the `dist/` folder on any static host. For GitHub Pages,
 publish `dist/` rather than the repository root.
+
+## Co-op Relay
+The co-op wall uses a small WebSocket relay. Run it locally with:
+
+```sh
+npm run coop
+```
+
+For free hobby hosting, this repo includes `render.yaml` for a Render Free Web
+Service. Deploy the repo as a Render Blueprint, then use the service URL as the
+co-op relay, for example:
+
+```text
+wss://trenchfall-coop-relay.onrender.com
+```
+
+If Render gives the service a different URL, paste that `wss://` URL into the
+co-op lobby's relay field. The GitHub Pages build can host the game client, but
+the relay must run on Render or another WebSocket-capable host.
