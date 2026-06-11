@@ -78,6 +78,11 @@ const softDot=(()=>{
   const rg=g.createRadialGradient(16,16,1,16,16,15);
   rg.addColorStop(0,'rgba(255,255,255,1)');rg.addColorStop(.55,'rgba(255,255,255,.6)');rg.addColorStop(1,'rgba(255,255,255,0)');
   g.fillStyle=rg;g.fillRect(0,0,32,32);
+  // transparent canvas pixels are BLACK at zero alpha: mipmaps average that black
+  // into the dot and far sprites render as dark squares. force RGB white everywhere.
+  const img=g.getImageData(0,0,32,32),d=img.data;
+  for(let i=0;i<d.length;i+=4){d[i]=d[i+1]=d[i+2]=255;}
+  g.putImageData(img,0,0);
   return new THREE.CanvasTexture(c);
 })();
 // the sun has a body: an HDR core that blooms, a halo that breathes
@@ -2214,6 +2219,9 @@ const smokes=[];
   const rg=g.createRadialGradient(32,32,4,32,32,30);
   rg.addColorStop(0,'rgba(238,232,216,.75)');rg.addColorStop(1,'rgba(238,232,216,0)');
   g.fillStyle=rg;g.fillRect(0,0,64,64);
+  {const img=g.getImageData(0,0,64,64),d=img.data;   // keep mips from pulling black in
+    for(let i=0;i<d.length;i+=4){d[i]=238;d[i+1]=232;d[i+2]=216;}
+    g.putImageData(img,0,0);}
   const tex=new THREE.CanvasTexture(c);
   for(let i=0;i<12;i++){
     const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,opacity:0,depthWrite:false}));
@@ -2247,7 +2255,7 @@ const pPos=new Float32Array(MAXP*3),pCol=new Float32Array(MAXP*3);
 pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
 pGeo.setAttribute('color',new THREE.BufferAttribute(pCol,3));
 const points=new THREE.Points(pGeo,new THREE.PointsMaterial({size:.3,vertexColors:true,
-  map:softDot,transparent:true,depthWrite:false}));
+  map:softDot,transparent:true,depthWrite:false,alphaTest:.05})); // cut the quad's dead corners
 points.frustumCulled=false;scene.add(points);
 const pVel=new Float32Array(MAXP*3),pLife=new Float32Array(MAXP);
 let pHead=0;
@@ -2343,6 +2351,9 @@ const decals=[];
       g.fillStyle=`rgba(255,255,255,${rand(.35,.8)})`;
       g.beginPath();g.ellipse(64+Math.cos(a)*r,64+Math.sin(a)*r,rand(1.2,4),rand(1,3),a,0,TAU);g.fill();
     }
+    const img=g.getImageData(0,0,128,128),d=img.data; // white RGB everywhere: mips stay clean
+    for(let i=0;i<d.length;i+=4){d[i]=d[i+1]=d[i+2]=255;}
+    g.putImageData(img,0,0);
     const t=new THREE.CanvasTexture(c);return t;
   })();
   const g=new THREE.CircleGeometry(.9,16);g.rotateX(-Math.PI/2);
