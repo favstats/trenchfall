@@ -2696,10 +2696,27 @@ const lampCone=(()=>{
 const vm=new THREE.Group();camera.add(vm);scene.add(camera);
 const gunModels=[];
 {
-  const dark=new THREE.MeshStandardMaterial({color:0x2e2e26,roughness:.42,metalness:.65,envMapIntensity:1.1});
+  const gunTex=(()=>{ // brushed, parkerized: machined steel is never one flat tone
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g2=c.getContext('2d'),img=g2.createImageData(128,128);
+    for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+      const i=(y*128+x)*4;
+      let v=205+Math.sin(x*.9+hash(0,y)*9)*9          // brushing along the machining direction
+            +(hash(x*3,y*7)-.5)*22                     // parkerized speckle
+            +fbm2(x*.06+50,y*.06+9,3)*26-13;           // faint wear clouds
+      img.data[i]=v;img.data[i+1]=v;img.data[i+2]=v*1.02;img.data[i+3]=255;
+    }
+    g2.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;
+    return t;
+  })();
+  const dark=new THREE.MeshStandardMaterial({color:0x3a3a30,roughness:.42,metalness:.65,envMapIntensity:1.1,
+    map:gunTex,bumpMap:gunTex,bumpScale:.06});
   const wood=new THREE.MeshStandardMaterial({color:0x6b4f30,map:woodTex,roughness:.72,envMapIntensity:.6,
     bumpMap:woodTex,bumpScale:.08}); // grain you can almost feel at arm's length
-  const steel=new THREE.MeshStandardMaterial({color:0x55554e,roughness:.28,metalness:.88,envMapIntensity:1.4});
+  const steel=new THREE.MeshStandardMaterial({color:0x6b6b62,roughness:.28,metalness:.88,envMapIntensity:1.4,
+    map:gunTex,bumpMap:gunTex,bumpScale:.05});
   const tank=new THREE.MeshStandardMaterial({color:0x7a2a1c,roughness:.45,metalness:.5,envMapIntensity:1});
   const box=(w,h,d,m)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);
   const cyl=(r,l,m)=>{const c=new THREE.Mesh(new THREE.CylinderGeometry(r,r,l),m);c.rotation.x=Math.PI/2;return c;};
@@ -2801,9 +2818,13 @@ const gunModels=[];
       sling(g,0,-.06,.45,0,-.002,-.45);
     },
     g=>{ // M1919 SUPPORT: the hundred-round argument, fully plumbed
-      const rec3=box(.08,.096,.36,dark);rec3.position.set(0,.02,.04);g.add(rec3);
-      const cover=box(.084,.02,.3,steel);cover.position.set(0,.075,.0);g.add(cover);          // top cover overlaps the receiver
-      const latch=box(.02,.012,.05,steel);latch.position.set(0,.088,.1);g.add(latch);
+      const rec3=box(.078,.09,.36,dark);rec3.position.set(0,.02,.04);g.add(rec3);
+      for(const sx of[-1,1]){ // riveted side plates, the way Browning meant it
+        const plate=box(.007,.082,.32,steel);plate.position.set(sx*.041,.02,.03);g.add(plate);
+        for(let r=0;r<5;r++)for(const ry of[.052,-.012]){
+          const riv=cap(.0045,steel);riv.position.set(sx*.0455,ry,-.09+r*.06);g.add(riv);}}
+      const cover=tube(.04,.04,.32,steel,14);cover.position.set(0,.062,.02);g.add(cover);     // rounded top cover, not a slab
+      const latch=box(.018,.012,.05,dark);latch.position.set(0,.104,.08);g.add(latch);
       const collar2=tube(.04,.036,.06,steel,14);collar2.position.set(0,.03,-.2);g.add(collar2);
       const jacket=tube(.034,.032,.34,dark);jacket.position.set(0,.03,-.39);g.add(jacket);
       for(let i3=0;i3<5;i3++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.0335,.004,5,12),steel);
