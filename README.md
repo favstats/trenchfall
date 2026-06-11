@@ -49,7 +49,15 @@ Web Audio buffers from the Kenney CC0 packs in `public/audio/kenney/`.
 
 ## Hosting
 Run `npm run build` and host the `dist/` folder on any static host. For GitHub Pages,
-publish `dist/` rather than the repository root.
+the repository publishes `dist/` through `.github/workflows/pages.yml` on every
+push to `main`.
+
+After GitHub Pages is enabled with **Source: GitHub Actions**, the public game
+client is:
+
+```text
+https://favstats.github.io/trenchfall/
+```
 
 ## Co-op Relay
 The co-op wall uses a small WebSocket relay. Run it locally with:
@@ -67,5 +75,5 @@ wss://trenchfall-coop-relay.onrender.com
 ```
 
 If Render gives the service a different URL, paste that `wss://` URL into the
-co-op lobby's relay field. The GitHub Pages build can host the game client, but
-the relay must run on Render or another WebSocket-capable host.
+co-op lobby's relay field. The GitHub Pages build hosts the game client, but the
+relay runs on Render or another WebSocket-capable host.
