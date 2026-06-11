@@ -6088,6 +6088,7 @@ function drawRouteMap(){
 }
 /* ---- endings ---- */
 function winCampaign(){
+  try{localStorage.setItem('tlr_best_camp',(+localStorage.getItem('tlr_best_camp')||0)+1);}catch(e){}
   CAMP.mode='epilogue';
   document.exitPointerLock&&document.exitPointerLock();
   const alive=compsAlive().length+(CAMP.flags.child===true?1:0);
@@ -6416,6 +6417,16 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
       });
     }
   }
+}
+{ // the cards keep score
+  try{
+    const bb=+localStorage.getItem('tlr_best_bast')||0;
+    if(bb&&$('bastBest'))$('bastBest').textContent='horde hold · four forts · best: night '+bb;
+    const bw=+localStorage.getItem('tlr_best_wand')||0,we=document.getElementById('wandBest');
+    if(bw&&we)we.textContent='open country · the walker\'s map · farthest: region '+bw;
+    const bc=+localStorage.getItem('tlr_best_camp')||0,ce=document.getElementById('campBest');
+    if(bc&&ce)ce.textContent='convoy campaign · permadeath · verdun reached '+bc+(bc===1?' time':' times');
+  }catch(e){}
 }
 $('wandBtn').addEventListener('click',()=>startWander(false));
 $('contW').addEventListener('click',()=>startWander(true));
@@ -8211,6 +8222,8 @@ function startBastion(load){
 }
 function bastionWave(){
   BAST.wave++;G.wave=Math.min(14,1+BAST.wave);
+  try{if(BAST.wave>(+localStorage.getItem('tlr_best_bast')||0))
+    localStorage.setItem('tlr_best_bast',BAST.wave);}catch(e){}
   G.spawnLeft=Math.round((14+BAST.wave*5)*(BAST.mod==='swarm'?1.7:1));
   G.bruteLeft=BAST.wave%4===0?Math.ceil(BAST.wave/4):0;
   BAST.colossus=BAST.wave%10===0;
@@ -8222,12 +8235,13 @@ function bastionWave(){
   if(BAST.mod==='fog'){wxNext=2;wxBlend=0;wxTimer=60;}
   SFX.waveHorn();
   if(BAST.wave%10===0){SFX.colossus();flashT=Math.max(flashT,.3);}
-  announce(BAST.wave%10===0?'NIGHT '+BAST.wave+' · IT WALKS':'NIGHT '+BAST.wave,
-    BAST.wave%10===0?'the trees are not falling. they are being stepped over.':
-    BAST.mod==='moon'?'runners\' moon: they are coming fast and screaming':
-    BAST.mod==='tide'?'the crawling tide: watch the grass, not the horizon':
-    BAST.mod==='fog'?'dead fog: you will hear them before you see them':
-    BAST.wave%4===0?'the ground west of the wall is moving wrong':'stand to the parapet');
+  if(BAST.pace!=='relent') // THE TIDE doesn't announce itself: it just keeps coming
+    announce(BAST.wave%10===0?'NIGHT '+BAST.wave+' · IT WALKS':'NIGHT '+BAST.wave,
+      BAST.wave%10===0?'the trees are not falling. they are being stepped over.':
+      BAST.mod==='moon'?'runners\' moon: they are coming fast and screaming':
+      BAST.mod==='tide'?'the crawling tide: watch the grass, not the horizon':
+      BAST.mod==='fog'?'dead fog: you will hear them before you see them':
+      BAST.wave%4===0?'the ground west of the wall is moving wrong':'stand to the parapet');
   // the wall mends a little between assaults; so do its people
   G.depotHp=Math.min(G.depotMax,G.depotHp+40);
   player.hp=Math.min(player.maxhp,player.hp+25);
@@ -8944,6 +8958,8 @@ function travelRegion(){
   fadeBlink();
   WANDER.saveRegions[WANDER.region]=captureRegionState();
   WANDER.region++;
+  try{if(WANDER.region>(+localStorage.getItem('tlr_best_wand')||0))
+    localStorage.setItem('tlr_best_wand',WANDER.region);}catch(e){}
   const heading=Math.abs(player.x)>Math.abs(player.z)?(player.x>0?'east':'west'):(player.z>0?'south':'north');
   player.x=-player.x*.88;player.z=-player.z*.88;
   buildWanderRegion(WANDER.region);
