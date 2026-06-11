@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TRENCHFALL · walk demo (after webgl_animation_walk)</title>
+<style>body{margin:0;overflow:hidden;background:#0d0e10}#hint{position:fixed;left:12px;top:10px;color:#cfc9b8;font:13px/1.5 monospace;text-shadow:0 1px 2px #000}</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="hint">WASD move &middot; SHIFT run &middot; drag to orbit<br>same rig &amp; blending as the in-game zombies</div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x16181c);
+scene.fog=new THREE.Fog(0x16181c,18,60);
+
+const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,200);
+camera.position.set(0,2,-4);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.enablePan=false;
+controls.maxPolarAngle=Math.PI/2-.05;controls.target.set(0,1,0);
+
+scene.add(new THREE.HemisphereLight(0xbfc8e0,0x33302a,1.4));
+const sun=new THREE.DirectionalLight(0xfff2dd,3.2);
+sun.position.set(6,10,4);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-12;sun.shadow.camera.right=12;
+sun.shadow.camera.top=12;sun.shadow.camera.bottom=-12;
+scene.add(sun);
+
+{ // the example's checkerboard, drawn by hand
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+    g.fillStyle=(x+y)%2?'#3c4046':'#2b2e33';g.fillRect(x*32,y*32,32,32);}
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(16,16);t.anisotropy=8;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(120,120),
+    new THREE.MeshStandardMaterial({map:t,roughness:.85}));
+  floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+}
+
+const group=new THREE.Group();scene.add(group);
+let mixer=null,act={},cur='Idle';
+new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
+  const model=gltf.scene;
+  model.traverse(o=>{if(o.isMesh){o.castShadow=true;}});
+  model.rotation.y=Math.PI;
+  group.add(model);
+  mixer=new THREE.AnimationMixer(model);
+  for(const c2 of gltf.animations){act[c2.name]=mixer.clipAction(c2);}
+  for(const k of['Idle','Walk','Run']){act[k].play();act[k].setEffectiveWeight(k==='Idle'?1:0);}
+});
+
+const keys={};
+addEventListener('keydown',e=>keys[e.code]=true);
+addEventListener('keyup',e=>keys[e.code]=false);
+
+const clock=new THREE.Clock();
+const _dir=new THREE.Vector3(),_q=new THREE.Quaternion(),_e=new THREE.Euler();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(.05,clock.getDelta());
+  let fx=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
+  let sx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
+  const moving=fx!==0||sx!==0;
+  const run=!!keys.ShiftLeft||!!keys.ShiftRight;
+  const want=moving?(run?'Run':'Walk'):'Idle';
+  if(mixer){
+    for(const k of['Idle','Walk','Run']){
+      const a=act[k],w=a.getEffectiveWeight();
+      a.setEffectiveWeight(w+((k===want?1:0)-w)*Math.min(1,dt*6));
+    }
+    mixer.update(dt);
+  }
+  if(moving){
+    const az=controls.getAzimuthalAngle();
+    const ang=az+Math.atan2(sx,fx)+Math.PI;          // face where you're going, camera-relative
+    _e.set(0,ang,0);_q.setFromEuler(_e);
+    group.quaternion.rotateTowards(_q,dt*8);
+    const v=run?5:1.8;                                // the example's velocities
+    _dir.set(Math.sin(ang+Math.PI),0,Math.cos(ang+Math.PI));
+    group.position.addScaledVector(_dir,v*dt);
+  }
+  controls.target.lerp(new THREE.Vector3(group.position.x,1,group.position.z),Math.min(1,dt*10));
+  controls.update();
+  renderer.render(scene,camera);
+}
+animate();
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
