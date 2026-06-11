@@ -6754,6 +6754,64 @@ function interact(){
              ['Walk on','two fires is one too many',null]]);
           return;
         }
+        if(s.kind==='tower'){
+          s.used=true;
+          markSeen(s.x,s.z,68);
+          G.score+=100;SFX.chime();
+          announce('THE WATCHTOWER','from up here the country admits what it has. marked on your map.');
+          WANDER.story.push('Climbed a watchtower in region '+WANDER.region+'.');
+          saveWander();
+          return;
+        }
+        if(s.kind==='grave'){
+          s.used=true;
+          if(Math.random()<.55){
+            const roll=Math.random();
+            if(roll<.4){G.scrap+=70;toast('UNDER THE MOUND: +70 SCRAP');}
+            else if(roll<.7){G.items.medkit++;player.reserve=Math.min(player.carryCap,player.reserve+40);toast('UNDER THE MOUND: A KIT AND 40 ROUNDS');}
+            else{G.items.nade+=2;toast('UNDER THE MOUND: ORDNANCE, STILL DRY');}
+            G.score+=80;SFX.chime();
+            WANDER.story.push('Robbed a grave in region '+WANDER.region+'. Needed it more than they did.');
+          }else{
+            say('THE COUNTRY','You knew better. Everyone knows better. Everyone digs anyway.',4200);
+            for(let i2=0;i2<6;i2++){const z2=spawnZombie();
+              if(z2){z2.x=s.x+rand(-7,7);z2.z=s.z+rand(-7,7);z2.rise=rand(.4,1.6);}}
+            WANDER.story.push('Dug where the crosses said not to, region '+WANDER.region+'.');
+            SFX.wail();
+          }
+          saveWander();
+          return;
+        }
+        if(s.kind==='wreck'){
+          s.used=true;
+          player.reserve=Math.min(player.carryCap,player.reserve+60);
+          G.items.flare+=2;if(player.owned[7])G.items.rocket++;
+          G.score+=150;SFX.chime();
+          toast('SPARROW\'S CARGO: +60 RDS · +2 FLARES'+(player.owned[7]?' · +1 ROCKET':''));
+          WANDER.story.push('Stripped a downed sparrow in region '+WANDER.region+'. Said thanks to the crew.');
+          saveWander();
+          return;
+        }
+        if(s.kind==='shrine'){
+          s.used=true;
+          player.maxhp=Math.min(140,player.maxhp+5);
+          player.hp=Math.min(player.maxhp,player.hp+20);
+          G.score+=60;SFX.chime();
+          say('YOU','One candle. Against all of it. Lighter anyway.',3600);
+          WANDER.story.push('Lit a candle in region '+WANDER.region+'.');
+          saveWander();
+          return;
+        }
+        if(s.kind==='battery'){
+          s.used=true;
+          G.items.nade+=2;G.items.molotov++;
+          if(player.owned[7])G.items.rocket+=2;else G.scrap+=45;
+          G.score+=80;SFX.chime();
+          toast('THE LIMBER HELD: +2 FRAGS · +1 BOTTLE'+(player.owned[7]?' · +2 ROCKETS':' · +45 SCRAP'));
+          WANDER.story.push('Salvaged a dead battery in region '+WANDER.region+'.');
+          saveWander();
+          return;
+        }
       }
     }
     for(const L of WANDER.loot){
@@ -7324,6 +7382,12 @@ function initSlots(){
   }
 }
 /* ---- the walker's map: what you've walked, you know (M, wander only) ---- */
+const POI_ICON={hermit:['⌂','#e8c050'],quester:['?','#d8c878'],drifter:['+','#9dd8a8'],stranded:['!','#7fa0c8'],
+  tower:['▲','#c8b078'],grave:['†','#b0a0c0'],wreck:['✕','#d88a6a'],shrine:['✚','#e8e0d0'],battery:['◎','#c8a890']};
+const POI_PROMPT={hermit:'<b>E</b> SIT AT THE HERMIT\'S FIRE',quester:'<b>E</b> HEAR THEM OUT',
+  drifter:'<b>E</b> SHARE THE DRIFTER\'S FIRE',stranded:'<b>E</b> REACH THEM IN TIME',
+  tower:'<b>E</b> CLIMB THE WATCHTOWER',grave:'<b>E</b> DIG. OR DON\'T.',
+  wreck:'<b>E</b> STRIP THE SPARROW',shrine:'<b>E</b> LIGHT A CANDLE',battery:'<b>E</b> SALVAGE THE BATTERY'};
 const SEEN_N=48;
 function markSeen(wx,wz,r){
   if(!WANDER.seen)return;
@@ -7355,7 +7419,7 @@ function toggleBigMap(force){
       'border:1px solid rgba(201,189,146,.4);box-shadow:0 20px 80px rgba(0,0,0,.7)';
     const leg=document.createElement('div');
     leg.style.cssText='color:#7a7d55;margin:9px;font-size:12px;letter-spacing:.08em;text-align:center';
-    leg.innerHTML='&#8962; HERMIT &middot; ? WORK &middot; + DRIFTER &middot; ! STRANDED &middot; &#9662; CACHE &middot; &#9760; DEN &middot; &#10038; LANDMARK &middot; &#9670; OBJECTIVE<br>[M] CLOSE &middot; the dark parts you have not walked yet';
+    leg.innerHTML='&#8962; HERMIT &middot; ? WORK &middot; + DRIFTER &middot; ! STRANDED &middot; &#9662; CACHE &middot; &#9760; DEN &middot; &#10038; LANDMARK &middot; &#9670; OBJECTIVE<br>&#9650; TOWER &middot; &dagger; GRAVE &middot; &#10005; WRECK &middot; &#10010; SHRINE &middot; &#9678; BATTERY &middot; [M] CLOSE &middot; the dark is what you have not walked';
     bigMapEl.appendChild(cap);bigMapEl.appendChild(cv);bigMapEl.appendChild(leg);
     document.body.appendChild(bigMapEl);
     bigMapC=cv.getContext('2d');
@@ -7400,8 +7464,7 @@ function drawBigMap(){
   for(const L of WANDER.loot)if(!L.taken&&seenAt(L.x,L.z))
     glyph(L.x,L.z,'\u25be',L.rich?'#e8742c':'#9dff70',16);
   for(const st of WANDER.sites)if(!st.used&&seenAt(st.x,st.z))
-    glyph(st.x,st.z,st.kind==='hermit'?'\u2302':st.kind==='quester'?'?':st.kind==='drifter'?'+':'!',
-      st.kind==='hermit'?'#e8c050':st.kind==='quester'?'#d8c878':st.kind==='drifter'?'#9dd8a8':'#7fa0c8');
+    glyph(st.x,st.z,(POI_ICON[st.kind]||['!','#7fa0c8'])[0],(POI_ICON[st.kind]||['!','#7fa0c8'])[1]);
   if(WANDER.den&&!WANDER.den.woken&&seenAt(WANDER.den.x,WANDER.den.z))
     glyph(WANDER.den.x,WANDER.den.z,'\u2620','#a3271e');
   const lm=WANDER.landmark;
@@ -7459,7 +7522,7 @@ function drawMap(){
   if(WANDER.on){
     for(const L of WANDER.loot)if(!L.taken)dot(L.x,L.z,L.rich?'#e8742c':'#9dff70',2.6);
     for(const s of WANDER.sites)if(!s.used)
-      dot(s.x,s.z,s.kind==='hermit'?'#e8c050':s.kind==='quester'?'#d8c878':s.kind==='drifter'?'#9dd8a8':'#7fa0c8',3);
+      dot(s.x,s.z,(POI_ICON[s.kind]||['!','#7fa0c8'])[1],3);
     const q=WANDER.quest;
     if(q&&q.taken&&!q.turned)dot(q.objDone?q.gx:q.x,q.objDone?q.gz:q.z,'#ffd060',3.4);
     if(WANDER.landmark&&!WANDER.landmark.found)dot(WANDER.landmark.x,WANDER.landmark.z,'#9fb4d8',3);
@@ -7606,8 +7669,7 @@ function updateHUD(dt){
         put(Math.atan2(WANDER.den.x-player.x,WANDER.den.z-player.z),'☠','cpsPoi','#a3271e');
       for(const s2 of WANDER.sites)if(!s2.used)
         put(Math.atan2(s2.x-player.x,s2.z-player.z),
-          s2.kind==='hermit'?'⌂':s2.kind==='quester'?'?':s2.kind==='drifter'?'+':'!','cpsPoi',
-          s2.kind==='hermit'?'#e8c050':s2.kind==='quester'?'#d8c878':s2.kind==='drifter'?'#9dd8a8':'#7fa0c8');
+          (POI_ICON[s2.kind]||['!','#7fa0c8'])[0],'cpsPoi',(POI_ICON[s2.kind]||['!','#7fa0c8'])[1]);
       const q3=WANDER.quest;
       if(q3&&q3.taken&&!q3.turned){
         const qx=q3.objDone?q3.gx:q3.x,qz=q3.objDone?q3.gz:q3.z;
@@ -7641,9 +7703,7 @@ function updateHUD(dt){
     }
     if(!pr&&WANDER.on){
       for(const s of WANDER.sites)if(!s.used&&Math.hypot(player.x-s.x,player.z-s.z)<3.4){
-        pr=s.kind==='hermit'?'<b>E</b> SIT AT THE HERMIT\'S FIRE':
-           s.kind==='quester'?'<b>E</b> HEAR THEM OUT':
-           s.kind==='drifter'?'<b>E</b> SHARE THE DRIFTER\'S FIRE':'<b>E</b> REACH THEM IN TIME';break;}
+        pr=POI_PROMPT[s.kind]||'<b>E</b> LOOK CLOSER';break;}
       if(!pr&&WANDER.quest&&WANDER.quest.taken&&!WANDER.quest.objDone&&WANDER.quest.type==='fetch'
         &&Math.hypot(player.x-WANDER.quest.x,player.z-WANDER.quest.z)<3)pr='<b>E</b> TAKE WHAT THEY ASKED FOR';
       if(!pr&&WANDER.landmark&&WANDER.landmark.kind==='bell'&&!WANDER.landmark.rung
@@ -8752,6 +8812,91 @@ function wanderPopulate(){
     addFirePatch(x+1.3,z+.5,.8,9999);
     COLLIDERS.push({x:x+1.3,z:z+.5,r:.7});
     WANDER.sites.push({kind:'drifter',name:dn,x,z,mesh,used:false});
+  }
+  // THE WATCHTOWER: built for seeing. climb, and the country admits what it has
+  const twr=srnd(),twa=srand(TAU),twd=srand(half*.3,half*.75);
+  if(twr<.5){
+    const x=clamp(Math.cos(twa)*twd,-half+15,half-15),z=clamp(Math.sin(twa)*twd,-half+15,half-15);
+    const g=new THREE.Group();
+    const palM3=frostable(new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,bumpMap:woodTex,bumpScale:.3}));
+    for(const[lx,lz]of[[-.9,-.9],[.9,-.9],[-.9,.9],[.9,.9]]){
+      const leg=new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,6.2,9),palM3);
+      leg.position.set(lx,3.1,lz);leg.castShadow=true;g.add(leg);
+    }
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(2.6,.16,2.6),palM3);deck.position.y=6.2;deck.castShadow=true;g.add(deck);
+    for(let pI=0;pI<4;pI++){
+      const par=new THREE.Mesh(new THREE.BoxGeometry(pI%2?2.6:.14,.6,pI%2?.14:2.6),palM3);
+      par.position.set(pI===0?-1.23:pI===2?1.23:0,6.6,pI===1?-1.23:pI===3?1.23:0);g.add(par);
+    }
+    const ldr=new THREE.Mesh(new THREE.BoxGeometry(.08,6,.08),palM3);ldr.position.set(0,3,1.05);g.add(ldr);
+    g.position.set(x,heightAt(x,z),z);scene.add(g);
+    COLLIDERS.push({x,z,r:1.5});
+    WANDER.sites.push({kind:'tower',x,z,mesh:g,used:false});
+  }
+  // THE MASS GRAVE: mounded earth and borrowed crosses. some debts are buried shallow
+  const gvr=srnd(),gva=srand(TAU),gvd=srand(half*.35,half*.8);
+  if(gvr<.45){
+    const x=clamp(Math.cos(gva)*gvd,-half+15,half-15),z=clamp(Math.sin(gva)*gvd,-half+15,half-15);
+    const g=new THREE.Group();
+    const dirtM=new THREE.MeshStandardMaterial({color:0x4a3a28,roughness:1,map:groundTex});
+    for(let i=0;i<4;i++){
+      const m=new THREE.Mesh(new THREE.SphereGeometry(.9,10,7),dirtM);
+      m.scale.set(1.4,.34,.8);m.position.set(srand(-2.2,2.2),.12,srand(-2.2,2.2));
+      m.rotation.y=srand(TAU);m.castShadow=true;g.add(m);
+    }
+    const wMat=frostable(new THREE.MeshStandardMaterial({color:0x5d5040,map:woodTex,roughness:.95}));
+    for(let i=0;i<3;i++){
+      const cx=srand(-2,2),cz=srand(-2,2);
+      const v=new THREE.Mesh(new THREE.BoxGeometry(.09,1.1,.09),wMat);v.position.set(cx,.55,cz);v.rotation.z=srand(-.15,.15);g.add(v);
+      const hbar=new THREE.Mesh(new THREE.BoxGeometry(.5,.08,.08),wMat);hbar.position.set(cx,.82,cz);hbar.rotation.z=v.rotation.z;g.add(hbar);
+    }
+    g.position.set(x,heightAt(x,z),z);scene.add(g);
+    WANDER.sites.push({kind:'grave',x,z,mesh:g,used:false});
+  }
+  // THE DOWNED SPARROW: not every bird made it home. the cargo doesn't care
+  const spr2=srnd(),spa2=srand(TAU),spd2=srand(half*.4,half*.85);
+  if(spr2<.3){
+    const x=clamp(Math.cos(spa2)*spd2,-half+15,half-15),z=clamp(Math.sin(spa2)*spd2,-half+15,half-15);
+    const g=new THREE.Group();
+    const wm=new THREE.MeshStandardMaterial({color:0x232820,roughness:.85,metalness:.25});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(.8,.55,4,12),wm);
+    body.rotation.x=Math.PI/2;body.rotation.z=.4;body.position.y=.7;g.add(body);
+    const tail=new THREE.Mesh(new THREE.CylinderGeometry(.14,.3,2.6,9),wm);
+    tail.rotation.x=Math.PI/2-.5;tail.position.set(.5,1.3,2.6);g.add(tail);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(.26,6,.06),wm);
+    blade.rotation.z=.5;blade.position.set(-1.1,1.8,-.4);g.add(blade);
+    g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    g.position.set(x,heightAt(x,z),z);g.rotation.y=srand(TAU);scene.add(g);
+    COLLIDERS.push({x,z,r:2.6});
+    addFirePatch(x+1.6,z+.5,.7,9999);
+    WANDER.sites.push({kind:'wreck',x,z,mesh:g,used:false});
+  }
+  // THE SHRINE: a candle against all of it. it helps more than it should
+  const shr=srnd(),sha=srand(TAU),shd=srand(half*.25,half*.6);
+  if(shr<.4){
+    const x=clamp(Math.cos(sha)*shd,-half+15,half-15),z=clamp(Math.sin(sha)*shd,-half+15,half-15);
+    const g=new THREE.Group();
+    const stM=frostable(new THREE.MeshStandardMaterial({color:0x6e675a,roughness:.95,bumpMap:fleshTex,bumpScale:.5}));
+    const pil=new THREE.Mesh(new THREE.CylinderGeometry(.32,.42,1.6,10),stM);pil.position.y=.8;g.add(pil);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(.5,.5,10),stM);cap.position.y=1.85;g.add(cap);
+    const nook=new THREE.Mesh(new THREE.BoxGeometry(.4,.34,.3),new THREE.MeshStandardMaterial({color:0x1c1812}));
+    nook.position.set(0,1.28,.18);g.add(nook);
+    const cnd=new THREE.Mesh(new THREE.SphereGeometry(.05,8,6),new THREE.MeshBasicMaterial());
+    cnd.material.color.setRGB(4,2.4,.9);cnd.position.set(0,1.26,.3);g.add(cnd);
+    g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    g.position.set(x,heightAt(x,z),z);scene.add(g);
+    COLLIDERS.push({x,z,r:.7});
+    WANDER.sites.push({kind:'shrine',x,z,mesh:g,used:false});
+  }
+  // THE OLD BATTERY: a gun that lost its war. its limber kept the good things
+  const btr=srnd(),bta=srand(TAU),btd=srand(half*.35,half*.7);
+  if(btr<.35){
+    const x=clamp(Math.cos(bta)*btd,-half+15,half-15),z=clamp(Math.sin(bta)*btd,-half+15,half-15);
+    const g=buildGunMesh('cannon');
+    g.position.set(x,heightAt(x,z),z);
+    g.rotation.y=srand(TAU);g.rotation.z=.28;          // thrown off its wheels
+    COLLIDERS.push({x,z,r:1.6});
+    WANDER.sites.push({kind:'battery',x,z,mesh:g,used:false});
   }
 }
 let fadeEl=null;
