@@ -130,6 +130,55 @@ placeProp('barbed_wire.glb',2.4,[[-5,9],[0,10],[5,9],[9,7]],[0,.2,-.2,.5]);
   tk.position.set(14,0,18);tk.rotation.y=2.6;scene.add(tk);
 }
 
+/* ---------- the user's armory: a real SCAR for every hand ---------- */
+const pendingHands=[];let scarBase=null;
+const _ws=new THREE.Vector3();
+function armHand(hand){
+  if(!scarBase){pendingHands.push(hand);return;}
+  const g=scarBase.clone(); // static-only now, plain clone is safe
+  hand.updateWorldMatrix(true,false);
+  hand.getWorldScale(_ws);                  // bones carry scale compensation; cancel it
+  g.scale.multiplyScalar(1/Math.max(1e-6,_ws.x));
+  g.position.multiplyScalar(1/Math.max(1e-6,_ws.x));
+  hand.add(g);
+}
+loader.load('assets/models/scar.glb',gltf=>{
+  gltf.scene.updateMatrixWorld(true);
+  const body=new THREE.Group();
+  gltf.scene.traverse(o=>{ // static parts only: Box3 is blind to skinning, so skinned bits lie about their size
+    if(o.isMesh&&!o.isSkinnedMesh){
+      const c=new THREE.Mesh(o.geometry,o.material);
+      c.applyMatrix4(o.matrixWorld);c.castShadow=true;body.add(c);
+    }
+  });
+  const bb=new THREE.Box3().setFromObject(body);
+  const dim=bb.getSize(new THREE.Vector3());
+  const L=Math.max(dim.x,dim.y,dim.z);
+  const ctr=bb.getCenter(new THREE.Vector3());
+  body.position.copy(ctr).multiplyScalar(-1); // pivot at the rifle's heart
+  const holder=new THREE.Group();
+  holder.add(body);
+  holder.scale.setScalar(.78/L);             // ~78cm of rifle
+  holder.position.set(.02,.17,.05);
+  holder.rotation.set(-Math.PI/2+.12,0,Math.PI/2);
+  scarBase=holder;
+  for(const h of pendingHands)armHand(h);
+  pendingHands.length=0;
+});
+loader.load('assets/models/us_assault.glb',gltf=>{ // a sentinel for the tower
+  const m=gltf.scene;
+  m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  const bb=new THREE.Box3().setFromObject(m);
+  const dim=bb.getSize(new THREE.Vector3());
+  const sc=1.85/dim.y;
+  m.scale.setScalar(sc);
+  const b2=new THREE.Box3().setFromObject(m);
+  const ctr=b2.getCenter(new THREE.Vector3());
+  m.position.set(-10.4-ctr.x,-b2.min.y,8.6-ctr.z);
+  m.rotation.y=.6;
+  scene.add(m);
+});
+
 /* ---------- actors ---------- */
 const player={group:new THREE.Group(),mixer:null,act:{},hp:100,ammo:12,reloadT:0,fireCd:0,kills:0,dead:false};
 scene.add(player.group);
@@ -191,13 +240,14 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
   const pr=rigUp(null,false);
   player.group.add(pr.model);
   player.mixer=pr.mixer;player.act=pr.act;
-  if(pr.hand)pr.hand.add(buildRifle());
-  for(let i=0;i<ZN;i++)spawnZombie(i,true);
+  if(pr.hand)armHand(pr.hand);
+  if(zombiePack)for(let i=0;i<ZN;i++)spawnZombie(i,true);
+  else setTimeout(()=>{for(let i=0;i<ZN;i++)spawnZombie(i,true);},4000); // pack still downloading? fall back soon
   // two riflemen on the bags
   for(const[nx,nz,ny]of[[-2.2,3.4,.15],[2.6,3.4,-.15]]){
     const r=rigUp(0x6e7060,false);
     const g=new THREE.Group();g.add(r.model);g.position.set(nx,0,nz);g.rotation.y=ny+Math.PI;
-    if(r.hand)r.hand.add(buildRifle());
+    if(r.hand)armHand(r.hand);
     scene.add(g);
     NPCS.push({group:g,...r,fireT:Math.random()});
   }
@@ -206,9 +256,33 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
     'open this over http(s), not file:// — browsers refuse to fetch models locally.<br>try: https://favstats.github.io/trenchfall/walk-demo.html';
 });
 
+let zombiePack=null,zombieRoots=[];
+loader.load('assets/models/zombies_pack.glb',gltf=>{
+  zombiePack=gltf;
+  gltf.scene.traverse(o=>{if(/^rig_CharRoot/.test(o.name||''))zombieRoots.push(o.name);}); // the armatures are the real bodies
+  if(baseGltf)for(let i=0;i<ZN;i++)spawnZombie(i,true);
+});
 function spawnZombie(i,first){
+  if(first&&zombies[i])return zombies[i];   // already built by the other loader
   const z=first?{}:zombies[i];
-  if(first){
+  if(first&&zombiePack&&zombieRoots.length){ // the user's pack: each slot a different corpse
+    const rig=skClone(zombiePack.scene);
+    const pickName=zombieRoots[i%zombieRoots.length];
+    rig.traverse(o=>{
+      if(zombieRoots.includes(o.name))o.visible=(o.name===pickName);
+      if((o.name||'').startsWith('Line001'))o.visible=false;
+    });
+    const chosen=rig.getObjectByName(pickName);
+    const mats=[];
+    chosen.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.castShadow=true;mats.push(o.material);}});
+    z.group=new THREE.Group();z.group.add(rig);scene.add(z.group);
+    const mixer=new THREE.AnimationMixer(rig);
+    const clip=zombiePack.animations[0];
+    const act=mixer.clipAction(clip);act.play();
+    act.time=Math.random()*clip.duration;     // out of step with each other, like the dead are
+    Object.assign(z,{rig,mats,mixer,chosen,packMode:true,calib:false});
+    zombies[i]=z;
+  }else if(first){
     const r=rigUp(0x77836b,true);
     z.group=new THREE.Group();z.group.add(r.model);scene.add(z.group);
     Object.assign(z,{rig:r.model,mats:r.mats,head:r.head,mixer:r.mixer,act:r.act});
@@ -354,13 +428,33 @@ function animate(){
       z.atkT-=dt;
       if(z.atkT<=0){z.atkT=1;player.hp-=9;hurt.style.opacity=.9;setTimeout(()=>hurt.style.opacity=0,260);}
     }
-    const runK=Math.min(1,Math.max(0,(spd-1.6)/1.4));
-    const walkK=(1-runK)*(d>1.2?1:.25);
-    const tw={Idle:Math.max(0,1-walkK-runK),Walk:walkK,Run:runK};
-    for(const k in tw){const a=z.act[k];const w=a.getEffectiveWeight();
-      a.setEffectiveWeight(w+(tw[k]-w)*Math.min(1,dt*6));}
-    if(z.act.Walk)z.act.Walk.setEffectiveTimeScale(spd/1.6);
-    z.mixer.update(dt);
+    if(z.packMode){
+      z.mixer.update(dt);
+      if(!z.calib){ // measure the body by its bones — Box3 is blind to skinning
+        z.group.updateMatrixWorld(true);
+        let mn=1e9,mx=-1e9;
+        z.chosen.traverse(o=>{if(o.isBone){o.getWorldPosition(_np);if(_np.y<mn)mn=_np.y;if(_np.y>mx)mx=_np.y;}});
+        let cx=0,cz=0,n=0;
+        z.chosen.traverse(o=>{if(o.isBone){o.getWorldPosition(_np);cx+=_np.x;cz+=_np.z;n++;}});
+        if(mx>mn&&n){
+          const k=1.78/(mx-mn);
+          z.rig.scale.multiplyScalar(k);
+          z.rig.position.x-=(cx/n-z.group.position.x)*k;
+          z.rig.position.z-=(cz/n-z.group.position.z)*k;
+          z.rig.position.y-=(mn-z.group.position.y)*k;
+          z.calib=true;
+        }
+      }
+    }
+    else{
+      const runK=Math.min(1,Math.max(0,(spd-1.6)/1.4));
+      const walkK=(1-runK)*(d>1.2?1:.25);
+      const tw={Idle:Math.max(0,1-walkK-runK),Walk:walkK,Run:runK};
+      for(const k in tw){const a=z.act[k];const w=a.getEffectiveWeight();
+        a.setEffectiveWeight(w+(tw[k]-w)*Math.min(1,dt*6));}
+      if(z.act.Walk)z.act.Walk.setEffectiveTimeScale(spd/1.6);
+      z.mixer.update(dt);
+    }
   }
   if(player.hp<=0&&!player.dead){player.dead=true;document.getElementById('dead').style.display='grid';}
   controls.target.lerp(_tp.set(player.group.position.x,1.05,player.group.position.z),Math.min(1,dt*10));
