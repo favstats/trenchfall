@@ -2922,6 +2922,7 @@ const gunModels=[];
       const magC=box(.038,.018,.062,steel);magC.position.set(0,-.235,-.055);g.add(magC);      // mag base plate
       const grip=ellw(.022,.03,.11,wood);grip.rotation.x=Math.PI/2-.32;grip.position.set(0,-.1,.12);g.add(grip);
       const ej=box(.012,.04,.1,steel);ej.position.set(.044,.025,-.02);g.add(ej);              // ejection door on the tube wall
+      for(let w2=0;w2<6;w2++){const wd=cap(.004,dark);wd.position.set(.02,.061,.12-w2*.06);g.add(wd);} // spot welds along the seam
       const tg2=halfTorus(.025,.005,steel);tg2.position.set(0,-.062,-.01);g.add(tg2);
       const trg=box(.006,.022,.012,brass);trg.position.set(0,-.056,-.01);g.add(trg);
       for(const sy of[-1,1]){const rod=cyl(.006,.3,steel);rod.position.set(sy*.028,.0,.2);g.add(rod);} // wire stock into the body
@@ -2946,6 +2947,8 @@ const gunModels=[];
       const bead=cap(.007,brass);bead.position.set(0,.072,-.55);g.add(bead);
       const fore2=ellw(.052,.034,.26,wood);fore2.position.set(0,-.004,-.22);g.add(fore2);     // splinter fore-end under both bores
       const lever=box(.026,.012,.06,brass);lever.position.set(0,.066,.1);g.add(lever);
+      for(const pz of[[.03,.05],[0,.13]]){const pin=cyl(.006,.088,steel);pin.rotation.z=Math.PI/2;
+        pin.rotation.x=Math.PI/2;pin.position.set(0,pz[0],pz[1]);g.add(pin);} // hinge and lock pins through the breech
       const tg3=halfTorus(.028,.006,steel);tg3.position.set(0,-.038,.1);g.add(tg3);
       const trg2=box(.007,.026,.014,brass);trg2.position.set(0,-.032,.1);g.add(trg2);
     },
@@ -3400,14 +3403,17 @@ function assignSkins(){
     const i=free.pop();zb._skin=i;SKINS[i].zb=zb;
   }
 }
-function poseSkin(sl,zb,pitch,sway,px,py,pz,aL,aR,eL,eR,lL,lR,kL,kR,hX,hZ,jaw,colC,colF,tint){
+function poseSkin(sl,zb,pitch,sway,px,py,pz,aL,aR,eL,eR,lL,lR,kL,kR,hX,hZ,jaw,colC,colF,tint,wkv=0){
   const m=sl.mesh,B=sl.bones;
   m.visible=true;
   m.position.set(px,py,pz);
   m.rotation.set(pitch*.55,zb.face||0,sway);
   {const w=zb.wide||1;m.scale.set(zb.scale*w,zb.scale,zb.scale*Math.max(.92,w*.96));}
   B[1].rotation.x=pitch*.27;B[2].rotation.x=pitch*.22;     // the spine curves instead of hinging
-  B[3].rotation.x=hX;B[3].rotation.z=hZ;
+  B[0].rotation.y=-wkv*.1;                                  // the pelvis drives the stride
+  B[2].rotation.y=wkv*.13;                                  // the shoulders argue back
+  B[1].rotation.z=sway*.3;                                  // the spine takes some of the sway
+  B[3].rotation.x=hX;B[3].rotation.z=hZ-sway*.5;            // the head steadies itself against it
   B[4].rotation.x=jaw;
   B[5].rotation.x=aL;B[6].rotation.x=eL;
   B[7].rotation.x=aR;B[8].rotation.x=eR;
@@ -3889,7 +3895,7 @@ function updateZombies(dt,t){
     if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb)
       shm=poseSkin(SKINS[zb._skin],zb,
         (crawl?1.15:zb.kind==='runner'?.45:(zb.hunch||.22))+ck*.05+spz*.4+swPitch,sway,
-        _P.x,_P.y,_P.z,aL,aR,eLb,eRb,lL,lR,kL,kR,hX2,hZ2,jaw,colC,colF,flash?1:zb.tint);
+        _P.x,_P.y,_P.z,aL,aR,eLb,eRb,lL,lR,kL,kR,hX2,hZ2,jaw,colC,colF,flash?1:zb.tint,wk);
     writeZombie(mi,_M,colC,colF,
       aL,aR,lL,lR,false,flash?1:zb.tint,_eyeFl,zb.hat&&!zb.brute,zb.gone,
       eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC,shm);
