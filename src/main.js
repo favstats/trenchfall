@@ -751,6 +751,13 @@ function genTerrain(){
   for(let iz=0;iz<VN;iz++)for(let ix=0;ix<VN;ix++){
     const x=-half+ix*cell,z=-half+iz*cell;
     let h=(smoothNoise(ix*.06,iz*.06)-.5)*3.2*BIOME.rugged+(smoothNoise(ix*.18,iz*.18)-.5)*.9;
+    { // the long hills: broad ridges and valleys the war never flattened
+      const rel=BIOME.relief??BIOME.rugged;
+      const hill=smoothNoise(ix*.021+53,iz*.021+21);
+      h+=Math.pow(Math.max(0,hill-.42),1.5)*15*rel;
+      const vale=smoothNoise(ix*.031+87,iz*.031+5);
+      h-=Math.pow(Math.max(0,vale-.6),1.6)*6.5*rel;
+    }
     const dDep=Math.hypot(x,z);
     h*=clamp((dDep-10)/26,0,1);
     if(!WANDER.on||WANDER.road){const rd=Math.abs(z-roadZ(x));
@@ -1375,7 +1382,7 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
       const h=heightAt(x,z),kind=srnd();
       COLLIDERS.push({x,z,r:.5});
       E.set(srand(-.06,.06),srand(TAU),srand(-.06,.06));Q.setFromEuler(E);
-      if(kind<.42*(1-(BIOME.pineBias||0))&&bi<wantB){ // birch + crown (conifers own the cold biomes)
+      if(kind<.42*(1-(BIOME.pineBias||0))+(BIOME.broadBias||0)&&bi<wantB){ // birch + crown (conifers own the cold biomes)
         const sc=srand(.8,1.4);S.set(sc,sc*srand(.85,1.2),sc);
         P.set(x,h,z);M.compose(P,Q,S);DESTRUCT.push({tree:1,m:birchT,i:bi,x,z});birchT.setMatrixAt(bi++,M);
         const top=h+13*S.y;
@@ -1501,6 +1508,110 @@ function scatterGrass(){
   grassMesh.computeBoundingSphere();
 }
 scatterGrass();
+/* ---------------- underbrush: ferns and bushes, the floor's own crowd ---------------- */
+let fernMesh=null,bushMesh=null,scatterUnderbrush=null;
+{
+  const fernTex=(()=>{ // a rosette of drooping fronds
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d');
+    for(let i=0;i<16;i++){
+      const a=i/16*TAU+Math.random()*.3,len=44+Math.random()*18;
+      const gr=(58+Math.random()*46)|0;
+      g.strokeStyle='rgba('+(gr*.42|0)+','+gr+','+(gr*.36|0)+','+(0.6+Math.random()*.35)+')';
+      g.lineWidth=2.4;
+      g.beginPath();g.moveTo(64,86);
+      g.quadraticCurveTo(64+Math.cos(a)*len*.5,86+Math.sin(a)*len*.35-16,64+Math.cos(a)*len,86+Math.sin(a)*len*.55-8);
+      g.stroke();
+      for(let n=2;n<11;n++){const k=n/11;
+        const nx=64+Math.cos(a)*len*k,ny=86+Math.sin(a)*len*.55*k-8*k-16*k*(1-k)*2;
+        g.lineWidth=1.1;
+        g.beginPath();g.moveTo(nx,ny);g.lineTo(nx+Math.cos(a+1.5)*6*(1-k+.3),ny+Math.sin(a+1.5)*4);g.stroke();
+        g.beginPath();g.moveTo(nx,ny);g.lineTo(nx+Math.cos(a-1.5)*6*(1-k+.3),ny+Math.sin(a-1.5)*4);g.stroke();
+      }
+    }
+    const img=g.getImageData(0,0,128,128),d=img.data;
+    for(let i=0;i<d.length;i+=4){if(d[i+3]>0)continue;d[i]=30;d[i+1]=58;d[i+2]=26;}
+    g.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+  })();
+  const bushTex=(()=>{ // a thick leafy heap
+    const c=document.createElement('canvas');c.width=c.height=128;
+    const g=c.getContext('2d');
+    for(let i=0;i<240;i++){
+      const a=Math.random()*TAU,r=Math.pow(Math.random(),.55)*52;
+      const x=64+Math.cos(a)*r,y=78+Math.sin(a)*r*.62-Math.abs(Math.cos(a))*6;
+      const lit=clamp(.55+(64-y)/64*.5+Math.random()*.3,.25,1.2);
+      const gr=(46+Math.random()*60)*lit|0;
+      g.fillStyle='rgba('+(gr*.45|0)+','+gr+','+(gr*.38|0)+','+(0.55+Math.random()*.4)+')';
+      g.beginPath();g.ellipse(x,y,3.2+Math.random()*4.5,2.2+Math.random()*3.2,Math.random()*TAU,0,TAU);g.fill();
+    }
+    const img=g.getImageData(0,0,128,128),d=img.data;
+    for(let i=0;i<d.length;i+=4){if(d[i+3]>0)continue;d[i]=26;d[i+1]=50;d[i+2]=24;}
+    g.putImageData(img,0,0);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
+  })();
+  const mkCross=(wd,ht,y0)=>{
+    const p1=new THREE.PlaneGeometry(wd,ht,1,2);p1.translate(0,y0,0);
+    const p2=p1.clone();p2.rotateY(Math.PI/2);
+    return mergeGeometries([p1,p2]);
+  };
+  const swayU=(mat,amp)=>{mat.onBeforeCompile=sh=>{
+    sh.uniforms.uWindT=WindU;
+    sh.vertexShader='uniform float uWindT;\n'+sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+       vec4 uwp=instanceMatrix*vec4(transformed,1.);
+       transformed.xz+=sin(uWindT*1.4+uwp.x*.33+uwp.z*.27)*uv.y*uv.y*vec2(${amp},${amp*.7});`);
+  };};
+  const fernMat=new THREE.MeshStandardMaterial({map:fernTex,alphaTest:.42,side:THREE.DoubleSide,
+    roughness:.9,envMapIntensity:.3,emissive:0x101b0a,emissiveMap:fernTex,emissiveIntensity:.7});
+  const bushMat=new THREE.MeshStandardMaterial({map:bushTex,alphaTest:.45,side:THREE.DoubleSide,
+    roughness:.92,envMapIntensity:.3,emissive:0x0d160a,emissiveMap:bushTex,emissiveIntensity:.6});
+  swayU(fernMat,'.09');swayU(bushMat,'.05');
+  const NF=4200,NB=1400;
+  fernMesh=new THREE.InstancedMesh(mkCross(1.4,1.0,.45),fernMat,NF);
+  bushMesh=new THREE.InstancedMesh(mkCross(2.1,1.6,.7),bushMat,NB);
+  fernMesh.receiveShadow=false;bushMesh.castShadow=true;
+  scene.add(fernMesh);scene.add(bushMesh);
+  scatterUnderbrush=function(){
+    const M=new THREE.Matrix4(),Q=new THREE.Quaternion(),S=new THREE.Vector3(),P=new THREE.Vector3(),E=new THREE.Euler();
+    const C=new THREE.Color();
+    const lush=BIOME.lushK??(BIOME.grassK*.55);
+    let fi=0,bi2=0;
+    const wantF=Math.min(NF,Math.round(NF*lush*.5)),wantB2=Math.min(NB,Math.round(NB*lush*.45));
+    for(let i=0;i<NF*4&&fi<wantF;i++){
+      const x=srand(-half+4,half-4),z=srand(-half+4,half-4);
+      if(isRoad(x,z)||Math.hypot(x,z)<12)continue;
+      const cl=smoothNoise((x+half)/cell*.1+71,(z+half)/cell*.1+44);
+      if(cl<.5&&srnd()>.16*lush)continue;       // ferns crowd the damp clusters
+      E.set(0,srand(TAU),srand(-.08,.08));Q.setFromEuler(E);
+      const sc=srand(.7,1.6);S.set(sc,sc*srand(.8,1.2),sc);
+      P.set(x,heightAt(x,z),z);M.compose(P,Q,S);
+      fernMesh.setMatrixAt(fi,M);
+      C.setHSL(srand(.26,.34)+BIOME.leafHue,srand(.32,.48)*(BIOME.snow?.3:1),
+        Math.min(.7,srand(.16,.3)*(BIOME.snow?1.6:1)));
+      fernMesh.setColorAt(fi++,C);
+    }
+    for(let i=0;i<NB*4&&bi2<wantB2;i++){
+      const x=srand(-half+5,half-5),z=srand(-half+5,half-5);
+      if(isRoad(x,z)||Math.hypot(x,z)<13)continue;
+      const cl=smoothNoise((x+half)/cell*.07+19,(z+half)/cell*.07+92);
+      if(cl<.52&&srnd()>.12*lush)continue;
+      E.set(0,srand(TAU),0);Q.setFromEuler(E);
+      const sc=srand(.7,1.7);S.set(sc,sc*srand(.75,1.25),sc);
+      P.set(x,heightAt(x,z),z);M.compose(P,Q,S);
+      bushMesh.setMatrixAt(bi2,M);
+      C.setHSL(srand(.25,.33)+BIOME.leafHue,srand(.3,.45)*(BIOME.snow?.3:1),
+        Math.min(.65,srand(.14,.26)*(BIOME.snow?1.6:1)));
+      bushMesh.setColorAt(bi2++,C);
+    }
+    fernMesh.count=fi;bushMesh.count=bi2;
+    fernMesh.instanceMatrix.needsUpdate=true;bushMesh.instanceMatrix.needsUpdate=true;
+    if(fernMesh.instanceColor)fernMesh.instanceColor.needsUpdate=true;
+    if(bushMesh.instanceColor)bushMesh.instanceColor.needsUpdate=true;
+    fernMesh.computeBoundingSphere();bushMesh.computeBoundingSphere();
+  };
+  scatterUnderbrush();
+}
 const _gM=new THREE.Matrix4(),_gZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
 function snapGrass(x,z,radius){ // dug earth swallows the grass; piled earth lifts it
   if(!grassMesh)return;
@@ -4646,8 +4757,10 @@ const EULOGY=[
 const BIOMES=[
  {name:'GREYFIELD MARCH',tint:[1,1,1],rugged:1,treeK:1,grassK:1,rockK:1,risk:1,nfBias:0,leafHue:0,grassHue:0,
   ds:'Hedgerows and old fences. The war passed through here twice.'},
- {name:'BIRCH HOLLOWS',tint:[.96,1.04,.95],rugged:.85,treeK:1.35,grassK:1.2,rockK:.6,risk:.85,nfBias:0,leafHue:.015,grassHue:.01,
+ {name:'BIRCH HOLLOWS',tint:[.96,1.04,.95],rugged:.85,treeK:1.35,grassK:1.2,rockK:.6,risk:.85,nfBias:0,leafHue:.015,grassHue:.01,lushK:1.3,
   ds:'White trunks and deep moss. Quiet. Too quiet to trust.'},
+ {name:'THE GREEN HELL',tint:[.9,1.08,.9],rugged:1.1,relief:1.35,treeK:2,grassK:2.2,lushK:2.6,broadBias:.4,rockK:.5,risk:1.25,nfBias:.06,leafHue:.055,grassHue:.05,grassL:1.2,
+  ds:'The green took it all back. You will not see ten meters. Neither will they.'},
  {name:'THE BONE ORCHARD',tint:[1.06,.97,.88],rugged:1.1,treeK:.35,grassK:.5,rockK:1.2,risk:1.3,nfBias:.1,leafHue:-.04,grassHue:-.05,
   ds:'Dead trees in rows, like they were planted for this.'},
  {name:'DROWNED MIRE',tint:[.88,.97,1.05],rugged:.55,treeK:.7,grassK:1.4,rockK:.4,risk:1.15,nfBias:.12,leafHue:.03,grassHue:.04,
@@ -4697,7 +4810,7 @@ function buildWorld(legSeed){
   buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
-  scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterCity();
+  scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterUnderbrush();scatterCity();
   scatterDeer();
   rebuildColGrid();
   sea.visible=!!BIOME.shore;
@@ -4709,6 +4822,7 @@ function setBiome(b){BIOME.city=0;BIOME.shore=false;
   BIOME.snow=false;BIOME.desert=false;BIOME.ground=null;
   BIOME.grassS=1;BIOME.grassL=1;BIOME.pineBias=0;
   BIOME.alpine=false;BIOME.ash=false;
+  BIOME.relief=undefined;BIOME.lushK=undefined;BIOME.broadBias=0;
   Object.assign(BIOME,b);
   SnowU.value=BIOME.snow?1:(BIOME.alpine?.55:0);}
 
