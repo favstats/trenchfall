@@ -2710,139 +2710,174 @@ const gunModels=[];
     st.position.set((x1+x2)/2,(y1+y2)/2-.03,(z1+z2)/2);
     st.lookAt(x2,y2,z2);g.add(st);
   };
+  /* the joiner's tools: smooth tapered tubes, elliptical wood, sphere caps — nothing floats */
+  const tube=(rRear,rMuzzle,l,m,sg=18)=>{const c=new THREE.Mesh(new THREE.CylinderGeometry(rRear,rMuzzle,l,sg),m);c.rotation.x=Math.PI/2;return c;};
+  const ellw=(rx,ry,l,m)=>{const g2=new THREE.CylinderGeometry(1,1,l,16);g2.rotateX(Math.PI/2);g2.scale(rx,ry,1);return new THREE.Mesh(g2,m);};
+  const cap=(r,m)=>new THREE.Mesh(new THREE.SphereGeometry(r,14,10),m);
+  const halfTorus=(r,t,m)=>{const h=new THREE.Mesh(new THREE.TorusGeometry(r,t,6,12,Math.PI),m);h.rotation.x=Math.PI/2;h.rotation.z=Math.PI;return h;};
   const builders=[
-    g=>{ // M1 SERVICE RIFLE: walnut, steel, and habit
-      const st=box(.07,.105,.46,wood);st.position.set(0,-.02,.3);g.add(st);          // buttstock
-      const bp=box(.075,.11,.018,steel);bp.position.set(0,-.02,.53);g.add(bp);       // butt plate
-      const fore=box(.068,.075,.5,wood);fore.position.set(0,.005,-.22);g.add(fore);  // fore wood
-      const rec=box(.062,.075,.16,dark);rec.position.set(0,.045,.04);g.add(rec);     // receiver
-      const br=cyl(.018,.55,steel);br.position.set(0,.045,-.55);g.add(br);           // barrel
-      const band=cyl(.026,.03,steel);band.position.set(0,.045,-.4);band.rotation.x=Math.PI/2;g.add(band);
-      const band2=cyl(.024,.03,steel);band2.position.set(0,.045,-.18);band2.rotation.x=Math.PI/2;g.add(band2);
-      for(const sx of[-1,1]){const wing=box(.008,.05,.02,steel);wing.position.set(sx*.022,.095,-.78);g.add(wing);}
-      const fp=box(.006,.045,.006,steel);fp.position.set(0,.1,-.78);g.add(fp);       // front post
-      const ch=box(.035,.014,.05,steel);ch.position.set(.052,.05,.07);g.add(ch);     // op-rod handle
-      const mg=box(.05,.05,.1,steel);mg.position.set(0,-.025,.0);g.add(mg);          // mag well
-      const trg=box(.008,.03,.02,brass);trg.position.set(0,-.055,.02);g.add(trg);
-      sling(g,0,-.06,.45,0,.02,-.4);
+    g=>{ // M1 SERVICE RIFLE: one flowing piece of walnut, steel let into it
+      const st=ellw(.04,.062,.34,wood);st.position.set(0,-.02,.36);st.rotation.x=.06;g.add(st);
+      const comb=ellw(.034,.045,.3,wood);comb.position.set(0,.022,.3);comb.rotation.x=.04;g.add(comb);
+      const wrist=ellw(.032,.05,.18,wood);wrist.rotation.x=.28;wrist.position.set(0,-.002,.16);g.add(wrist);
+      const bp=tube(.046,.05,.02,steel,14);bp.position.set(0,-.024,.53);g.add(bp);            // butt plate caps the wood
+      const fore=ellw(.036,.044,.62,wood);fore.position.set(0,.012,-.16);g.add(fore);         // fore-end swallows the barrel root
+      const rec=box(.058,.068,.18,dark);rec.position.set(0,.05,.05);g.add(rec);               // receiver sits down in the wrist
+      const br=tube(.017,.0135,.5,steel);br.position.set(0,.052,-.62);g.add(br);              // tapered barrel out of the fore-end
+      const crown=tube(.015,.015,.014,dark,12);crown.position.set(0,.052,-.868);g.add(crown); // muzzle crown
+      const gas=cyl(.009,.4,steel);gas.position.set(0,.024,-.6);g.add(gas);                   // gas tube under the barrel
+      const band=tube(.042,.042,.022,steel,14);band.position.set(0,.034,-.45);g.add(band);    // front band ties wood to steel
+      const band2=tube(.045,.045,.02,steel,14);band2.position.set(0,.032,-.12);g.add(band2);
+      const fsb=box(.026,.028,.03,steel);fsb.position.set(0,.075,-.85);g.add(fsb);            // sight base rooted on the barrel
+      for(const sx of[-1,1]){const wing=box(.007,.044,.016,steel);wing.position.set(sx*.014,.1,-.85);g.add(wing);}
+      const fp=box(.005,.038,.005,steel);fp.position.set(0,.105,-.85);g.add(fp);
+      const rs=box(.034,.022,.03,steel);rs.position.set(0,.094,.11);g.add(rs);                // rear aperture housing on the receiver
+      const ap=new THREE.Mesh(new THREE.TorusGeometry(.009,.003,6,12),steel);ap.position.set(0,.1,.09);g.add(ap);
+      const ch=box(.014,.016,.07,steel);ch.position.set(.04,.05,.07);g.add(ch);               // op-rod handle, rooted, knob on its end
+      const chk=cap(.012,steel);chk.position.set(.05,.05,.1);g.add(chk);
+      const mg=box(.046,.05,.1,dark);mg.position.set(0,.002,.05);g.add(mg);                   // mag well flush under the receiver
+      const tg=halfTorus(.026,.005,steel);tg.position.set(0,-.026,.06);g.add(tg);
+      const trg=box(.007,.024,.013,brass);trg.position.set(0,-.02,.06);g.add(trg);
+      sling(g,0,-.05,.45,0,.005,-.42);
     },
-    g=>{ // M3 GREASE GUN: a plumber's idea of war, lovingly machined
-      const tube=cyl(.045,.34,steel);tube.position.set(0,.02,-.02);g.add(tube);
-      const shroud=cyl(.03,.2,dark);shroud.position.set(0,.02,-.3);g.add(shroud);
-      for(let i2=0;i2<3;i2++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.031,.004,5,10),steel);
-        ring.position.set(0,.02,-.24-i2*.06);g.add(ring);}                            // shroud rings
-      const br=cyl(.014,.16,steel);br.position.set(0,.02,-.46);g.add(br);
-      const mag=box(.034,.22,.06,dark);mag.position.set(0,-.13,-.06);mag.rotation.x=.06;g.add(mag);
-      const grip=box(.045,.09,.06,wood);grip.position.set(0,-.085,.1);grip.rotation.x=.3;g.add(grip);
-      const ej=box(.05,.012,.09,steel);ej.position.set(.044,.03,-.02);g.add(ej);      // ejection door
-      for(const sy of[-1,1]){const rod=box(.012,.012,.26,steel);rod.position.set(sy*.03,-.01,.22);g.add(rod);}
-      const rb=box(.07,.012,.03,steel);rb.position.set(0,-.01,.35);g.add(rb);         // wire stock
-      const crank=cyl(.008,.05,steel);crank.rotation.z=Math.PI/2;crank.position.set(-.05,.04,.04);g.add(crank);
+    g=>{ // M3 GREASE GUN: a plumber's idea of war, machined until it shines
+      const body=tube(.046,.046,.36,steel);body.position.set(0,.02,-.02);g.add(body);
+      const capR=cap(.046,steel);capR.scale.z=.55;capR.position.set(0,.02,.16);g.add(capR);   // rounded rear cap
+      const collar=tube(.034,.028,.07,dark,14);collar.position.set(0,.02,-.23);g.add(collar); // barrel nut threads into the body
+      const br=tube(.015,.013,.2,steel);br.position.set(0,.02,-.36);g.add(br);
+      const mzl=tube(.018,.018,.024,dark,12);mzl.position.set(0,.02,-.45);g.add(mzl);
+      const trH=box(.05,.05,.16,dark);trH.position.set(0,-.035,.04);g.add(trH);               // trigger housing bridges body, grip, mag
+      const mag=box(.034,.2,.058,dark);mag.position.set(0,-.14,-.05);mag.rotation.x=.05;g.add(mag);
+      const magC=box(.038,.018,.062,steel);magC.position.set(0,-.235,-.055);g.add(magC);      // mag base plate
+      const grip=ellw(.022,.03,.11,wood);grip.rotation.x=Math.PI/2-.32;grip.position.set(0,-.1,.12);g.add(grip);
+      const ej=box(.012,.04,.1,steel);ej.position.set(.044,.025,-.02);g.add(ej);              // ejection door on the tube wall
+      const tg2=halfTorus(.025,.005,steel);tg2.position.set(0,-.062,-.01);g.add(tg2);
+      const trg=box(.006,.022,.012,brass);trg.position.set(0,-.056,-.01);g.add(trg);
+      for(const sy of[-1,1]){const rod=cyl(.006,.3,steel);rod.position.set(sy*.028,.0,.2);g.add(rod);} // wire stock into the body
+      const rb=box(.066,.014,.04,steel);rb.position.set(0,.0,.35);g.add(rb);
+      const post=box(.008,.03,.008,steel);post.position.set(0,.072,-.22);g.add(post);         // post grows out of the collar
+      const notch=box(.03,.016,.01,steel);notch.position.set(0,.07,.13);g.add(notch);         // notch on the cap
+      const crank=cyl(.007,.04,steel);crank.rotation.z=Math.PI/2;crank.position.set(-.046,.034,.05);g.add(crank);
     },
-    g=>{ // TRENCH SWEEPER: two mouths and a bead of brass
-      const st=box(.075,.11,.3,wood);st.position.set(0,-.04,.32);g.add(st);
-      const cheek=box(.06,.03,.16,wood);cheek.position.set(0,.03,.34);g.add(cheek);
-      const breech=box(.08,.1,.12,steel);breech.position.set(0,.01,.1);g.add(breech);
+    g=>{ // TRENCH SWEEPER: two mouths, one shoulder of walnut
+      const st=ellw(.042,.062,.36,wood);st.position.set(0,-.03,.34);st.rotation.x=.1;g.add(st);
+      const bp2=tube(.046,.05,.02,steel,14);bp2.position.set(0,-.045,.52);g.add(bp2);
+      const wrist2=ellw(.034,.05,.18,wood);wrist2.rotation.x=.3;wrist2.position.set(0,-.002,.18);g.add(wrist2);
+      const breech=box(.082,.092,.16,steel);breech.position.set(0,.015,.08);g.add(breech);
+      const tang=box(.05,.028,.1,steel);tang.position.set(0,.052,.18);tang.rotation.x=.18;g.add(tang); // tang flows into the wrist
       for(const sx of[-1,1]){
-        const br=cyl(.027,.56,steel);br.position.set(sx*.028,.03,-.36);g.add(br);
-        const hammer=box(.012,.04,.025,steel);hammer.position.set(sx*.025,.085,.13);hammer.rotation.x=-.5;g.add(hammer);
+        const br=tube(.027,.025,.6,steel);br.position.set(sx*.028,.03,-.3);g.add(br);
+        const mz=tube(.03,.03,.028,dark,12);mz.position.set(sx*.028,.03,-.586);g.add(mz);     // muzzle bands
+        const hammer=box(.012,.044,.028,steel);hammer.position.set(sx*.026,.08,.14);hammer.rotation.x=-.45;g.add(hammer);
       }
-      const rib=box(.012,.008,.5,dark);rib.position.set(0,.062,-.33);g.add(rib);
-      const bead=new THREE.Mesh(new THREE.SphereGeometry(.007,6,5),brass);bead.position.set(0,.07,-.62);g.add(bead);
-      const fore2=box(.075,.05,.2,wood);fore2.position.set(0,-.015,-.3);g.add(fore2);
-      const lever=box(.03,.01,.05,brass);lever.position.set(0,.065,.16);g.add(lever);
+      const web=box(.014,.022,.5,dark);web.position.set(0,.03,-.3);g.add(web);                // the web between the barrels
+      const rib=box(.014,.01,.52,dark);rib.position.set(0,.062,-.3);g.add(rib);
+      const bead=cap(.007,brass);bead.position.set(0,.072,-.55);g.add(bead);
+      const fore2=ellw(.052,.034,.26,wood);fore2.position.set(0,-.004,-.22);g.add(fore2);     // splinter fore-end under both bores
+      const lever=box(.026,.012,.06,brass);lever.position.set(0,.066,.1);g.add(lever);
+      const tg3=halfTorus(.028,.006,steel);tg3.position.set(0,-.038,.1);g.add(tg3);
+      const trg2=box(.007,.026,.014,brass);trg2.position.set(0,-.032,.1);g.add(trg2);
     },
-    g=>{ // M1903 MARKSMAN: the long argument, with glass
-      const st=box(.062,.1,.5,wood);st.position.set(0,-.025,.32);g.add(st);
-      const comb=box(.05,.035,.22,wood);comb.position.set(0,.035,.4);g.add(comb);
-      const fore3=box(.058,.07,.55,wood);fore3.position.set(0,0,-.3);g.add(fore3);
-      const br=cyl(.014,.6,steel);br.position.set(0,.02,-.82);g.add(br);
-      const rec=box(.055,.06,.14,steel);rec.position.set(0,.04,.02);g.add(rec);
-      const bolt=cyl(.012,.07,steel);bolt.rotation.z=Math.PI/2;bolt.position.set(.05,.05,.04);g.add(bolt);
-      const knob=new THREE.Mesh(new THREE.SphereGeometry(.016,7,5),steel);knob.position.set(.085,.05,.04);g.add(knob);
-      const tube2=cyl(.022,.22,dark);tube2.position.set(0,.105,-.02);g.add(tube2);    // scope tube
-      for(const so of[-.1,.08]){const ring=new THREE.Mesh(new THREE.TorusGeometry(.024,.005,6,12),steel);
-        ring.position.set(0,.105,so-.02);g.add(ring);}
-      const occ=cyl(.026,.04,dark);occ.position.set(0,.105,.1);g.add(occ);
-      const obj=cyl(.028,.05,dark);obj.position.set(0,.105,-.15);g.add(obj);
-      const tur=cyl(.008,.02,brass);tur.rotation.x=0;tur.position.set(0,.135,-.02);g.add(tur);
-      sling(g,0,-.07,.45,0,0,-.5);
+    g=>{ // M1903 MARKSMAN: the long argument, its glass finally bolted down
+      const st=ellw(.04,.058,.4,wood);st.position.set(0,-.025,.36);st.rotation.x=.08;g.add(st);
+      const bp3=tube(.044,.048,.018,steel,14);bp3.position.set(0,-.038,.555);g.add(bp3);
+      const comb2=ellw(.032,.04,.26,wood);comb2.position.set(0,.018,.4);g.add(comb2);
+      const wrist3=ellw(.03,.046,.18,wood);wrist3.rotation.x=.3;wrist3.position.set(0,-.002,.18);g.add(wrist3);
+      const fore3=ellw(.032,.04,.6,wood);fore3.position.set(0,.005,-.2);g.add(fore3);
+      const rec2=tube(.03,.03,.16,steel,14);rec2.position.set(0,.045,.03);g.add(rec2);        // round receiver ring
+      const br2=tube(.016,.012,.55,steel);br2.position.set(0,.045,-.75);g.add(br2);
+      const crown2=tube(.014,.014,.014,dark,12);crown2.position.set(0,.045,-1.024);g.add(crown2);
+      const bolt2=cyl(.011,.05,steel);bolt2.rotation.z=Math.PI/2;bolt2.position.set(.04,.05,.06);g.add(bolt2);
+      const knob=cap(.015,steel);knob.position.set(.068,.042,.07);g.add(knob);                // bolt knob swept low
+      for(const bz of[-.05,.1]){const base=box(.024,.024,.03,steel);base.position.set(0,.086,bz);g.add(base);} // bases ON the ring
+      const tube2=tube(.02,.02,.24,dark,14);tube2.position.set(0,.115,.02);g.add(tube2);
+      const obj=tube(.024,.027,.06,dark,14);obj.position.set(0,.115,-.12);g.add(obj);
+      const occ=tube(.026,.022,.05,dark,14);occ.position.set(0,.115,.16);g.add(occ);
+      for(const bz of[-.05,.1]){const ring=new THREE.Mesh(new THREE.TorusGeometry(.021,.005,6,14),steel);ring.position.set(0,.115,bz);g.add(ring);}
+      const tur=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,.02,10),brass);tur.position.set(0,.138,.02);g.add(tur);
+      const tg4=halfTorus(.026,.005,steel);tg4.position.set(0,-.032,.08);g.add(tg4);
+      const trg3=box(.007,.024,.012,brass);trg3.position.set(0,-.026,.08);g.add(trg3);
+      sling(g,0,-.06,.45,0,-.002,-.45);
     },
-    g=>{ // M1919 SUPPORT: a hundred-round argument and its furniture
-      const rec=box(.085,.1,.34,dark);rec.position.set(0,.02,0);g.add(rec);
-      const tray=box(.1,.02,.16,steel);tray.position.set(0,.08,-.02);g.add(tray);     // feed tray
-      const br=cyl(.024,.5,steel);br.position.set(0,.03,-.55);g.add(br);
-      const jacket=cyl(.034,.3,dark);jacket.position.set(0,.03,-.38);g.add(jacket);
-      for(let i3=0;i3<4;i3++){const hole=new THREE.Mesh(new THREE.TorusGeometry(.035,.003,4,8),steel);
-        hole.position.set(0,.03,-.28-i3*.07);g.add(hole);}
-      const hider=new THREE.Mesh(new THREE.ConeGeometry(.03,.06,7),steel);
+    g=>{ // M1919 SUPPORT: the hundred-round argument, fully plumbed
+      const rec3=box(.08,.096,.36,dark);rec3.position.set(0,.02,.04);g.add(rec3);
+      const cover=box(.084,.02,.3,steel);cover.position.set(0,.075,.0);g.add(cover);          // top cover overlaps the receiver
+      const latch=box(.02,.012,.05,steel);latch.position.set(0,.088,.1);g.add(latch);
+      const collar2=tube(.04,.036,.06,steel,14);collar2.position.set(0,.03,-.2);g.add(collar2);
+      const jacket=tube(.034,.032,.34,dark);jacket.position.set(0,.03,-.39);g.add(jacket);
+      for(let i3=0;i3<5;i3++){const ring=new THREE.Mesh(new THREE.TorusGeometry(.0335,.004,5,12),steel);
+        ring.position.set(0,.03,-.26-i3*.065);g.add(ring);}                                   // cooling rings hugging the jacket
+      const br3=tube(.018,.015,.3,steel);br3.position.set(0,.03,-.66);g.add(br3);
+      const hider=new THREE.Mesh(new THREE.ConeGeometry(.028,.06,12),steel);
       hider.rotation.x=-Math.PI/2;hider.position.set(0,.03,-.82);g.add(hider);
-      const mag2=box(.14,.11,.2,0?null:steel);mag2.position.set(-.1,-.03,-.02);g.add(mag2); // belt box
-      const lid=box(.142,.012,.2,dark);lid.position.set(-.1,.03,-.02);g.add(lid);
-      for(const sx of[-1,1]){const leg=box(.012,.16,.012,steel);
-        leg.position.set(sx*.03,-.1,-.62);leg.rotation.x=.5;leg.rotation.z=sx*.25;g.add(leg);}
-      const handle=box(.012,.05,.12,wood);handle.position.set(0,.12,.1);g.add(handle);
-      const spade=box(.05,.08,.04,wood);spade.position.set(0,-.04,.2);g.add(spade);
+      const bracket=box(.05,.03,.12,steel);bracket.position.set(-.065,-.01,-.02);g.add(bracket); // the belt box hangs off real steel
+      const mag2=box(.13,.11,.19,steel);mag2.position.set(-.12,-.03,-.02);g.add(mag2);
+      const lid=box(.134,.014,.194,dark);lid.position.set(-.12,.032,-.02);g.add(lid);
+      for(const pz of[.05,.15]){const post2=box(.012,.04,.012,steel);post2.position.set(0,.1,pz);g.add(post2);}
+      const hgrip=ellw(.012,.014,.14,wood);hgrip.position.set(0,.122,.1);g.add(hgrip);        // carry handle on its posts
+      const bpl=box(.05,.07,.03,steel);bpl.position.set(0,0,.225);g.add(bpl);                 // backplate
+      const pg=ellw(.02,.028,.1,wood);pg.rotation.x=Math.PI/2-.25;pg.position.set(0,-.06,.23);g.add(pg); // grip roots into it
+      const bipC=tube(.037,.037,.02,steel,12);bipC.position.set(0,.03,-.56);g.add(bipC);      // bipod clamp ring
+      for(const sx of[-1,1]){const leg=cyl(.007,.18,steel);leg.rotation.x=.45;leg.rotation.z=sx*.22;leg.position.set(sx*.028,-.045,-.56);g.add(leg);}
+      const sightR=box(.02,.05,.012,steel);sightR.position.set(0,.108,.18);g.add(sightR);
+      const sightF=box(.01,.04,.01,steel);sightF.position.set(0,.068,-.2);g.add(sightF);
     },
-    g=>{ // M2 DRAGON: plumbing for the end of the world
-      const body=cyl(.04,.34,steel);body.position.set(0,0,-.06);g.add(body);
-      const noz=cyl(.018,.34,dark);noz.position.set(0,0,-.4);g.add(noz);
-      const tip=cyl(.034,.07,dark);tip.position.set(0,0,-.6);g.add(tip);
-      const pilot=new THREE.Mesh(new THREE.SphereGeometry(.012,6,5),new THREE.MeshBasicMaterial());
-      pilot.material.color.setRGB(4,1.6,.3);pilot.position.set(0,.025,-.62);g.add(pilot); // the pilot light, always hungry
-      const shield=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.16,8,1,true,0,Math.PI),dark);
-      shield.rotation.z=Math.PI/2;shield.rotation.y=Math.PI/2;shield.position.set(0,.04,-.5);g.add(shield);
-      const tk=cyl(.065,.24,tank);tk.position.set(-.04,-.12,.02);g.add(tk);
-      const tk2=cyl(.04,.2,tank);tk2.position.set(.06,-.11,.04);g.add(tk2);
-      for(const[hx,hz]of[[-.04,-.0],[.06,.02]]){
-        const hose=cyl(.012,.18,dark);hose.rotation.x=.9;hose.position.set(hx,-.04,hz-.05);g.add(hose);}
-      const valve=new THREE.Mesh(new THREE.TorusGeometry(.022,.005,6,10),brass);
-      valve.rotation.x=Math.PI/2;valve.position.set(-.04,.02,.02);g.add(valve);
-      const gauge=cyl(.016,.012,brass);gauge.rotation.x=Math.PI/2;gauge.position.set(.0,.045,-.04);g.add(gauge);
+    g=>{ // M2 DRAGON: plumbing for the end of the world, every joint tight
+      const body=tube(.042,.038,.4,steel);body.position.set(0,0,-.04);g.add(body);
+      const capB=cap(.042,steel);capB.scale.z=.6;capB.position.set(0,0,.155);g.add(capB);
+      const reg=tube(.047,.047,.05,brass,14);reg.position.set(0,0,-.18);g.add(reg);           // brass union mid-body
+      const noz=tube(.016,.013,.3,dark);noz.position.set(0,0,-.4);g.add(noz);
+      const tip=tube(.03,.02,.08,dark,12);tip.position.set(0,0,-.58);g.add(tip);
+      const pilot=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial());
+      pilot.material.color.setRGB(4,1.6,.3);pilot.position.set(0,.022,-.6);g.add(pilot);      // the pilot light, always hungry
+      const shield=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.16,12,1,true,0,Math.PI),dark);
+      shield.rotation.z=Math.PI/2;shield.rotation.y=Math.PI/2;shield.position.set(0,.038,-.5);g.add(shield);
+      for(const pz of[-.46,-.54]){const post3=box(.008,.04,.008,dark);post3.position.set(0,.012,pz);g.add(post3);} // shield stand-offs
+      const grip1=ellw(.02,.028,.1,wood);grip1.rotation.x=Math.PI/2-.2;grip1.position.set(0,-.062,.06);g.add(grip1);
+      const grip2f=ellw(.018,.026,.09,wood);grip2f.rotation.x=Math.PI/2;grip2f.position.set(0,-.058,-.22);g.add(grip2f);
+      const tk=tube(.06,.06,.26,tank,16);tk.position.set(-.045,-.115,.03);g.add(tk);
+      for(const tz of[-.1,.16]){const tc=cap(.06,tank);tc.scale.z=.5;tc.position.set(-.045,-.115,tz+.03);g.add(tc);} // domed tank ends
+      const tk2=tube(.04,.04,.2,tank,14);tk2.position.set(.058,-.105,.04);g.add(tk2);
+      for(const tz of[-.075,.135]){const tc=cap(.04,tank);tc.scale.z=.5;tc.position.set(.058,-.105,tz+.04);g.add(tc);}
+      const hose=cyl(.011,.2,dark);hose.rotation.x=1.0;hose.position.set(-.045,-.045,.1);g.add(hose);  // tank into the butt
+      const hose2=cyl(.01,.16,dark);hose2.rotation.x=1.1;hose2.position.set(.058,-.045,.1);g.add(hose2);
+      const valve=new THREE.Mesh(new THREE.TorusGeometry(.02,.005,6,12),brass);
+      valve.rotation.x=Math.PI/2;valve.position.set(-.045,-.04,-.06);g.add(valve);
+      const stem=new THREE.Mesh(new THREE.CylinderGeometry(.005,.005,.03,8),brass);stem.position.set(-.045,-.055,-.06);g.add(stem);
+      const gauge=cyl(.014,.012,brass);gauge.rotation.x=Math.PI/2;gauge.position.set(0,.044,-.06);g.add(gauge);
     },
-    g=>{ // TRENCH KNIFE: close work, carried even when everything else is gone
-      const grip=cyl(.035,.22,wood);grip.position.set(0,-.075,.16);g.add(grip);
-      const pom=box(.09,.035,.035,steel);pom.position.set(0,-.075,.29);g.add(pom);
-      const guard=box(.22,.025,.035,brass);guard.position.set(0,-.055,.035);guard.rotation.z=.08;g.add(guard);
-      const blade=new THREE.Mesh(new THREE.ConeGeometry(.04,.58,4),steel);
-      blade.rotation.x=-Math.PI/2;blade.rotation.z=Math.PI/4;blade.position.set(.035,-.02,-.25);g.add(blade);
-      const fuller=box(.01,.006,.35,dark);fuller.position.set(.035,.005,-.25);g.add(fuller);
-      const wrap1=new THREE.Mesh(new THREE.TorusGeometry(.038,.004,6,10),dark);wrap1.position.set(0,-.075,.09);g.add(wrap1);
-      const wrap2=wrap1.clone();wrap2.position.z=.2;g.add(wrap2);
+    g=>{ // TRENCH KNIFE: close work, the blade finally true to the hand
+      const grip=ellw(.024,.03,.2,wood);grip.rotation.x=.12;grip.position.set(0,-.07,.17);g.add(grip);
+      for(let i4=0;i4<5;i4++){const wrap=new THREE.Mesh(new THREE.TorusGeometry(.027,.0035,6,12),dark);
+        const wz=.1+i4*.035;wrap.position.set(0,-.07-(wz-.17)*.12,wz);wrap.rotation.x=.12;g.add(wrap);} // cord wrap, ring by ring
+      const pom=cap(.03,steel);pom.scale.set(1,.8,.7);pom.position.set(0,-.073,.28);g.add(pom);
+      const guard=box(.16,.018,.03,brass);guard.position.set(0,-.058,.06);g.add(guard);
+      const ric=box(.02,.034,.05,steel);ric.position.set(0,-.054,.03);g.add(ric);             // ricasso joins guard to blade
+      const blade=new THREE.Mesh(new THREE.ConeGeometry(.036,.55,4),steel);
+      blade.rotation.x=-Math.PI/2;blade.rotation.z=Math.PI/4;blade.scale.x=.45;blade.position.set(0,-.05,-.22);g.add(blade); // diamond section, on axis
+      const fuller=box(.007,.005,.3,dark);fuller.position.set(0,-.044,-.16);g.add(fuller);
     },
-    g=>{ // M9 BAZOOKA: a stovepipe with opinions
-      const tube=cyl(.062,1.3,dark);tube.rotation.x=Math.PI/2;tube.position.set(.04,.06,-.18);g.add(tube);
-      const bell=new THREE.Mesh(new THREE.CylinderGeometry(.085,.062,.14,10),steel);
-      bell.rotation.x=Math.PI/2;bell.position.set(.04,.06,-.85);g.add(bell);
-      const breech=new THREE.Mesh(new THREE.CylinderGeometry(.07,.085,.12,10),steel);
-      breech.rotation.x=Math.PI/2;breech.position.set(.04,.06,.46);g.add(breech);
-      const grip=box(.05,.16,.06,wood);grip.position.set(.04,-.08,.1);grip.rotation.x=.2;g.add(grip);
-      const grip2=box(.05,.13,.06,wood);grip2.position.set(.04,-.06,-.18);g.add(grip2);
-      const sightF=box(.012,.09,.012,steel);sightF.position.set(.04,.15,-.5);g.add(sightF);
-      const ring=new THREE.Mesh(new THREE.TorusGeometry(.045,.008,6,14),brass);
-      ring.position.set(.04,.16,.05);g.add(ring);
-      const strap=box(.02,.005,.9,dark);strap.position.set(-.03,-.02,-.1);strap.rotation.z=.3;g.add(strap);
-      const rocketTip=new THREE.Mesh(new THREE.ConeGeometry(.05,.12,8),brass);
-      rocketTip.rotation.x=-Math.PI/2;rocketTip.position.set(.04,.06,-.93);g.add(rocketTip);
+    g=>{ // M9 BAZOOKA: a stovepipe with opinions and good joinery
+      const tube4=tube(.06,.06,1.3,dark);tube4.position.set(.04,.06,-.18);g.add(tube4);
+      const bell=tube(.062,.085,.14,steel,16);bell.position.set(.04,.06,-.89);g.add(bell);
+      const breech2=tube(.085,.062,.12,steel,16);breech2.position.set(.04,.06,.45);g.add(breech2);
+      const seam=tube(.064,.064,.02,steel,16);seam.position.set(.04,.06,-.5);g.add(seam);     // joint collar mid-tube
+      const conduit=box(.008,.008,.7,brass);conduit.position.set(.098,.06,-.1);g.add(conduit);// firing wire along the skin
+      const trH2=box(.05,.07,.14,dark);trH2.position.set(.04,-.002,.1);g.add(trH2);           // trigger housing joins tube to grip
+      const grip=ellw(.02,.028,.11,wood);grip.rotation.x=Math.PI/2-.2;grip.position.set(.04,-.07,.12);g.add(grip);
+      const gpost=box(.02,.05,.04,dark);gpost.position.set(.04,-.005,-.18);g.add(gpost);
+      const grip2=ellw(.018,.026,.1,wood);grip2.rotation.x=Math.PI/2;grip2.position.set(.04,-.06,-.18);g.add(grip2);
+      const shoulder=box(.05,.026,.22,wood);shoulder.position.set(.04,-.004,.27);g.add(shoulder); // shoulder rest against the tube
+      const sightF=box(.01,.07,.01,steel);sightF.position.set(.04,.125,-.5);g.add(sightF);    // front frame on the seam collar
+      const rpost=box(.012,.04,.012,steel);rpost.position.set(.04,.135,.05);g.add(rpost);     // rear ring on a post
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(.04,.007,6,14),brass);ring.position.set(.04,.185,.05);g.add(ring);
+      sling(g,.04,0,.4,.04,0,-.7);
+      const rocketTip=new THREE.Mesh(new THREE.ConeGeometry(.045,.12,12),brass);
+      rocketTip.rotation.x=-Math.PI/2;rocketTip.position.set(.04,.06,-.97);g.add(rocketTip);
     },
   ];
   for(let i=0;i<WEAPONS.length;i++){
     const g=new THREE.Group();builders[i](g);
-    if(!WEAPONS[i].flame&&!WEAPONS[i].melee){ // shared gun furniture: sights, bolt, trigger guard, grip
-      const post=box(.012,.05,.012,steel);post.position.set(0,.09,-.32);g.add(post);
-      const ring=new THREE.Mesh(new THREE.TorusGeometry(.024,.006,6,14),steel);
-      ring.position.set(0,.085,.12);g.add(ring);
-      const bolt=new THREE.Mesh(new THREE.SphereGeometry(.017,6,5),steel);
-      bolt.position.set(.05,.025,.06);g.add(bolt);
-      const boltArm=cyl(.007,.05,steel);boltArm.rotation.z=Math.PI/2;boltArm.rotation.x=0;
-      boltArm.position.set(.028,.025,.06);g.add(boltArm);
-      const hood=new THREE.Mesh(new THREE.TorusGeometry(.02,.005,6,12),steel);
-      hood.position.set(0,.088,-.32);g.add(hood);
-      const plate=box(.012,.06,.16,steel);plate.position.set(.046,.012,.02);g.add(plate);
-      const grip=box(.05,.11,.07,wood);grip.position.set(0,-.1,.13);grip.rotation.x=.32;g.add(grip);
-      const guard=new THREE.Mesh(new THREE.TorusGeometry(.03,.006,5,10,Math.PI),dark);
-      guard.rotation.x=Math.PI/2;guard.rotation.z=Math.PI;guard.position.set(0,-.06,-.02);g.add(guard);
-    }
     g.visible=i===0;vm.add(g);gunModels.push(g);
   }
 }
@@ -9415,6 +9450,7 @@ window.CONVOY=convoy;window.leadTruck=leadTruck;window.openEvent=openEvent;windo
 window.winCampaign=winCampaign;window.buildWorld=buildWorld;window.roadZ=roadZ;
 window.throwGrenade=throwGrenade;window.explode=explode;window.selectWeapon=selectWeapon;
 window.WEAPONS=WEAPONS;window.toggleShop=toggleShop;window.offerPerks=offerPerks;
+window.VM=vm;window.GUNS=gunModels; // dev: weapon photography rig
 window.throwMolotov=throwMolotov;window.placeMine=placeMine;window.throwFlare=throwFlare;
 window.addFirePatch=addFirePatch;window.WXSTATE=()=>({cur:WX[wxCur].id,next:WX[wxNext].id,blend:wxBlend,frenzy:wxFrenzy});
 window.setWeather=i=>{wxNext=i;wxBlend=0;wxTimer=999;};
