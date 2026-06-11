@@ -704,6 +704,8 @@ function smoothNoise(x,z){
 /* the road winds differently on every leg, but always passes the camp at origin */
 const ROAD={a1:10,f1:.026,s1:1,a2:5,f2:.07,s2:1};
 function roadZ(x){return ROAD.a1*Math.sin(x*ROAD.f1)*ROAD.s1+ROAD.a2*Math.sin(x*ROAD.f2)*ROAD.s2;}
+const RIVER={on:false,x0:30,a1:12,f1:.018,a2:4,f2:.05};
+function riverX(z){return RIVER.x0+Math.sin(z*RIVER.f1)*RIVER.a1+Math.sin(z*RIVER.f2)*RIVER.a2;}
 const BIOME={name:'GREYFIELD MARCH',tint:[1,1,1],rugged:1,treeK:1,grassK:1,rockK:1,risk:1,nfBias:0,leafHue:0,grassHue:0,city:0,shore:false};
 let terrainSkirt=null;
 function buildSkirt(){
@@ -758,6 +760,13 @@ function genTerrain(){
       h+=Math.pow(Math.max(0,hill-.42),1.5)*15*rel;
       const vale=smoothNoise(ix*.031+87,iz*.031+5);
       h-=Math.pow(Math.max(0,vale-.6),1.6)*6.5*rel;
+    }
+    if(RIVER.on){ // the river: the valley's one argument that always wins
+      const rdx=Math.abs(x-riverX(z));
+      if(rdx<9){
+        const w=1-rdx/9,ww=w*w*(3-2*w);
+        h=h*(1-ww)-2.5*ww;
+      }
     }
     const dDep=Math.hypot(x,z);
     h*=clamp((dDep-10)/26,0,1);
@@ -1992,6 +2001,38 @@ const pondMat=(()=>{
   };
   return m;
 })();
+const riverMesh=(()=>{ // one long ribbon of moving water
+  const SEG=64;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array((SEG+1)*2*3),uv2=new Float32Array((SEG+1)*2*2),idx=[];
+  for(let i=0;i<SEG;i++){const a=i*2,b=a+1,c=a+2,d=a+3;idx.push(a,c,b,b,c,d);}
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.BufferAttribute(uv2,2));
+  geo.setIndex(idx);
+  const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x14222b,roughness:.13,
+    metalness:.5,envMapIntensity:1.7,transparent:true,opacity:.93}));
+  m.material.onBeforeCompile=s2=>{ // a current, not a mirror
+    s2.uniforms.uT=WindU;
+    s2.vertexShader='uniform float uT;\n'+s2.vertexShader.replace('#include <beginnormal_vertex>',
+      `#include <beginnormal_vertex>
+       float rwA=position.x*.5+uT*1.6,rwB=position.z*.35-uT*1.1;
+       objectNormal=normalize(vec3(-.16*cos(rwA),1.,-.12*cos(rwB)));`);
+  };
+  m.receiveShadow=true;m.visible=false;m.frustumCulled=false;
+  scene.add(m);return m;
+})();
+function buildRiverMesh(){
+  riverMesh.visible=RIVER.on;
+  if(!RIVER.on)return;
+  const SEG=64,W=8.5,p=riverMesh.geometry.attributes.position.array;
+  for(let i=0;i<=SEG;i++){
+    const z=-half+TER.size*i/SEG,x=riverX(z);
+    p[i*6]=x-W/2;p[i*6+1]=-1.25;p[i*6+2]=z;
+    p[i*6+3]=x+W/2;p[i*6+4]=-1.25;p[i*6+5]=z;
+  }
+  riverMesh.geometry.attributes.position.needsUpdate=true;
+  riverMesh.geometry.computeBoundingSphere();
+}
 const iceMat=new THREE.MeshStandardMaterial({color:0xaec6dd,roughness:.06,metalness:.35,
   envMapIntensity:2.1,transparent:true,opacity:.96,alphaMap:pondMat.alphaMap,depthWrite:false});
 for(let i=0;i<5;i++){
@@ -2107,6 +2148,118 @@ function scatterSetpieces(){
   }
 }
 scatterSetpieces();
+function scatterRuins(){ // the country keeps its dead architecture
+  const concrete=frostable(new THREE.MeshStandardMaterial({color:0x8d897e,roughness:.95,bumpMap:brickTex,bumpScale:.25}));
+  const brickM=frostable(new THREE.MeshStandardMaterial({color:0xb09a86,roughness:.92,map:brickTex,bumpMap:brickTex,bumpScale:.35}));
+  const woodM=frostable(new THREE.MeshStandardMaterial({color:0x4f4434,map:woodTex,roughness:.95,bumpMap:woodTex,bumpScale:.3}));
+  const rustM=frostable(new THREE.MeshStandardMaterial({color:0x5a4634,roughness:.6,metalness:.5}));
+  const spot=minR=>{
+    for(let t=0;t<40;t++){
+      const x=srand(-half+18,half-18),z=srand(-half+18,half-18);
+      if(Math.hypot(x,z-9.5)<minR)continue;
+      if(Math.abs(z-roadZ(x))<11)continue;
+      if(RIVER.on&&Math.abs(x-riverX(z))<12)continue;
+      return{x,z};
+    }
+    return null;
+  };
+  const lootHere=(x,z,rich)=>{ // in the open country, ruins keep their stores
+    if(!WANDER.on)return;
+    const c=buildCacheMesh(rich);
+    c.position.set(x,heightAt(x,z)+.38,z);
+    scene.add(c);WANDER._meshes.push(c);
+    WANDER.loot.push({x,z,mesh:c,taken:false,rich});
+  };
+  const builders={
+    barn(x,z){
+      const g=new THREE.Group();
+      for(const s2 of[-1,1]){ // two gable ends still standing
+        const w=new THREE.Mesh(new THREE.BoxGeometry(7,4.6,.5),brickM);
+        w.position.set(0,2.0,s2*4.6);g.add(w);
+      }
+      for(let i=0;i<4;i++){ // the roof, fallen in
+        const bm=new THREE.Mesh(new THREE.BoxGeometry(.22,.22,9.6),woodM);
+        bm.position.set(srand(-2.6,2.6),srand(1,3.4),0);
+        bm.rotation.z=srand(-.7,.7);bm.rotation.x=srand(-.12,.12);g.add(bm);
+      }
+      COLLIDERS.push({x,z,r:5});
+      lootHere(x+srand(-2,2),z+srand(-2,2),false);
+      return g;
+    },
+    chapel(x,z){
+      const g=new THREE.Group();
+      for(const[ox,oz,w2,ry]of[[0,-2.6,5,0],[2.6,0,5,Math.PI/2],[-2.6,0,5,Math.PI/2]]){
+        const w=new THREE.Mesh(new THREE.BoxGeometry(w2,srand(2.6,3.8),.45),brickM);
+        w.position.set(ox,1.5,oz);w.rotation.y=ry;g.add(w);
+      }
+      const c1=new THREE.Mesh(new THREE.BoxGeometry(.22,2.2,.22),woodM);c1.position.set(0,4.2,-2.6);g.add(c1);
+      const c2=new THREE.Mesh(new THREE.BoxGeometry(1.2,.22,.22),woodM);c2.position.set(0,4.6,-2.6);g.add(c2);
+      COLLIDERS.push({x,z,r:3.4});
+      return g;
+    },
+    silo(x,z){
+      const g=new THREE.Group();
+      const body=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.4,10,14),brickM);
+      body.position.y=5;g.add(body);
+      const dome=new THREE.Mesh(new THREE.SphereGeometry(2.25,14,8,0,TAU,0,Math.PI/2),rustM);
+      dome.position.y=10;g.add(dome);
+      g.rotation.z=srand(-.03,.03);
+      COLLIDERS.push({x,z,r:2.8});
+      return g;
+    },
+    watertower(x,z){
+      const g=new THREE.Group();
+      for(const[lx,lz]of[[-1.3,-1.3],[1.3,-1.3],[-1.3,1.3],[1.3,1.3]]){
+        const leg=new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,8.5,8),rustM);
+        leg.position.set(lx,4.25,lz);leg.rotation.x=lz*-.04;leg.rotation.z=lx*.04;g.add(leg);
+      }
+      const tank=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.1,2.6,14),rustM);
+      tank.position.y=9.4;g.add(tank);
+      const cap=new THREE.Mesh(new THREE.ConeGeometry(2.3,1,14),rustM);cap.position.y=11.2;g.add(cap);
+      COLLIDERS.push({x,z,r:2.2});
+      return g;
+    },
+    cavemouth(x,z){ // a dark socket of stone, its keep just inside
+      const g=new THREE.Group();
+      const rockM2=frostable(new THREE.MeshStandardMaterial({color:0x6a6354,roughness:.95,bumpMap:fleshTex,bumpScale:.5}));
+      for(const[ox,oy,oz,s2]of[[-2,1,0,1.7],[2,1,0,1.7],[0,2.9,-.4,1.9],[-1.2,.4,1,1],[1.4,.5,.8,1.1]]){
+        const r=new THREE.Mesh(new THREE.IcosahedronGeometry(s2,1),rockM2);
+        r.position.set(ox,oy,oz);r.rotation.set(srand(TAU),srand(TAU),0);g.add(r);
+      }
+      const dark=new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.4),
+        new THREE.MeshBasicMaterial({color:0x020303}));
+      dark.position.set(0,1.1,-.2);g.add(dark);
+      COLLIDERS.push({x,z,r:3});
+      lootHere(x,z+2.2,true);
+      return g;
+    },
+    bunker(x,z){ // a concrete cap over something built to be forgotten
+      for(let p2=0;p2<5;p2++)modifyTerrain(x,z,4.2,-.75);
+      const g=new THREE.Group(),gy=heightAt(x,z);
+      const room=new THREE.Mesh(new THREE.BoxGeometry(5,2.6,5),concrete);
+      room.position.y=gy+.6;g.add(room);
+      const hatch=new THREE.Mesh(new THREE.BoxGeometry(2,1.6,.3),concrete);
+      hatch.position.set(0,gy+1.6,2.6);g.add(hatch);
+      const stair=new THREE.Mesh(new THREE.BoxGeometry(1.6,.3,3),concrete);
+      stair.position.set(0,gy+.6,3.8);stair.rotation.x=-.5;g.add(stair);
+      COLLIDERS.push({x,z,r:3.6});
+      lootHere(x,z+5.4,true);
+      return g;
+    },
+  };
+  const keys=Object.keys(builders);
+  const n=3+(srnd()*4|0);
+  for(let i=0;i<n;i++){
+    const kind=keys[Math.floor(srnd()*keys.length)];
+    const sp=spot(kind==='bunker'||kind==='cavemouth'?34:30);
+    if(!sp)continue;
+    const g=builders[kind](sp.x,sp.z);
+    if(kind!=='bunker'){g.position.set(sp.x,heightAt(sp.x,sp.z),sp.z);g.rotation.y=kind==='silo'||kind==='watertower'?0:srand(TAU);}
+    else g.position.set(sp.x,0,sp.z);
+    g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+    setpieces.add(g);
+  }
+}
 
 /* ---------------- the dead city: streets you drive through ---------------- */
 const facadeTex=(()=>{
@@ -4860,6 +5013,10 @@ function buildWorld(legSeed){
   setSeed(legSeed);HSALT=legSeed|0;
   ROAD.a1=srand(6,15);ROAD.f1=srand(.018,.032);ROAD.s1=srnd()<.5?-1:1;
   ROAD.a2=srand(2,7);ROAD.f2=srand(.05,.09);ROAD.s2=srnd()<.5?-1:1;
+  RIVER.on=!BIOME.desert&&!BIOME.shore&&srnd()<.5;
+  RIVER.x0=srand(-34,34);if(Math.abs(RIVER.x0)<22)RIVER.x0+=RIVER.x0<0?-22:22;
+  RIVER.a1=srand(8,16);RIVER.f1=srand(.012,.022);
+  RIVER.a2=srand(2,5);RIVER.f2=srand(.04,.07);
   genTerrain();
   const pos=tGeo.attributes.position.array;
   for(let v=0;v<VN*VN;v++)pos[v*3+1]=H[v];
@@ -4867,7 +5024,8 @@ function buildWorld(legSeed){
   buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
-  scatterPosts();scatterForest();scatterSetpieces();scatterPonds();scatterGrass();scatterUnderbrush();scatterCity();
+  scatterPosts();scatterForest();scatterSetpieces();scatterRuins();scatterPonds();scatterGrass();scatterUnderbrush();scatterCity();
+  buildRiverMesh();
   scatterDeer();
   rebuildColGrid();
   sea.visible=!!BIOME.shore;
