@@ -1,0 +1,23 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1400, height: 700 } });
+const errs = [];
+page.on('pageerror', e => errs.push(String(e)));
+await page.goto('http://127.0.0.1:5183/kestrel.html?seed=777', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(7000);
+await page.evaluate(() => {
+  KQA.lock(); KQA.god(); KQA.zoo();
+  const r = KQA.rooms()[0];
+  KQA.tp(r.x - 1.2, r.z + 2.6, 0, -.04);
+});
+await page.waitForTimeout(900);
+await page.screenshot({ path: '/tmp/k-zoo.png' });
+await page.waitForTimeout(2500);
+await page.evaluate(() => { const r = KQA.rooms()[0]; KQA.tp(r.x - 3.2, r.z + .2, .8, -.05); });
+await page.waitForTimeout(400);
+await page.screenshot({ path: '/tmp/k-zoo2.png' });
+await page.evaluate(() => { const r = KQA.rooms()[0]; KQA.tp(r.x + 2.4, r.z + .2, -.9, -.05); });
+await page.waitForTimeout(400);
+await page.screenshot({ path: '/tmp/k-zoo3.png' });
+console.log('errors:', errs.filter(e => !/pointer/i.test(e)).join('\n') || 'none');
+await browser.close();

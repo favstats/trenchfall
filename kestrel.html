@@ -1042,44 +1042,90 @@ function roomLight(x, z, lit, warm, rH = H) {
 /* ------------------------------------------------------------ the build */
 const INTER = [];       // interactables: {x,z,kind,label,...}
 const WINDOWS = [];
-const hallLampMat = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffe8c8, emissiveIntensity: 2.0, roughness: 1 });
+/* halls travel in families: each connected run has its own gauge and mood */
+const hallGroup = new Int16Array(GW * GH).fill(-1);
+const HALLGROUPS = [];
+for (let c = 0; c < GW * GH; c++) {
+  if (map[c] !== HALL || hallGroup[c] >= 0) continue;
+  const gid = HALLGROUPS.length;
+  const q = [c];
+  hallGroup[c] = gid;
+  while (q.length) {
+    const k = q.pop();
+    for (const n of [k - 1, k + 1, k - GW, k + GW]) {
+      if (n < 0 || n >= GW * GH || map[n] !== HALL || hallGroup[n] >= 0) continue;
+      if (!edgeOpen(k, n)) continue;
+      hallGroup[n] = gid; q.push(n);
+    }
+  }
+  HALLGROUPS.push({
+    w: rpick([1.8, 2.4, 2.4, 3.4]),
+    h: rpick([2.2, 2.55, 2.55, 3.1]),
+    mood: rpick(['warm', 'warm', 'warm', 'red', 'accent', 'dead']),
+  });
+}
+const LAMPMATS = {
+  warm: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffe8c8, emissiveIntensity: 2.0, roughness: 1 }),
+  red: new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff3522, emissiveIntensity: 1.6, roughness: 1 }),
+  accent: new THREE.MeshStandardMaterial({ color: 0, emissive: PAL.accent, emissiveIntensity: 1.8, roughness: 1 }),
+  dead: deadLightMat,
+};
+const hallLampMat = LAMPMATS.warm;
 for (let c = 0; c < GW * GH; c++) {
   if (map[c] !== HALL) continue;
+  const G2 = HALLGROUPS[hallGroup[c]];
+  const hw = G2.w, hh = G2.h, half = hw / 2;
   const x = cellCX(c), z = cellCZ(c);
   const dirs = [
     { d: [1, 0], n: c + 1, ok: (c % GW) < GW - 1 },
     { d: [-1, 0], n: c - 1, ok: (c % GW) > 0 },
-    { d: [0, 1], n: c - GW, ok: c >= GW },        // -z is "up" the grid (gy-1)
+    { d: [0, 1], n: c - GW, ok: c >= GW },
     { d: [0, -1], n: c + GW, ok: c < GW * (GH - 1) },
   ];
-  // grid gy increases toward -z, so neighbor at gy-1 sits at HIGHER z (closer to start)
-  floorPiece(2.4, 2.4, x, z, plateMat, 1);
-  ceilPiece(2.4, 2.4, x, z, ceilMat, 4, HH);
-  const chan = new THREE.Mesh(new THREE.BoxGeometry(.34, .05, 1.7), blackTrim);
-  chan.position.set(x, HH - .025, z);
+  floorPiece(hw, hw, x, z, plateMat, 1);
+  ceilPiece(hw, hw, x, z, ceilMat, 4, hh);
+  const chan = new THREE.Mesh(new THREE.BoxGeometry(.34, .05, Math.min(1.7, hw * .7)), blackTrim);
+  chan.position.set(x, hh - .025, z);
   scene.add(chan);
-  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.16, .015, 1.5), ((c % 3) !== 2) ? hallLampMat : deadLightMat);
-  lamp.position.set(x, HH - .055, z);
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(.16, .015, Math.min(1.5, hw * .62)),
+    ((c % 3) !== 2) ? LAMPMATS[G2.mood] : deadLightMat);
+  lamp.position.set(x, hh - .055, z);
   scene.add(lamp);
   for (const dir of dirs) {
     const [dx, dzg] = dir.d;
-    const wx = dx, wz = dzg === 1 ? 1 : dzg === -1 ? -1 : 0; // world z dir for this arm
+    const wx = dx, wz = dzg === 1 ? 1 : dzg === -1 ? -1 : 0;
     const open = dir.ok && map[dir.n] !== SOLID && edgeOpen(c, dir.n);
     if (open) {
-      const ax = x + wx * (1.2 + .9), az = z + wz * (1.2 + .9);
-      floorPiece(wx ? 1.8 : 2.4, wx ? 2.4 : 1.8, ax, az, plateMat, 1);
-      ceilPiece(wx ? 1.8 : 2.4, wx ? 2.4 : 1.8, ax, az, ceilMat, 4, HH);
-      if (wx) { // arm along x: side walls at z +/-1.2
-        for (const s of [-1, 1])
-          buildWall(x + wx * 1.2, z + s * 1.2, x + wx * 3, z + s * 1.2, 0, -s, HH, wallMat);
+      const ax = x + wx * (half + (3 - half) / 2), az = z + wz * (half + (3 - half) / 2);
+      const armL = 3 - half;
+      floorPiece(wx ? armL : hw, wx ? hw : armL, ax, az, plateMat, 1);
+      ceilPiece(wx ? armL : hw, wx ? hw : armL, ax, az, ceilMat, 4, hh);
+      if (wx) {
+        for (const sd of [-1, 1])
+          buildWall(x + wx * half, z + sd * half, x + wx * 3, z + sd * half, 0, -sd, hh, wallMat);
       } else {
-        for (const s of [-1, 1])
-          buildWall(x + s * 1.2, z + wz * 1.2, x + s * 1.2, z + wz * 3, -s, 0, HH, wallMat);
+        for (const sd of [-1, 1])
+          buildWall(x + sd * half, z + wz * half, x + sd * half, z + wz * 3, -sd, 0, hh, wallMat);
+      }
+      // a neighbouring hall of a narrower gauge: close the difference at the boundary
+      if (map[dir.n] === HALL) {
+        const T = HALLGROUPS[hallGroup[dir.n]];
+        if (T.w < hw) {
+          const bx = x + wx * 3, bz = z + wz * 3;
+          for (const sd of [-1, 1]) {
+            if (wx) buildWall(bx, bz + sd * T.w / 2, bx, bz + sd * half, -wx, 0, Math.min(hh, T.h), wallMat);
+            else buildWall(bx + sd * T.w / 2, bz, bx + sd * half, bz, 0, -wz, Math.min(hh, T.h), wallMat);
+          }
+        }
+        if (T.h < hh) {
+          const bx = x + wx * 3, bz = z + wz * 3;
+          if (wx) buildWall(bx, bz - half, bx, bz + half, -wx, 0, hh - T.h, wallMat, T.h, false);
+          else buildWall(bx - half, bz, bx + half, bz, 0, -wz, hh - T.h, wallMat, T.h, false);
+        }
       }
     } else {
-      // closed throat
-      if (wx) buildWall(x + wx * 1.2, z - 1.2, x + wx * 1.2, z + 1.2, -wx, 0, HH, wallMat);
-      else buildWall(x - 1.2, z + wz * 1.2, x + 1.2, z + wz * 1.2, 0, -wz, HH, wallMat);
+      if (wx) buildWall(x + wx * half, z - half, x + wx * half, z + half, -wx, 0, hh, wallMat);
+      else buildWall(x - half, z + wz * half, x + half, z + wz * half, 0, -wz, hh, wallMat);
     }
   }
 }
@@ -2578,24 +2624,36 @@ function nameGen() {
   return n;
 }
 function makeSpecies(hostile) {
-  const size = hostile ? rr(.5, 1.8) : rr(.5, 1.1);
-  const hue = rnd(), sat = rr(.05, hostile ? .45 : .6), lit = rr(.06, hostile ? .3 : .5);
+  // horror palette: dark bodies, one burning note — not a cartoon
+  const hue = rnd(), sat = rr(.04, hostile ? .3 : .6), lit = rr(.05, hostile ? .2 : .5);
   const col = new THREE.Color().setHSL(hue, sat, lit);
   const eyeCol = new THREE.Color().setHSL((hue + rr(.3, .7)) % 1, .9, .6);
-  const body = rpick(hostile ? ['biped', 'quad', 'floater', 'serpent', 'crab'] : ['biped', 'floater']);
-  const rigged = hostile && (body === 'biped' || body === 'quad') ;
+  // six designed silhouettes; the seed stretches them inside their bounds
+  const arch = hostile ? rpick(['stalker', 'stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike']) : 'wisp';
+  const rigged = hostile && rnd() < .3;
+  const A = {
+    stalker:    { size: rr(1.0, 1.5), speed: rr(1.6, 2.4), hyF: 1.25, rF: .5, loco: 'walk', hpM: 1 },
+    widow:      { size: rr(.8, 1.35), speed: rr(2.2, 3.2), hyF: .8, rF: .6, loco: 'skitter', hpM: .8 },
+    centipede:  { size: rr(.8, 1.25), speed: rr(1.8, 2.8), hyF: .45, rF: .55, loco: 'walk', hpM: .9 },
+    marionette: { size: rr(.95, 1.2), speed: rr(1.2, 1.8), hyF: 1.1, rF: .45, loco: 'drift', hpM: 1 },
+    brute:      { size: rr(1.0, 1.35), speed: rr(.9, 1.4), hyF: 1.0, rF: .75, loco: 'walk', hpM: 2.2 },
+    shrike:     { size: rr(.9, 1.3), speed: rr(2.4, 3.4), hyF: 1.05, rF: .45, loco: 'hop', hpM: .7 },
+    wisp:       { size: rr(.6, 1.0), speed: 1.4, hyF: .9, rF: .35, loco: 'drift', hpM: 1 },
+  }[arch];
+  const size = rigged ? rr(.7, 1.45) : A.size;
   return {
-    name: nameGen(), size: rigged ? rr(.7, 1.45) : size, hostile, rigged, body,
+    name: nameGen(), size, hostile, rigged, arch, body: arch,
     col, eyeCol,
-    rough: rr(.2, .95), metal: rnd() < .25 ? rr(.5, .9) : rr(0, .2),
-    eyes: hostile ? (rnd() * 5 | 0) + (rnd() < .15 ? 0 : 1) : 2,
-    loco: rpick(hostile ? ['walk', 'skitter', 'hop', 'drift', 'phase'] : ['walk', 'drift']),
+    rough: rr(.35, .95), metal: rnd() < .2 ? rr(.3, .6) : 0,
+    eyes: hostile ? 1 + (rnd() * 5 | 0) : 2,
+    loco: rigged ? 'walk' : A.loco,
     quirk: hostile ? rpick(['none', 'none', 'freezeWatched', 'lightShy', 'statue', 'splitter', 'feigner']) : 'none',
     pattern: rpick(['spots', 'stripes', 'veins', 'patches', 'scales']),
     attack: rpick(['claw', 'claw', 'lunge', 'spit', 'scream']),
-    speed: rr(1.1, 2.6) * (RUN.deck > 4 ? 1.25 : 1),
-    hp: (22 + size * 38) * (1 + RUN.deck * .12),
+    speed: A.speed * (RUN.deck > 4 ? 1.2 : 1),
+    hp: (22 + size * 38) * A.hpM * (1 + RUN.deck * .12),
     dmg: 8 + size * 12 + RUN.deck,
+    hyF: A.hyF, rF: A.rF,
     voice: {
       kind: rpick(['tonal', 'tonal', 'click', 'breath']),
       wave: rpick(['sine', 'sawtooth', 'triangle', 'square']),
@@ -2677,122 +2735,276 @@ function creatureSkinTex(sp) {
 function buildCreature(sp) {
   if (!sp._hide) sp._hide = creatureSkinTex(sp);
   const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0xd9d9d9, map: sp._hide,
-    bumpMap: sp._hide, bumpScale: .05, roughness: sp.rough, metalness: sp.metal,
-    emissive: sp.col.clone().multiplyScalar(.14) });
-  const skin2 = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xd9d9d9).offsetHSL(rr(-.06, .06), 0, rr(-.18, .08)),
-    map: sp._hide, bumpMap: sp._hide, bumpScale: .07,
-    roughness: clamp(sp.rough + rr(-.25, .25), .05, 1), metalness: sp.metal });
-  const eyeM = new THREE.MeshStandardMaterial({ color: 0, emissive: sp.eyeCol, emissiveIntensity: 3, roughness: 1 });
-  const S = sp.size;
-  const refs = { legs: [], arms: [], heads: [], fins: [], eyeM, skin, mats: [skin, skin2] };
-  // trunk: a lathe profile nobody drew
-  const prof = [];
-  const segs = 9, bulge = rr(.7, 1.5), ripple = rr(1, 2.6), lean = rr(.7, 1.3);
-  for (let i = 0; i <= segs; i++) {
-    const t = i / segs;
-    let r = Math.sin(Math.pow(t, lean) * Math.PI);
-    r *= .3 * S * bulge * (1 + Math.sin(t * TAU * ripple) * .14);
-    prof.push(new THREE.Vector2(Math.max(.015, r), t * S));
-  }
-  const coreY = sp.body === 'floater' ? .85 * S : sp.body === 'crab' || sp.body === 'serpent' ? .3 * S : .55 * S;
-  const torso = new THREE.Mesh(new THREE.LatheGeometry(prof, 14), skin);
-  torso.position.y = coreY;
-  torso.scale.z = rr(.75, 1.3);
-  g.add(torso);
-  refs.torso = torso;
-  const topY = coreY + S;
-  if (rnd() < .55) { // dorsal spines
-    const n = 3 + (rnd() * 5 | 0);
-    for (let i = 0; i < n; i++) {
-      const t = .25 + i / n * .6;
-      const spn = new THREE.Mesh(new THREE.ConeGeometry(.035 * S, rr(.12, .3) * S, 6), skin2);
-      spn.position.set(0, coreY + t * S, -prof[(t * segs) | 0].x * torso.scale.z);
-      spn.rotation.x = -rr(.5, 1.1);
-      g.add(spn);
-    }
-  }
-  if (rnd() < .5) { // bioluminescent nodes
-    const n = 2 + (rnd() * 5 | 0);
-    for (let i = 0; i < n; i++) {
-      const a = rnd() * TAU, t = rr(.2, .85);
-      const rad = prof[(t * segs) | 0].x;
-      const node = new THREE.Mesh(new THREE.SphereGeometry(rr(.025, .06) * S, 6, 5), eyeM);
-      node.position.set(Math.cos(a) * rad, coreY + t * S, Math.sin(a) * rad * torso.scale.z);
-      g.add(node);
-    }
-  }
-  const headN = rnd() < .12 ? 2 : 1;
-  for (let h = 0; h < headN; h++) {
-    const head = new THREE.Mesh(new THREE.SphereGeometry(.16 * S, 12, 10), skin);
-    head.position.set((h - (headN - 1) / 2) * .26 * S, topY, .08 * S);
-    head.scale.set(rr(.8, 1.25), rr(.75, 1.5), rr(.9, 1.7));
-    g.add(head);
-    refs.heads.push(head);
-    if (rnd() < .5) { // snout, or something like one
-      const sn = new THREE.Mesh(new THREE.ConeGeometry(.06 * S, rr(.15, .4) * S, 8), skin2);
-      sn.position.set(head.position.x, topY - .02 * S, head.position.z + .18 * S);
-      sn.rotation.x = Math.PI / 2 + rr(-.3, .2);
-      g.add(sn);
-    }
-    for (let e = 0; e < sp.eyes; e++) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(rr(.02, .04) * S, 6, 5), eyeM);
-      const a = (e - (sp.eyes - 1) / 2) * .45;
-      eye.position.set(head.position.x + Math.sin(a) * .14 * S,
-        topY + (e % 2 ? .05 : -.01) * S,
-        head.position.z + Math.cos(a) * .15 * S);
-      g.add(eye);
-    }
-  }
-  const legN = sp.body === 'biped' ? 2 : sp.body === 'quad' ? 4 : sp.body === 'crab' ? 6 : 0;
-  const hipY = coreY + .25 * S;
-  for (let i = 0; i < legN; i++) {
-    const a = sp.body === 'biped' ? (i ? -1 : 1) * Math.PI / 2 : (i / legN) * TAU + .35;
-    const hip = new THREE.Group();
-    hip.position.set(Math.cos(a) * .24 * S, hipY, sp.body === 'biped' ? 0 : Math.sin(a) * .2 * S);
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(.05 * S, .038 * S, hipY * .62, 7), skin);
-    upper.position.y = -hipY * .31;
-    hip.add(upper);
-    const knee = new THREE.Group();
-    knee.position.y = -hipY * .62;
-    const lower = new THREE.Mesh(new THREE.CylinderGeometry(.034 * S, .02 * S, hipY * .52, 7), skin2);
-    lower.position.y = -hipY * .26;
-    knee.add(lower);
+  const u = sp.size;
+  // material discipline: textured hide, glossy chitin, ONE emissive focal note
+  const hide = new THREE.MeshStandardMaterial({ color: 0xc9c9c9, map: sp._hide,
+    bumpMap: sp._hide, bumpScale: .06, roughness: sp.rough, metalness: sp.metal * .4,
+    emissive: sp.col.clone().multiplyScalar(.07) });
+  const chitin = new THREE.MeshStandardMaterial({ color: sp.col.clone().multiplyScalar(.22),
+    roughness: .16, metalness: .5 });
+  const focal = new THREE.MeshStandardMaterial({ color: 0, emissive: sp.eyeCol, emissiveIntensity: 3.2, roughness: 1 });
+  const refs = { arch: sp.arch, u, legs: [], arms: [], segs: [], fins: [], heads: [],
+    mats: [hide, chitin], eyeM: focal, head: null, sway: null, neckG: null };
+  const sph = (r, mat, sx = 1, sy = 1, sz = 1) => {
+    const m2 = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), mat);
+    m2.scale.set(sx, sy, sz);
+    return m2;
+  };
+  const seg2 = (len, r0, r1, mat) => { // pivot at the top, bone hangs down
+    const gr = new THREE.Group();
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), mat);
+    c.position.y = -len / 2;
+    gr.add(c);
+    return gr;
+  };
+  const limb = (list, x, y, z, L1, L2, r, mat, restH, restK, splayZ = 0, tip = null) => {
+    const hip = seg2(L1, r, r * .72, mat);
+    hip.position.set(x, y, z);
+    const knee = seg2(L2, r * .7, r * .38, mat);
+    knee.position.y = -L1;
     hip.add(knee);
-    if (sp.body === 'crab') { hip.rotation.z = Math.cos(a) * .9; hip.rotation.x = Math.sin(a) * .5; }
+    if (tip) { tip.position.y = -L2; knee.add(tip); }
+    hip.rotation.x = restH; hip.rotation.z = splayZ;
+    knee.rotation.x = restK;
     g.add(hip);
-    refs.legs.push({ hip, knee });
-  }
-  if (sp.body === 'biped') for (const sd of [-1, 1]) {
-    const arm = new THREE.Group();
-    arm.position.set(sd * .3 * S, coreY + .62 * S, 0);
-    const ua = new THREE.Mesh(new THREE.CylinderGeometry(.034 * S, .024 * S, .55 * S, 7), skin);
-    ua.position.y = -.27 * S;
-    arm.add(ua);
-    arm.rotation.z = sd * .35;
-    g.add(arm);
-    refs.arms.push(arm);
-  }
-  if (sp.body === 'serpent') {
-    let pz = -.3 * S;
-    for (let i = 0; i < 6; i++) {
-      const seg = new THREE.Mesh(new THREE.SphereGeometry((.22 - i * .028) * S, 9, 7), i % 2 ? skin2 : skin);
-      seg.position.set(0, coreY * (1 - i * .1), pz);
-      pz -= .24 * S;
-      g.add(seg);
-      refs.fins.push(seg);
+    const E = { hip, knee, restH, restK, splayZ, restKz: 0, i: list.length };
+    list.push(E);
+    return E;
+  };
+  const eyesOn = (cx2, cy2, cz2, n, r) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i - (n - 1) / 2) * .4;
+      const e2 = sph(r * rr(.7, 1.2), focal);
+      e2.position.set(cx2 + Math.sin(a) * .12 * u, cy2 + (i % 2 ? .03 : -.02) * u, cz2 + Math.cos(a) * .04 * u);
+      g.add(e2);
     }
-  }
-  if (sp.body === 'floater') for (let i = 0; i < 4; i++) {
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(.09 * S, rr(.3, .6) * S, 6), i % 2 ? skin2 : skin);
-    const a = i / 4 * TAU;
-    fin.position.set(Math.cos(a) * .3 * S, coreY + .4 * S, Math.sin(a) * .3 * S);
-    fin.rotation.z = Math.PI / 2 + a;
-    g.add(fin);
-    refs.fins.push(fin);
+  };
+  if (sp.arch === 'stalker') {
+    // the wrong kind of tall: hunched spine, arms past the knees, head hung low
+    const hipY = 1.15 * u;
+    const pelvis = sph(.14 * u, hide, 1.1, .9, .9); pelvis.position.y = hipY; g.add(pelvis);
+    for (let i = 0; i < 4; i++) {
+      const v = sph((.11 + i * .02) * u, hide, 1.35, .8, 1);
+      v.position.set(0, hipY + .2 * u * (i + 1), Math.pow(i / 3, 1.4) * .22 * u);
+      g.add(v);
+    }
+    const shY = hipY + .8 * u, shZ = .22 * u;
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(.6 * u, .13 * u, .17 * u), chitin);
+    bar.position.set(0, shY, shZ); g.add(bar);
+    for (let i = 0; i < 3; i++) { // ribs remember being a cage
+      const rib = new THREE.Mesh(new THREE.TorusGeometry((.16 + i * .015) * u, .013 * u, 6, 12, Math.PI), chitin);
+      rib.position.set(0, hipY + (.25 + i * .16) * u, .04 * u);
+      rib.rotation.x = Math.PI / 2 + .25; rib.rotation.z = Math.PI;
+      g.add(rib);
+    }
+    const head = sph(.11 * u, hide, 1, 1.3, 1.15);
+    head.position.set(0, shY - .04 * u, shZ + .24 * u);
+    head.rotation.x = .55;
+    g.add(head); refs.head = head;
+    eyesOn(0, shY - .02 * u, shZ + .33 * u, Math.min(3, sp.eyes), .022 * u);
+    const claws = () => { const c2 = new THREE.Group();
+      for (let i = -1; i <= 1; i++) { const cl = new THREE.Mesh(new THREE.ConeGeometry(.016 * u, .14 * u, 5), chitin);
+        cl.position.x = i * .03 * u; cl.rotation.x = Math.PI; c2.add(cl); } return c2; };
+    limb(refs.arms, -.32 * u, shY, shZ, .55 * u, .7 * u, .045 * u, hide, .22, -.3, .12, claws());
+    limb(refs.arms, .32 * u, shY, shZ, .55 * u, .7 * u, .045 * u, hide, .22, -.3, -.12, claws());
+    limb(refs.legs, -.15 * u, hipY, 0, .62 * u, .62 * u, .055 * u, hide, .5, -1.0);
+    limb(refs.legs, .15 * u, hipY, 0, .62 * u, .62 * u, .055 * u, hide, .5, -1.0);
+  } else if (sp.arch === 'widow') {
+    // legs arch above the body; that is the whole point of it
+    const bodyY = .85 * u;
+    const ceph = sph(.2 * u, chitin, 1, .9, 1.1); ceph.position.set(0, bodyY, .14 * u); g.add(ceph);
+    const abd = sph(.3 * u, hide, 1, 1.1, 1.35); abd.position.set(0, bodyY + .1 * u, -.38 * u); g.add(abd);
+    refs.body = abd; refs.bodyY = abd.position.y;
+    const mark = sph(.12 * u, focal, 1, .4, 1.4); // the hourglass burns
+    mark.position.set(0, bodyY + .1 * u, -.64 * u);
+    g.add(mark);
+    eyesOn(0, bodyY + .05 * u, .35 * u, Math.max(4, sp.eyes + 2), .018 * u);
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const zofs = (i - 1.5) * .22 * u;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(.018 * u, .2 * u, 5), chitin);
+      tip.rotation.x = Math.PI;
+      const E = limb(refs.legs, sd * .16 * u, bodyY + .08 * u, zofs, .75 * u, 1.0 * u, .032 * u, chitin,
+        0, 0, sd * -1.15, tip);
+      E.knee.rotation.z = sd * 2.05; // elbow up, point down
+      E.restKz = E.knee.rotation.z;
+    }
+  } else if (sp.arch === 'centipede') {
+    const n = 8 + (rnd() * 5 | 0);
+    for (let i = 0; i < n; i++) {
+      const r2 = (.2 - i * .009) * u;
+      const m2 = sph(Math.max(.06 * u, r2), i % 3 === 2 ? chitin : hide, 1, .85, 1.15);
+      m2.position.set(0, .3 * u, -i * .3 * u);
+      g.add(m2);
+      refs.segs.push({ mesh: m2, i });
+      if (i < n - 1) for (const sd of [-1, 1]) {
+        const E = limb(refs.legs, sd * .14 * u, .3 * u, -i * .3 * u, .22 * u, .2 * u, .018 * u, hide, 0, -.4, sd * -1.25);
+        E.segI = i;
+      }
+    }
+    const head = sph(.24 * u, chitin, 1.05, .9, 1); head.position.set(0, .32 * u, .26 * u);
+    g.add(head); refs.head = head;
+    for (const sd of [-1, 1]) { // mandibles + antennae
+      const md = new THREE.Mesh(new THREE.TorusGeometry(.1 * u, .02 * u, 6, 10, Math.PI * .8), chitin);
+      md.position.set(sd * .1 * u, .28 * u, .42 * u);
+      md.rotation.set(Math.PI / 2, 0, sd * .8);
+      g.add(md);
+      const ant = seg2(.5 * u, .012 * u, .004 * u, hide);
+      ant.position.set(sd * .08 * u, .42 * u, .38 * u);
+      ant.rotation.set(-2.2, 0, sd * .5);
+      g.add(ant); refs.fins.push(ant);
+    }
+    eyesOn(0, .36 * u, .48 * u, Math.min(2, sp.eyes), .025 * u);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(.05 * u, .3 * u, 6), chitin);
+    spike.position.set(0, .3 * u, -(n - 1) * .3 * u - .15 * u);
+    spike.rotation.x = -Math.PI / 2;
+    g.add(spike);
+  } else if (sp.arch === 'marionette') {
+    // a person-shaped thing hung from a thread no one is holding
+    const sw = new THREE.Group(); g.add(sw); refs.sway = sw;
+    const add = m2 => { sw.add(m2); return m2; };
+    const torso = add(sph(.19 * u, hide, 1, 1.55, .7)); torso.position.y = 1.22 * u;
+    const head = add(sph(.115 * u, hide, 1, 1.2, 1));
+    head.position.y = 1.62 * u; head.rotation.z = 1.15;
+    refs.head = head;
+    const e1 = add(sph(.02 * u, focal)); e1.position.set(-.04 * u, 1.64 * u, .1 * u);
+    const e2b = add(sph(.02 * u, focal)); e2b.position.set(.05 * u, 1.6 * u, .1 * u);
+    const thread = add(new THREE.Mesh(new THREE.CylinderGeometry(.005, .005, 1.5, 4),
+      new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 1 })));
+    thread.position.y = 1.72 * u + .75;
+    const mkHand = () => sph(.05 * u, hide, 1, 1.3, .8);
+    const armL = limb(refs.arms, -.21 * u, 1.45 * u, 0, .48 * u, .48 * u, .03 * u, hide, .04, .02, .06, mkHand());
+    const armR = limb(refs.arms, .21 * u, 1.45 * u, 0, .48 * u, .48 * u, .03 * u, hide, .04, .02, -.06, mkHand());
+    sw.add(armL.hip); sw.add(armR.hip);
+    const mkToe = () => { const t2 = new THREE.Mesh(new THREE.ConeGeometry(.03 * u, .12 * u, 5), hide);
+      t2.rotation.x = Math.PI; return t2; };
+    const legL = limb(refs.legs, -.09 * u, 1.0 * u, 0, .48 * u, .42 * u, .04 * u, hide, .06, .05, 0, mkToe());
+    const legR = limb(refs.legs, .09 * u, 1.0 * u, 0, .48 * u, .42 * u, .04 * u, hide, -.04, .08, 0, mkToe());
+    sw.add(legL.hip); sw.add(legR.hip);
+  } else if (sp.arch === 'brute') {
+    const shY = 1.25 * u;
+    const hull = sph(.5 * u, hide, 1.15, .95, 1.3); hull.position.set(0, shY, -.05 * u); g.add(hull);
+    for (let i = 0; i < 4; i++) { // dorsal plates
+      const pl = new THREE.Mesh(new THREE.BoxGeometry(.34 * u, .07 * u, .2 * u), chitin);
+      pl.position.set(0, shY + (.42 - i * .07) * u, (-.4 + i * .22) * u);
+      pl.rotation.x = -.35 + i * .12;
+      g.add(pl);
+    }
+    const head = sph(.17 * u, hide, 1.1, .85, 1);
+    head.position.set(0, shY - .18 * u, .52 * u);
+    g.add(head); refs.head = head;
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(.3 * u, .06 * u, .12 * u), chitin);
+    brow.position.set(0, shY - .08 * u, .56 * u); g.add(brow);
+    eyesOn(0, shY - .15 * u, .66 * u, Math.min(2, sp.eyes), .02 * u);
+    const mkFist = () => sph(.17 * u, chitin, 1, .8, 1.1);
+    limb(refs.arms, -.5 * u, shY + .1 * u, .22 * u, .75 * u, .62 * u, .12 * u, hide, .5, -.12, .12, mkFist());
+    limb(refs.arms, .5 * u, shY + .1 * u, .22 * u, .75 * u, .62 * u, .12 * u, hide, .5, -.12, -.12, mkFist());
+    limb(refs.legs, -.24 * u, .72 * u, -.42 * u, .4 * u, .34 * u, .06 * u, hide, .2, -.4);
+    limb(refs.legs, .24 * u, .72 * u, -.42 * u, .4 * u, .34 * u, .06 * u, hide, .2, -.4);
+  } else if (sp.arch === 'shrike') {
+    const hipY = 1.05 * u;
+    const body = sph(.22 * u, hide, 1, .9, 1.6); body.position.set(0, hipY + .18 * u, -.05 * u); g.add(body);
+    for (const sd of [-1, 1]) { // folded blade-arms
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(.035 * u, .09 * u, .62 * u), chitin);
+      blade.position.set(sd * .2 * u, hipY + .25 * u, -.2 * u);
+      blade.rotation.y = sd * .12; blade.rotation.x = -.1;
+      g.add(blade);
+    }
+    const neckG = new THREE.Group();
+    neckG.position.set(0, hipY + .3 * u, .25 * u);
+    g.add(neckG); refs.neckG = neckG; refs.neckZ = neckG.position.z;
+    for (let i = 0; i < 3; i++) {
+      const v = sph(.07 * u, hide);
+      v.position.set(0, (.12 + i * .13) * u, (i * .1) * u);
+      neckG.add(v);
+    }
+    const head = sph(.09 * u, hide, 1, 1, 1.3);
+    head.position.set(0, .5 * u, .34 * u);
+    neckG.add(head); refs.head = head;
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(.028 * u, .34 * u, 6), chitin);
+    beak.position.set(0, .48 * u, .55 * u);
+    beak.rotation.x = Math.PI / 2;
+    neckG.add(beak);
+    const eye = sph(.02 * u, focal); eye.position.set(0, .53 * u, .42 * u); neckG.add(eye);
+    limb(refs.legs, -.13 * u, hipY, 0, .6 * u, .55 * u, .04 * u, hide, .55, -1.05);
+    limb(refs.legs, .13 * u, hipY, 0, .6 * u, .55 * u, .04 * u, hide, .55, -1.05);
+  } else { // wisp: the gentle lantern
+    const prof = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8;
+      prof.push(new THREE.Vector2(Math.max(.01, Math.sin(t * Math.PI) * .26 * u * (1 - t * .35)), t * .8 * u));
+    }
+    const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 12), hide);
+    body.position.y = .5 * u; g.add(body);
+    const glow = sph(.1 * u, focal); glow.position.y = .85 * u; g.add(glow);
+    for (let i = 0; i < 3; i++) {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(.07 * u, .4 * u, 6), hide);
+      const a = i / 3 * TAU;
+      fin.position.set(Math.cos(a) * .24 * u, .8 * u, Math.sin(a) * .24 * u);
+      fin.rotation.z = Math.PI / 2 + a;
+      g.add(fin); refs.fins.push(fin);
+    }
   }
   g.userData = refs;
   return g;
+}
+/* per-archetype gaits: motion is most of the design */
+function animCreature(e, refs, dt) {
+  const sp2 = Math.hypot(e.vx, e.vz);
+  const k = clamp(sp2 / Math.max(.5, e.sp.speed), 0, 1);
+  e.ph = (e.ph || 0) + dt * (2 + sp2 * (refs.arch === 'widow' ? 4.5 : 3));
+  const ph = e.ph;
+  switch (refs.arch) {
+    case 'stalker':
+      for (const L of refs.legs) {
+        L.hip.rotation.x = L.restH + Math.sin(ph + L.i * Math.PI) * .55 * k;
+        L.knee.rotation.x = L.restK + Math.max(0, Math.sin(ph + L.i * Math.PI + .6)) * .7 * k;
+      }
+      for (const A2 of refs.arms)
+        A2.hip.rotation.x = A2.restH + Math.sin(ph + A2.i * Math.PI + Math.PI) * .3 * k + Math.sin(e.t * 1.7 + A2.i) * .06;
+      if (refs.head) refs.head.rotation.z = Math.sin(e.t * .9) * .14;
+      break;
+    case 'widow':
+      for (const L of refs.legs) {
+        L.hip.rotation.x = Math.sin(ph + L.i * .8) * .4 * (.15 + k);
+        L.knee.rotation.z = L.restKz + Math.sin(ph + L.i * .8 + 1.2) * .12 * k;
+      }
+      if (refs.body) refs.body.position.y = refs.bodyY + Math.sin(ph * 2) * .03;
+      break;
+    case 'centipede':
+      for (const sg of refs.segs)
+        sg.mesh.position.x = Math.sin(e.t * 5 - sg.i * .7) * .09 * refs.u * (.3 + k);
+      for (const L of refs.legs) {
+        L.hip.rotation.x = Math.sin(ph * 2 - (L.segI || 0) * .7 + L.i) * .5 * (.2 + k);
+        L.hip.position.x = Math.sin(e.t * 5 - (L.segI || 0) * .7) * .09 * refs.u * (.3 + k) + Math.sign(L.splayZ) * .14 * refs.u * -1;
+      }
+      break;
+    case 'marionette':
+      if (refs.sway) refs.sway.rotation.z = Math.sin(e.t * .8) * .07 + sp2 * .03;
+      for (const A2 of refs.arms) A2.hip.rotation.x = A2.restH + Math.sin(e.t * .85 + A2.i * 2.4) * .07 + sp2 * .05;
+      for (const L of refs.legs) L.hip.rotation.x = L.restH + Math.sin(e.t * .9 + L.i * 2) * .08;
+      e.twitchT = (e.twitchT ?? rand(2, 6)) - dt;
+      if (e.twitchT <= 0) {
+        e.twitchT = rand(2, 7);
+        if (refs.head) refs.head.rotation.z = refs.head.rotation.z > 0 ? -1.15 : 1.15;
+      }
+      break;
+    case 'brute':
+      for (const A2 of refs.arms)
+        A2.hip.rotation.x = A2.restH + Math.max(0, Math.sin(ph * .9 + A2.i * Math.PI)) * .38 * k;
+      for (const L of refs.legs)
+        L.hip.rotation.x = L.restH + Math.sin(ph * .9 + L.i * Math.PI) * .3 * k;
+      e.mesh.rotation.z = Math.sin(ph * .45) * .05 * k;
+      break;
+    case 'shrike':
+      for (const L of refs.legs) {
+        L.hip.rotation.x = L.restH + Math.sin(ph * 1.4 + L.i * Math.PI) * .6 * k;
+        L.knee.rotation.x = L.restK + Math.max(0, Math.sin(ph * 1.4 + L.i * Math.PI + .7)) * .8 * k;
+      }
+      if (refs.neckG) refs.neckG.position.z = refs.neckZ + Math.sin(ph * 2.8) * .07 * (.3 + k);
+      break;
+    default:
+      refs.fins.forEach((f, i) => { f.rotation.y = Math.sin(e.t * 2 + i) * .4; });
+  }
 }
 /* this deck's bestiary */
 const SPECIES = [];
@@ -2859,7 +3071,7 @@ function spawnEntBody(sp, x, z, friendly) {
   scene.add(mesh);
   const e = {
     sp, x, z, y: 0, vx: 0, vz: 0,
-    hp: sp.hp, hy: sp.size * .9, r: Math.max(.35, sp.size * .45),
+    hp: sp.hp, hy: (sp.hyF || .9) * sp.size, r: Math.max(.3, (sp.rF || .45) * sp.size),
     mesh, t: rand(10), state: sp.quirk === 'statue' ? 'statue' : 'idle',
     atkCd: 0, voiceT: rand(4, 12), burn: 0, los: false, losT: 0,
     friendly: !!friendly, dead: false, feigned: false, dieT: 0,
@@ -3105,15 +3317,7 @@ function updateEnt(e, dt) {
   else e.y = gy;
   const sp2 = Math.hypot(e.vx, e.vz);
   if (e.mixer) e.mixer.update(dt * clamp(sp2 * .8 + .25, .25, 2));
-  const gk = Math.min(1, sp2);
-  refs.legs.forEach((leg, i) => {
-    const ph = e.t * 8 + i * 2.1;
-    leg.hip.rotation.x = Math.sin(ph) * .55 * gk;
-    leg.knee.rotation.x = Math.max(0, -Math.sin(ph)) * .85 * gk;
-  });
-  refs.arms.forEach((arm, i) => { arm.rotation.x = Math.sin(e.t * 8 + i * 3) * .45 * gk; });
-  refs.fins.forEach((f, i) => { f.rotation.y = Math.sin(e.t * 3 + i) * .3; });
-  refs.heads.forEach(h => { h.rotation.y = Math.atan2(pdx, pdz) - e.mesh.rotation.y; });
+  else animCreature(e, refs, dt);
   e.mesh.position.set(e.x, e.y, e.z);
   if (sp2 > .1) e.mesh.rotation.y = Math.atan2(e.vx, e.vz);
   // attacks
@@ -3759,7 +3963,9 @@ function frame() {
   }
   // light moods
   lightMat.emissiveIntensity = 2.4 * lightsMul;
-  hallLampMat.emissiveIntensity = 2.0 * lightsMul;
+  LAMPMATS.warm.emissiveIntensity = 2.0 * lightsMul;
+  LAMPMATS.red.emissiveIntensity = (1.2 + Math.sin(t * 2.4) * .5) * lightsMul;
+  LAMPMATS.accent.emissiveIntensity = 1.8 * lightsMul;
   for (const L2 of LIGHTS) {
     let f = 1;
     if (L2.flick) {
@@ -3830,6 +4036,17 @@ window.KQA = {
   ents: () => entities.map(e => ({ n: e.sp.name, x: e.x | 0, z: e.z | 0, st: e.state, fr: !!e.friendly })),
   select: selectWeapon, fire() { mouseDownL = true; setTimeout(() => mouseDownL = false, 60); },
   interact, descend, map() { mapOpen = true; mapCv.style.display = 'block'; player.schematic = true; drawMap(); },
+  zoo() { // one of each silhouette, lined up for inspection
+    const archs = ['stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike'];
+    archs.forEach((arch, i) => {
+      let sp, guard = 0;
+      do { sp = makeSpecies(true); } while ((sp.arch !== arch || sp.rigged) && ++guard < 200);
+      sp.quirk = 'none';
+      const e = spawnEntBody(sp, startRoom.cx - 4 + i * 1.6, startRoom.cz - 2.0, false);
+      e.state = 'idle';
+      e.mesh.rotation.y = Math.PI;
+    });
+  },
   give() { player.owned = player.owned.map(() => true); player.mags = WEAPONS.map(w => w.magSize); player.reserve = RESERVE_CAP.slice(); updateHUD(); },
 };
 </script>
