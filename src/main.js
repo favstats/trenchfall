@@ -9850,6 +9850,11 @@ window.startWander=startWander;
 window.WANDER=WANDER; // dev: the open country, inspectable
 window.G=G;           // dev: the ledger too — QA sets the hour by the wave
 window.BAST=BAST;     // dev: the wall inspectable, searchlight parkable
+window.devSpawn=(n,x,z,spread=6)=>{ // dev: the dead, summoned to coordinates for the camera
+  for(let i=0;i<n;i++){const zb=spawnZombie();
+    if(zb){zb.x=x+rand(-spread,spread);zb.z=z+rand(-spread,spread);zb.rise=0;}}
+  return n+' raised at '+x+','+z;
+};
 window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to reach you
   return new Promise(res=>{
     if(!WANDER.on)return res({ok:false,why:'start wander first'});
@@ -9954,6 +9959,7 @@ function frame(now){
   sun.color.lerpColors(DUSK.sun,NIGHT.sun,nf);
   sun.intensity=lerp(DUSK.sunI,NIGHT.sunI,nf)+flashT*7;
   hemi.intensity=lerp(DUSK.hemiI,NIGHT.hemiI,nf)+flashT*9;
+  rim.intensity=lerp(.45,1.05,nf); // the colder the night, the harder the moon cuts the silhouettes
   lampSpot.intensity=lampOn?50+nf*110:0;
   lampCone.visible=lampOn;
   lampCone.material.opacity=.008+nf*.02;
