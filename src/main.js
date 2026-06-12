@@ -4800,9 +4800,9 @@ function updateAllies(dt,t){
       if(!a._cried){a._cried=true;
         say(a.name,pick(['Falling back, I\'m leaking!','Too close! Opening the range!','Patch me after. Moving now.']),3000);}
     }else if(a.hp>a.maxhp*.6)a._cried=false;
-    let stepping=false;
+    let stepping=false,aspd=0; // walk speed, visible to the rig poser below
     if(md>.6&&(!best||bestD>16||hurt)){ // fight on the move unless the work is close
-      const asp=md>14?6.2:2.4;
+      const asp=aspd=md>14?6.2:2.4;
       const av=steerAvoid(a.x,a.z,mdx/md,mdz/md,2.8,a);
       const dx2=av.x,dz2=av.z;
       a.x+=dx2*asp*dt;a.z+=dz2*asp*dt;
@@ -4881,7 +4881,7 @@ function updateAllies(dt,t){
       for(let ri=0;ri<ARIGS.length;ri++)if(!ARIGS[ri].a){ARIGS[ri].a=a;a._rig=ri;break;}
     if(a._rig!=null&&ARIGS[a._rig]&&ARIGS[a._rig].a===a){
       a.mesh.visible=false;
-      poseAllyRig(a,gy,stepping,stepping?asp:0,dt);
+      poseAllyRig(a,gy,stepping,stepping?aspd:0,dt);
     }
     a.mesh.userData.rifle.position.z=(a.mesh.userData.rifleZ??-.32)-a.recoil*.06;
   }
