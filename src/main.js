@@ -70,10 +70,10 @@ const sun=new THREE.DirectionalLight(0xffb070,2.7);
 sun.position.set(-70,80,-40);
 sun.castShadow=true;
 sun.shadow.mapSize.set(4096,4096); // the examples' look is mostly their shadows
-sun.shadow.camera.left=-46;sun.shadow.camera.right=46;
-sun.shadow.camera.top=46;sun.shadow.camera.bottom=-46;
-sun.shadow.camera.far=320;sun.shadow.bias=-0.0005;
-sun.shadow.normalBias=.02;sun.shadow.radius=3.5;
+sun.shadow.camera.left=-80;sun.shadow.camera.right=80;   // shade reaches the treeline now
+sun.shadow.camera.top=80;sun.shadow.camera.bottom=-80;
+sun.shadow.camera.far=320;sun.shadow.bias=-0.0008;
+sun.shadow.normalBias=.032;sun.shadow.radius=3;
 scene.add(sun);scene.add(sun.target);
 const softDot=(()=>{
   const c=document.createElement('canvas');c.width=c.height=32;
