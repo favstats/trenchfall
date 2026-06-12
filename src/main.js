@@ -8599,6 +8599,34 @@ function buildFort(kind){
     const lin=new THREE.Mesh(new THREE.BoxGeometry(3,1.5,9.4),stoneM);
     lin.position.set(-24,heightAt(-24,gateZ)+7.1,gateZ);lin.castShadow=true;setpieces.add(lin);
     placeBag(-22.6,breach-1.2,0);placeBag(-22.6,breach+1.2,0); // the breach is bagged, barely
+    { // torches on the parapet: the wall announces itself all night
+      const fl=(()=>{const c2=document.createElement('canvas');c2.width=c2.height=32;
+        const g2=c2.getContext('2d');
+        const rg=g2.createRadialGradient(16,18,1,16,16,14);
+        rg.addColorStop(0,'rgba(255,230,170,1)');rg.addColorStop(.45,'rgba(255,150,60,.8)');rg.addColorStop(1,'rgba(255,120,40,0)');
+        g2.fillStyle=rg;g2.fillRect(0,0,32,32);
+        const img=g2.getImageData(0,0,32,32),d2=img.data;
+        for(let i=0;i<d2.length;i+=4){if(d2[i+3]>0)continue;d2[i]=255;d2[i+1]=140;d2[i+2]=50;}
+        g2.putImageData(img,0,0);
+        return new THREE.CanvasTexture(c2);})();
+      let li=0;
+      for(let tz=-48;tz<=48;tz+=16){
+        if(Math.abs(tz-gateZ)<5||Math.abs(tz-breach)<5)continue;
+        const wy=heightAt(-24,tz)+6.1;
+        const post=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,.9,7),
+          new THREE.MeshStandardMaterial({color:0x2c2620,roughness:.9}));
+        post.position.set(-24.9,wy-.45,tz);setpieces.add(post);
+        const flame=new THREE.Sprite(new THREE.SpriteMaterial({map:fl,transparent:true,
+          depthWrite:false,blending:THREE.AdditiveBlending}));
+        flame.material.color.setRGB(3.2,1.8,.7);
+        flame.position.set(-24.9,wy+.18,tz);flame.scale.setScalar(.85);
+        setpieces.add(flame);
+        if(li++%2===0){ // every second torch carries true light
+          const pl=new THREE.PointLight(0xff9840,26,17);
+          pl.position.set(-25.2,wy+.3,tz);setpieces.add(pl);
+        }
+      }
+    }
   }else if(kind==='tiers'){
     // the three steps: outer timber, raised ground, inner stone. gates never align.
     for(let p=0;p<5;p++)for(let z=-42;z<=42;z+=3.5)modifyTerrain(-8,z,8,.5);
@@ -9820,6 +9848,8 @@ function wanderUpdate(dt){
 }
 window.startWander=startWander;
 window.WANDER=WANDER; // dev: the open country, inspectable
+window.G=G;           // dev: the ledger too — QA sets the hour by the wave
+window.BAST=BAST;     // dev: the wall inspectable, searchlight parkable
 window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to reach you
   return new Promise(res=>{
     if(!WANDER.on)return res({ok:false,why:'start wander first'});
