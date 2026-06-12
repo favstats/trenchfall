@@ -7,7 +7,7 @@ const errs = [];
 page.on('pageerror', e => errs.push(String(e)));
 page.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
 await page.goto(`http://127.0.0.1:${port}/kestrel.html?seed=${seed}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-await page.waitForTimeout(6000);
+await page.waitForTimeout(9000); // let the rig pack arrive too
 await page.screenshot({ path: '/tmp/k-1-title.png', timeout: 120000 });
 
 const info = await page.evaluate(() => {
@@ -39,6 +39,19 @@ if (e0) {
   await page.waitForTimeout(150);
   await page.screenshot({ path: '/tmp/k-4-entity.png', timeout: 120000 });
 }
+// wearer portrait: a rigged one, if the pack loaded
+const wearer = await page.evaluate(() => KQA.ents().find(e => /CREW/.test(e.n)) || null);
+console.log('WEARER:', JSON.stringify(wearer));
+if (wearer) {
+  await page.evaluate(e => KQA.tp(e.x + 2.5, e.z + 2.5, Math.atan2(2.5, 2.5), 0), wearer);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: '/tmp/k-7-wearer.png', timeout: 120000 });
+}
+// the exit dais and its stairs
+const ex = (await page.evaluate(() => KQA.rooms())).find(r => r.kind === 'exit');
+await page.evaluate(r => KQA.tp(r.x + .5, r.z + 5.2, 0, -.15), ex);
+await page.waitForTimeout(500);
+await page.screenshot({ path: '/tmp/k-8-stairs.png', timeout: 120000 });
 // map overlay
 await page.evaluate(() => KQA.map());
 await page.waitForTimeout(300);
