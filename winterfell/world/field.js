@@ -165,25 +165,99 @@ function makeSnowTexture() {
   });
 }
 
-// proper ashlar masonry — courses of mortared stone blocks, so the castle reads as stone
+// proper ashlar masonry — courses of mortared stone blocks with weathering, lichen,
+// snow streaks and cracks, so the castle reads as real cold stone, not a grey box.
+// per-block dims vary a little, and the same seed walk is reused by the bump map so
+// the height channel lines up with the colour channel.
+function masonryBlocks(size, cols, rows) {
+  const rh = size / rows, blocks = [];
+  for (let r = 0; r < rows; r++) {
+    const y = r * rh, off = (r % 2) * 0.5;
+    // each course has a few stones of irregular width so it isn't a perfect grid
+    let x = -off * (size / cols);
+    while (x < size + 4) {
+      const w = (size / cols) * (0.7 + rnd() * 0.7);
+      blocks.push({ x, y, w, h: rh, r });
+      x += w;
+    }
+  }
+  return { blocks, rh };
+}
+
 function makeMasonryTexture(size = 512, cols = 7, rows = 9) {
+  const { blocks } = masonryBlocks(size, cols, rows);
   return makeCanvasTexture(size, (g) => {
-    g.fillStyle = '#33383f'; g.fillRect(0, 0, size, size); // mortar
-    const rh = size / rows, cw = size / cols;
-    for (let r = 0; r < rows; r++) {
-      const y = r * rh, off = (r % 2) * 0.5;
-      for (let c = -1; c <= cols; c++) {
-        const x = (c + off) * cw, pad = 2.5 + rnd() * 2;
-        const v = 96 + (rnd() - 0.5) * 40;            // per-block tone
-        g.fillStyle = `rgb(${(v * 0.9) | 0},${(v * 0.97) | 0},${(v * 1.05) | 0})`;
-        g.fillRect(x + pad, y + pad, cw - pad * 2, rh - pad * 2);
-        const grd = g.createLinearGradient(0, y + pad, 0, y + rh - pad); // bevel
-        grd.addColorStop(0, 'rgba(255,255,255,.10)'); grd.addColorStop(1, 'rgba(0,0,0,.22)');
-        g.fillStyle = grd; g.fillRect(x + pad, y + pad, cw - pad * 2, rh - pad * 2);
-        for (let s = 0; s < 5; s++) { // weathering speckle
-          g.fillStyle = `rgba(0,0,0,${rnd() * 0.14})`;
-          g.fillRect(x + pad + rnd() * (cw - pad * 2), y + pad + rnd() * (rh - pad * 2), 1.6, 1.6);
-        }
+    g.fillStyle = '#2c3138'; g.fillRect(0, 0, size, size);        // dark mortar
+    // faint vertical damp/soot bleed down the whole face
+    for (let i = 0; i < 7; i++) {
+      const x = rnd() * size;
+      g.fillStyle = `rgba(18,22,28,${0.05 + rnd() * 0.06})`;
+      g.fillRect(x, 0, 6 + rnd() * 26, size);
+    }
+    for (const b of blocks) {
+      const pad = 2 + rnd() * 1.6;
+      const bx = b.x + pad, by = b.y + pad, bw = b.w - pad * 2, bh = b.h - pad * 2;
+      if (bw < 2 || bh < 2) continue;
+      // cool grey limestone, each stone a slightly different tint/warmth
+      const v = 104 + (rnd() - 0.5) * 46;
+      const warm = (rnd() - 0.5) * 10;
+      g.fillStyle = `rgb(${clamp(v * 0.92 + warm, 0, 255) | 0},${clamp(v * 0.97, 0, 255) | 0},${clamp(v * 1.04 - warm, 0, 255) | 0})`;
+      g.fillRect(bx, by, bw, bh);
+      // chiselled bevel: light top-left, shadow bottom-right
+      const grd = g.createLinearGradient(bx, by, bx + bw * 0.4, by + bh);
+      grd.addColorStop(0, 'rgba(255,255,255,.14)'); grd.addColorStop(0.5, 'rgba(255,255,255,0)'); grd.addColorStop(1, 'rgba(0,0,0,.30)');
+      g.fillStyle = grd; g.fillRect(bx, by, bw, bh);
+      // mottled weathering blotches inside the stone
+      for (let s = 0; s < 4; s++) {
+        const dark = rnd() < 0.5;
+        g.fillStyle = dark ? `rgba(20,18,16,${rnd() * 0.16})` : `rgba(150,158,168,${rnd() * 0.12})`;
+        const ww = 2 + rnd() * (bw * 0.4), hh = 2 + rnd() * (bh * 0.4);
+        g.fillRect(bx + rnd() * (bw - ww), by + rnd() * (bh - hh), ww, hh);
+      }
+      // occasional moss/lichen on the lower & shaded stones (greenish, low)
+      if (b.r > rows * 0.45 && rnd() < 0.22) {
+        g.fillStyle = `rgba(${60 + rnd() * 25 | 0},${78 + rnd() * 30 | 0},${48 + rnd() * 20 | 0},${0.18 + rnd() * 0.22})`;
+        g.beginPath();
+        g.ellipse(bx + rnd() * bw, by + bh * (0.6 + rnd() * 0.4), 3 + rnd() * 6, 2 + rnd() * 4, rnd() * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+      // hairline crack across a few stones
+      if (rnd() < 0.12) {
+        g.strokeStyle = 'rgba(12,14,18,.5)'; g.lineWidth = 0.8 + rnd();
+        g.beginPath();
+        let cx = bx + rnd() * bw, cy = by + rnd() * bh; g.moveTo(cx, cy);
+        for (let k = 0; k < 4; k++) { cx += (rnd() - 0.5) * bw * 0.5; cy += (rnd() - 0.3) * bh * 0.5; g.lineTo(cx, cy); }
+        g.stroke();
+      }
+      // snow caught on the top lip of the stone (horizontal ledge)
+      if (rnd() < 0.5) {
+        g.fillStyle = `rgba(226,234,244,${0.25 + rnd() * 0.3})`;
+        g.fillRect(bx, by, bw, 1.2 + rnd() * 1.8);
+      }
+    }
+  });
+}
+
+// grayscale height map keyed to the same block layout: deep mortar valleys, raised
+// block faces, so light actually catches the courses at the tactical distance.
+function makeMasonryBump(size = 512, cols = 7, rows = 9) {
+  const { blocks } = masonryBlocks(size, cols, rows);
+  return makeCanvasTexture(size, (g) => {
+    g.fillStyle = '#1a1a1a'; g.fillRect(0, 0, size, size);        // recessed mortar
+    for (const b of blocks) {
+      const pad = 2 + rnd() * 1.6;
+      const bx = b.x + pad, by = b.y + pad, bw = b.w - pad * 2, bh = b.h - pad * 2;
+      if (bw < 2 || bh < 2) continue;
+      const lvl = 150 + (rnd() - 0.5) * 40;                       // proud block face
+      g.fillStyle = `rgb(${lvl | 0},${lvl | 0},${lvl | 0})`;
+      g.fillRect(bx, by, bw, bh);
+      // rounded-up centre so each stone bulges slightly
+      const grd = g.createRadialGradient(bx + bw / 2, by + bh / 2, 1, bx + bw / 2, by + bh / 2, Math.max(bw, bh) * 0.7);
+      grd.addColorStop(0, 'rgba(255,255,255,.5)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd; g.fillRect(bx, by, bw, bh);
+      for (let s = 0; s < 3; s++) { // pitting
+        g.fillStyle = `rgba(0,0,0,${0.2 + rnd() * 0.3})`;
+        g.fillRect(bx + rnd() * bw, by + rnd() * bh, 1.4, 1.4);
       }
     }
   });
@@ -431,24 +505,40 @@ function addTerrain(group, placementTargets, env) {
 }
 
 function addWall(group, torches, placementTargets, env) {
+  // colour map and a matched height map so courses catch raking light at night
   const stoneTex = makeMasonryTexture(512, 7, 9);
   stoneTex.repeat.set(14, 4);
-  const stoneBump = makeMasonryTexture(512, 7, 9);
+  const stoneBump = makeMasonryBump(512, 7, 9);
   stoneBump.repeat.set(14, 4);
+  // finer-grained mapping for the smaller pieces (parapet, base course, towers)
+  const trimTex = makeMasonryTexture(384, 9, 5);
+  const trimBump = makeMasonryBump(384, 9, 5);
   const stone = new THREE.MeshStandardMaterial({
     map: stoneTex,
     bumpMap: stoneBump,
-    bumpScale: 0.5,
-    color: 0x8a929c,
-    roughness: 0.92,
-    metalness: 0,
-  });
-  const darkStone = new THREE.MeshStandardMaterial({
-    color: 0x434a54,
+    bumpScale: 0.7,
+    color: 0x9aa2ac,
     roughness: 0.95,
     metalness: 0,
+  });
+  // base course / plinth — warmer, dirtier, weather-stained at the foot of the wall
+  const baseStone = new THREE.MeshStandardMaterial({
+    map: trimTex,
+    bumpMap: trimBump,
+    bumpScale: 0.7,
+    color: 0x6f7682,
+    roughness: 0.97,
+    metalness: 0,
+  });
+  baseStone.map.repeat.set(16, 1.3); baseStone.bumpMap.repeat.set(16, 1.3);
+  // coping / string-course bands — crisp dressed stone, lighter
+  const copingMat = new THREE.MeshStandardMaterial({ color: 0xb3bac4, roughness: 0.88, metalness: 0, bumpMap: trimBump, bumpScale: 0.25 });
+  const darkStone = new THREE.MeshStandardMaterial({
+    color: 0x4b525c,
+    roughness: 0.96,
+    metalness: 0,
     bumpMap: stoneBump,
-    bumpScale: 0.1,
+    bumpScale: 0.18,
   });
   const snowCap = new THREE.MeshStandardMaterial({ color: 0xe6eef8, roughness: 1 });
   const gateMat = new THREE.MeshStandardMaterial({
@@ -467,15 +557,45 @@ function addWall(group, torches, placementTargets, env) {
   const wall = new THREE.Group();
   const gateBreakables = [];
   const spanLen = FIELD_HALF_X - GATE_W / 2;
+  // reusable: a battered (sloped) base course, a string-course band, and a coped
+  // parapet for one span of wall, so the wall reads as a layered stone curtain
+  // instead of a single flat extrusion.
+  const BASE_H = 2.4;        // tall plinth
+  const PARAPET_H = 2.6;     // walkway lip the merlons stand on (above WALL_H)
+  function dressSpan(cx, len) {
+    // battered base: wider at the foot, approximated by two stacked boxes (cheap,
+    // reads as a batter), tapering up to the wall face
+    const plinthLo = new THREE.Mesh(new THREE.BoxGeometry(len, BASE_H * 0.6, WALL_T + 1.4), baseStone);
+    plinthLo.position.set(cx, BASE_H * 0.3, WALL_Z);
+    wall.add(plinthLo);
+    const plinthHi = new THREE.Mesh(new THREE.BoxGeometry(len, BASE_H * 0.4, WALL_T + 0.7), baseStone);
+    plinthHi.position.set(cx, BASE_H * 0.8, WALL_Z);
+    wall.add(plinthHi);
+    // string-course band at the top of the plinth — a thin proud lip
+    const band = new THREE.Mesh(new THREE.BoxGeometry(len, 0.36, WALL_T + 0.95), copingMat);
+    band.position.set(cx, BASE_H + 0.18, WALL_Z);
+    wall.add(band);
+    // continuous coped parapet sitting on the wall top: a solid plinth the merlons
+    // grow from, with the walkway floor recessed behind (south) it
+    const parWall = new THREE.Mesh(new THREE.BoxGeometry(len, PARAPET_H, WALL_T * 0.42), stone);
+    parWall.position.set(cx, WALL_H + PARAPET_H / 2, WALL_Z - WALL_T / 2 + WALL_T * 0.21);
+    wall.add(parWall);
+    // dressed coping run capping the parapet (snow-dusted dressed stone)
+    const coping = new THREE.Mesh(new THREE.BoxGeometry(len, 0.4, WALL_T * 0.5), copingMat);
+    coping.position.set(cx, WALL_H + PARAPET_H + 0.2, WALL_Z - WALL_T / 2 + WALL_T * 0.24);
+    wall.add(coping);
+  }
   for (const side of [-1, 1]) {
     const span = new THREE.Mesh(new THREE.BoxGeometry(spanLen, WALL_H, WALL_T), stone);
     span.position.set(side * (GATE_W / 2 + spanLen / 2), WALL_H / 2, WALL_Z);
     wall.add(span);
     placementTargets.push(span);
+    dressSpan(span.position.x, spanLen);
 
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(spanLen, 0.42, WALL_T + 0.75), snowCap);
-    cap.position.set(span.position.x, WALL_H + 0.18, WALL_Z - 0.15);
-    wall.add(cap);
+    // snow lying along the rampart walkway (behind the parapet)
+    const walk = new THREE.Mesh(new THREE.BoxGeometry(spanLen, 0.14, WALL_T * 0.5), snowCap);
+    walk.position.set(span.position.x, WALL_H + 0.07, WALL_Z + WALL_T * 0.22);
+    wall.add(walk);
   }
 
   // ladders up the back (south) face instead of an earthwork ramp
@@ -541,22 +661,21 @@ function addWall(group, torches, placementTargets, env) {
   buttresses.castShadow = buttresses.receiveShadow = true;
   wall.add(buttresses);
 
-  // crenellations: snow-capped stone merlons with their own masonry mapping so
-  // they read as battlements, not flat grey boxes
-  const merlonTex = stampMasonry(); merlonTex.repeat.set(1.2, 0.8);
-  const merlonMat = new THREE.MeshStandardMaterial({ map: merlonTex, bumpMap: merlonTex, bumpScale: 0.35, color: 0x828b96, roughness: 0.93 });
+  // crenellations: snow-capped dressed-stone merlons rising from the coped parapet
+  const merlonMat = new THREE.MeshStandardMaterial({ map: trimTex, bumpMap: trimBump, bumpScale: 0.55, color: 0xa6adb7, roughness: 0.93 });
   // proper battlement teeth: WIDE along the wall, SHALLOW across it (so they read as
   // crenellations standing along the parapet, not coffins laid across it), and set on
   // the OUTER (enemy-facing, north) lip so a defender shelters behind them
-  const MERLON_W = 3.2, MERLON_H = 1.9, MERLON_D = 1.7;
+  const MERLON_W = 3.2, MERLON_H = 2.1, MERLON_D = 1.55;
   const MERLON_Z = WALL_Z - WALL_T * 0.5 + MERLON_D * 0.5; // flush to the north face
+  const COPING_TOP = WALL_H + PARAPET_H + 0.4;             // top of the parapet coping
   const merlonGeo = new THREE.BoxGeometry(MERLON_W, MERLON_H, MERLON_D);
-  const merlonCapGeo = new THREE.BoxGeometry(MERLON_W + 0.1, 0.24, MERLON_D + 0.1);
+  const merlonCapGeo = new THREE.BoxGeometry(MERLON_W + 0.14, 0.24, MERLON_D + 0.14);
   const merlons = new THREE.InstancedMesh(merlonGeo, merlonMat, 80);
   const merlonCaps = new THREE.InstancedMesh(merlonCapGeo, snowCap, 80);
   let mi = 0;
-  const merlonY = WALL_H + MERLON_H / 2;          // base flush on the parapet
-  const capY = WALL_H + MERLON_H + 0.1;           // snow cap flush on the tooth top
+  const merlonY = COPING_TOP + MERLON_H / 2;       // base flush on the parapet coping
+  const capY = COPING_TOP + MERLON_H + 0.1;        // snow cap flush on the tooth top
   // merlon + open crenel of roughly equal width — even battlement rhythm
   for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += MERLON_W + 2.6) {
     if (Math.abs(x) < GATE_W / 2 + 2) continue;
@@ -573,24 +692,127 @@ function addWall(group, torches, placementTargets, env) {
   merlonCaps.castShadow = true;
   wall.add(merlons, merlonCaps);
 
-  const towerH = 17.8;
-  for (const side of [-1, 1]) {
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(5.8, 6.6, towerH, 12), stone);
-    tower.position.set(side * (GATE_W / 2 + 6.2), towerH / 2, WALL_Z - 0.15);
-    wall.add(tower);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(6.55, 6.1, 2.0, 12), darkStone);
-    crown.position.set(tower.position.x, towerH + 0.75, WALL_Z - 0.15);
+  // a reusable rounded drum tower with a crenellated crown and a snowy conical roof —
+  // these read far better than bare cylinders at the tactical distance
+  function drumTower(tx, tz, rTop, rBot, h, teeth, cone) {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, 16), stone);
+    t.position.set(tx, h / 2, tz);
+    wall.add(t);
+    // a couple of string-courses banding the shaft so it isn't a smooth tube
+    for (const fy of [h * 0.45, h * 0.82]) {
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(rTop * 1.04 + (1 - fy / h) * (rBot - rTop), rTop * 1.04 + (1 - (fy + 0.4) / h) * (rBot - rTop), 0.34, 16), copingMat);
+      ring.position.set(tx, fy, tz);
+      wall.add(ring);
+    }
+    // corbelled crown the parapet sits on
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.55, rTop, 1.1, 16), darkStone);
+    crown.position.set(tx, h + 0.55, tz);
     wall.add(crown);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(6.7, 6.25, 0.42, 12), snowCap);
-    cap.position.set(tower.position.x, towerH + 1.95, WALL_Z - 0.15);
+    const par = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.45, rTop + 0.45, 1.4, 16), stone);
+    par.position.set(tx, h + 1.75, tz);
+    wall.add(par);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.6, rTop + 0.5, 0.34, 16), snowCap);
+    cap.position.set(tx, h + 2.45, tz);
     wall.add(cap);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.65, 1.25), stone);
-      m.position.set(tower.position.x + Math.cos(a) * 5.1, towerH + 2.3, WALL_Z - 0.15 + Math.sin(a) * 5.1);
+    // ring of merlon teeth
+    const tr = rTop + 0.1;
+    for (let i = 0; i < teeth; i++) {
+      const a = (i / teeth) * Math.PI * 2;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.7, 1.0), merlonMat);
+      m.position.set(tx + Math.cos(a) * tr, h + 2.75, tz + Math.sin(a) * tr);
       m.rotation.y = -a;
       wall.add(m);
+      const mc = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.2, 1.1), snowCap);
+      mc.position.set(tx + Math.cos(a) * tr, h + 3.6, tz + Math.sin(a) * tr);
+      mc.rotation.y = -a;
+      wall.add(mc);
     }
+    // optional snowy conical roof rising from inside the crown
+    if (cone) {
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(rTop + 0.2, rTop * 1.5, 16), snowCap);
+      roof.position.set(tx, h + 3.0 + rTop * 0.75, tz);
+      wall.add(roof);
+      const finial = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.1, 6), iron);
+      finial.position.set(tx, h + 3.0 + rTop * 1.5 + 0.4, tz);
+      wall.add(finial);
+    }
+    // a couple of glowing arrow-loops facing the field (north)
+    for (const ly of [h * 0.5, h * 0.78]) {
+      const loop = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 1.5, 0.08),
+        new THREE.MeshBasicMaterial({ color: 0xffb155, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, fog: false }),
+      );
+      loop.position.set(tx, ly, tz - rTop - 0.05);
+      wall.add(loop);
+    }
+  }
+
+  // intermediate drum towers stepping along each span between the gatehouse and the
+  // corner bastions — they break the flat run and give the wall a real cadence
+  const towerH = 16.5;
+  for (const side of [-1, 1]) {
+    for (const dist of [34, 68, 104]) {
+      const tx = side * (GATE_W / 2 + dist);
+      if (Math.abs(tx) > FIELD_HALF_X - 6) continue;
+      drumTower(tx, WALL_Z - 0.3, 4.3, 5.2, towerH + (dist > 90 ? 2 : 0), 9, dist > 90);
+    }
+  }
+
+  // GATEHOUSE: two stout drum towers flank the gate, a machicolated lintel spans it,
+  // a chamfered arch frames the opening, and a portcullis hangs in its slot.
+  const GH_H = WALL_H + 9;                 // gatehouse towers stand proud of the curtain
+  const ghX = GATE_W / 2 + 4.4;            // tower centres just outside the gate gap
+  for (const side of [-1, 1]) {
+    drumTower(side * ghX, WALL_Z - 0.3, 5.0, 5.9, GH_H, 10, false);
+  }
+  // the wall block bridging over the gate (the part above the opening) so the
+  // gatehouse reads as a solid mass pierced by the gateway, not an open notch
+  const lintelY = WALL_H - 0.6;
+  const overGate = new THREE.Mesh(new THREE.BoxGeometry(GATE_W + 8.6, WALL_H + 1.6, WALL_T), stone);
+  overGate.position.set(0, lintelY + (WALL_H + 1.6) / 2 + 1.2, WALL_Z);
+  wall.add(overGate);
+  // machicolations: corbelled box brackets jutting from the gatehouse face, with
+  // murder-gaps between them, the classic overhang above a castle gate
+  const machY = lintelY + 1.0;
+  for (let x = -GATE_W / 2 - 3.4; x <= GATE_W / 2 + 3.4; x += 2.3) {
+    const corbel = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.5, 1.6), darkStone);
+    corbel.position.set(x, machY, WALL_Z - WALL_T / 2 - 0.55);
+    wall.add(corbel);
+  }
+  // a continuous lip the machicolation brackets carry
+  const machLip = new THREE.Mesh(new THREE.BoxGeometry(GATE_W + 8.4, 0.7, 1.0), copingMat);
+  machLip.position.set(0, machY + 1.05, WALL_Z - WALL_T / 2 - 0.85);
+  wall.add(machLip);
+  // crenellated fighting top over the gatehouse, between the two towers
+  for (let x = -GATE_W / 2 - 2.5; x <= GATE_W / 2 + 2.5; x += 3.0) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.0, 1.4), merlonMat);
+    m.position.set(x, lintelY + WALL_H + 2.5, WALL_Z - WALL_T / 2 + 0.7);
+    wall.add(m);
+    const mc = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.22, 1.5), snowCap);
+    mc.position.set(x, lintelY + WALL_H + 3.6, WALL_Z - WALL_T / 2 + 0.7);
+    wall.add(mc);
+  }
+  // chamfered voussoir arch around the opening, on the NORTH face (enemy side)
+  const archGeo2 = new THREE.BoxGeometry(1.5, 1.15, 1.0);
+  for (let i = 0; i <= 16; i++) {
+    const t = Math.PI * (i / 16);
+    const a = new THREE.Mesh(archGeo2, copingMat);
+    a.position.set(Math.cos(t) * (GATE_W * 0.52), WALL_H - 1.6 + Math.sin(t) * (GATE_W * 0.5), WALL_Z - WALL_T / 2 - 0.35);
+    a.rotation.z = Math.PI / 2 - t;
+    wall.add(a);
+  }
+  // portcullis hint: a dark iron grid set in the gateway throat, lifted partway
+  const pcBarV = new THREE.BoxGeometry(0.22, WALL_H + 1.2, 0.22);
+  const pcBarH = new THREE.BoxGeometry(GATE_W - 1.6, 0.22, 0.22);
+  for (let x = -GATE_W / 2 + 1.0; x <= GATE_W / 2 - 1.0; x += 1.9) {
+    const b = new THREE.Mesh(pcBarV, iron);
+    b.position.set(x, (WALL_H + 1.2) / 2 + 1.0, WALL_Z - WALL_T / 2 + 0.4);
+    wall.add(b);
+  }
+  for (const y of [2.6, 6.2, 9.6]) {
+    const b = new THREE.Mesh(pcBarH, iron);
+    b.position.set(0, y, WALL_Z - WALL_T / 2 + 0.4);
+    wall.add(b);
   }
 
   const gate = new THREE.Group();
@@ -619,14 +841,6 @@ function addWall(group, torches, placementTargets, env) {
     hinge.position.set(x, WALL_H / 2, WALL_Z + 1.55);
     gate.add(hinge);
     gateBreakables.push(hinge);
-  }
-  const archGeo = new THREE.BoxGeometry(1.7, 1.25, 1.9);
-  for (let i = 0; i < 15; i++) {
-    const t = Math.PI * (i / 14);
-    const a = new THREE.Mesh(archGeo, stone);
-    a.position.set(Math.cos(t) * (GATE_W * 0.49), 4.0 + Math.sin(t) * 6.4, WALL_Z - 2.08);
-    a.rotation.z = Math.PI / 2 - t;
-    gate.add(a);
   }
   wall.add(gate);
 
