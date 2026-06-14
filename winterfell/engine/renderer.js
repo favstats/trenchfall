@@ -37,13 +37,13 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   const scene = new THREE.Scene();
   const NIGHT = new THREE.Color(0x0a121d);
   scene.background = NIGHT;
-  scene.fog = new THREE.Fog(NIGHT, 70, 360);
+  scene.fog = new THREE.Fog(NIGHT, 90, 520);
 
-  const hemi = new THREE.HemisphereLight(0x9fb8d6, 0x0a0f15, 0.55);
+  const hemi = new THREE.HemisphereLight(0x9fb8d6, 0x0a0f15, 0.7);
   scene.add(hemi);
 
   // cold moonlight from the north-west
-  const sun = new THREE.DirectionalLight(0xc4d6ff, 1.15);
+  const sun = new THREE.DirectionalLight(0xc8d8ff, 1.35);
   sun.position.set(-60, 90, -50);
   sun.castShadow = true;
   sun.shadow.mapSize.set(fq.shadow, fq.shadow);
