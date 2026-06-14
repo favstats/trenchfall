@@ -4,9 +4,9 @@ import * as THREE from './three.js';
 // Angled RTS camera: orbits a focus point on the ground. WASD / edge-scroll pan,
 // wheel zoom, Q/E or middle-drag rotate. Clamped to the battlefield bounds.
 export function makeCameraRig(camera, dom, bounds) {
-  const focus = new THREE.Vector3(0, 4, -8); // looking out over the field
-  let dist = 125, yaw = 0;
-  const pitch = 1.0; // radians from horizontal (~57°), steep tactical angle
+  const focus = new THREE.Vector3(0, 6, -24); // looking out over the field
+  let dist = 158, yaw = 0;
+  const pitch = 0.58; // radians from horizontal (~33°), cinematic but still tactical
   const keys = new Set();
   let edge = { x: 0, z: 0 };
   let dragRotate = false, lastX = 0;
@@ -20,7 +20,7 @@ export function makeCameraRig(camera, dom, bounds) {
   dom.ownerDocument.addEventListener('keyup', e => onKey(e, false));
 
   dom.addEventListener('wheel', e => {
-    dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * 8, 38, 200);
+    dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * 8, 52, 235);
     e.preventDefault();
   }, { passive: false });
 

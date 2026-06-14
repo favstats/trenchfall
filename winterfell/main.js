@@ -5,6 +5,7 @@ import { buildField } from './world/field.js';
 import { makeCameraRig, makePicker } from './engine/input.js';
 import { GameState } from './game/state.js';
 import { Force } from './units/squads.js';
+import { Horde } from './horde/horde.js';
 import { createHUD } from './ui/hud.js';
 
 const canvas = document.getElementById('gl');
@@ -23,6 +24,9 @@ const field = buildField(scene);
 const rig = makeCameraRig(camera, canvas, field.bounds);
 const picker = makePicker(camera, canvas);
 const force = new Force(scene, state);
+const horde = new Horde(scene, state, field);
+horde.spawnWave(Math.floor(horde.cap * 0.5)); // first ranks already on the field
+let spawnAcc = 0;
 const hud = createHUD(hudRoot, state, {
   onMortar: () => console.log('[WF] mortar (M5)'),
   onReserve: () => console.log('[WF] reserve (M5)'),
@@ -90,12 +94,18 @@ async function frame(now) {
   if (state.phase === 'battle') {
     state.time += dt;
     force.update(dt);
+    // keep the tide topped up — the dead never stop coming
+    spawnAcc += dt;
+    if (spawnAcc > 0.35 && horde.count < horde.cap) { horde.spawnWave(30); spawnAcc = 0; }
+    horde.update(dt);
   }
+  if (field.update) field.update(dt, camera);
   rig.update(dt);
   hud.update(force);
   window.WF.stats = {
     cam: camera.position.toArray().map(n => +n.toFixed(1)),
     men: state.menRemaining, kills: state.kills,
+    horde: horde.count,
     selected: force.selected().map(s => s.label),
   };
   await R.render();
@@ -110,6 +120,8 @@ window.WF.test = {
   orderMove: (x, z) => force.orderSelected('MOVE', { x, z }),
   squads: () => force.squads.map(s => ({ label: s.label, count: s.count, order: s.order, c: s.centroid().toArray() })),
   killSome: (n = 3) => force.soldiers.slice(0, n).forEach(m => m.kill()),
+  horde: () => horde.count,
+  spawn: (n = 200) => horde.spawnWave(n),
 };
 
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
