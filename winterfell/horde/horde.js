@@ -293,10 +293,10 @@ export class Horde {
       metalness: 0,
       emissive: 0x122333,
       emissiveIntensity: 0.1,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
-    this.mesh.castShadow = true;
+    this.mesh.castShadow = false; // up to 9000 instanced shadow-casters was the #1 perf sink
     this.mesh.count = 0;
     this.mesh.frustumCulled = false; // instances span the field; origin-based culling would hide them
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -312,10 +312,10 @@ export class Horde {
       vertexColors: true,
       roughness: 1,
       metalness: 0,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     });
     this.corpses = new THREE.InstancedMesh(geo, corpseMat, this._corpseCap);
-    this.corpses.castShadow = true; this.corpses.receiveShadow = true;
+    this.corpses.castShadow = false; this.corpses.receiveShadow = false;
     this.corpses.count = 0;
     this.corpses.frustumCulled = false; // the corpse-hill must render from every angle
     this.corpses.instanceMatrix.setUsage(THREE.StaticDrawUsage);

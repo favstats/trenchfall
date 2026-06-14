@@ -22,7 +22,7 @@ const TOP = 96, BOT = -3;    // vertical span the flakes recycle through
 export function createWeather(scene) {
   const s = season();
   const snow = !!s.snow;
-  const N = snow ? 4400 : 1500;
+  const N = snow ? 3200 : 1100; // fewer transparent sprites = less full-screen overdraw
   const pos = new Float32Array(N * 3);
   const fall = new Float32Array(N);   // per-flake descent speed
   const phase = new Float32Array(N);  // drift phase

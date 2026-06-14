@@ -11,9 +11,9 @@ import { season } from '../game/season.js';
 const FIDELITY = {
   // exposure pulled back slightly vs. before — the cinematic grade lifts shadows
   // and protects highlights, so we no longer need to over-expose to stay readable
-  low:    { shadow: 1536, pixelRatio: 1,    bloom: false, exposure: 1.34 },
-  medium: { shadow: 2560, pixelRatio: 1.45, bloom: true,  exposure: 1.38 },
-  high:   { shadow: 4096, pixelRatio: 1.75, bloom: true,  exposure: 1.42 },
+  low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.34 },
+  medium: { shadow: 2048, pixelRatio: 1.25, bloom: true,  exposure: 1.38 },
+  high:   { shadow: 3072, pixelRatio: 1.5,  bloom: true,  exposure: 1.42 },
 };
 
 function probeFidelity(hasGPU) {
