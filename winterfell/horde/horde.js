@@ -100,14 +100,14 @@ function buildUndeadGeometry() {
   const flesh = new THREE.Color(0xb6c4c2);    // cold dead skin (instance tint multiplies this)
   const coat = new THREE.Color(0x515c66);     // rotted field coat — baked darker into the body
   const push = (geo, tint, shade) => { parts.push({ geo, tint, shade: shade || (() => 1) }); };
-  const blob = (r, sx, sy, sz) => { const g = new THREE.SphereGeometry(r, 10, 7); g.scale(sx, sy, sz); return g; };
-  const limb = (rTop, rBot, len) => { const g = new THREE.CylinderGeometry(rTop, rBot, len, 7); g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2); return g; };
+  const blob = (r, sx, sy, sz) => { const g = new THREE.SphereGeometry(r, 7, 5); g.scale(sx, sy, sz); return g; };
+  const limb = (rTop, rBot, len) => { const g = new THREE.CylinderGeometry(rTop, rBot, len, 5); g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2); return g; };
 
   // ---- torso: a lathed gaunt profile, hunched forward over the legs ----
   {
     const pts = [[.075, 1.56], [.15, 1.5], [.255, 1.44], [.265, 1.35], [.235, 1.2], [.2, 1.03], [.215, .9], [.225, .82], [.195, .7], [.1, .62], [.01, .6]]
       .map(p => new THREE.Vector2(p[0], p[1]));
-    const torso = new THREE.LatheGeometry(pts, 12);
+    const torso = new THREE.LatheGeometry(pts, 9);
     torso.scale(1.04, 1, .68);          // oval chest, not a column
     torso.rotateX(0.16);                 // hunch the trunk forward
     torso.translate(0, 0.04, -0.05);
@@ -125,7 +125,7 @@ function buildUndeadGeometry() {
     { const c = blob(.035, 1.1, .6, .8); c.translate(-.1, -.06, .07); h.push(c); } // cheek L
     { const c = blob(.035, 1.1, .6, .8); c.translate(.1, -.06, .07); h.push(c); }  // cheek R
     { const nz = blob(.022, .7, 1.2, .9); nz.translate(0, -.03, .16); h.push(nz); }// nose
-    { const nk = new THREE.CylinderGeometry(.07, .095, .22, 8); nk.translate(0, -.18, -.02); h.push(nk); }
+    { const nk = new THREE.CylinderGeometry(.07, .095, .22, 6); nk.translate(0, -.18, -.02); h.push(nk); }
     const skull = mergeRaw(h);
     skull.scale(.92, .92, .92);
     skull.rotateX(0.4);                  // lolls forward off the bent neck
@@ -135,7 +135,7 @@ function buildUndeadGeometry() {
   }
   // ---- agape jaw ----
   {
-    const j = new THREE.SphereGeometry(.085, 9, 6); j.scale(1, .55, 1.2); j.rotateX(.85);
+    const j = new THREE.SphereGeometry(.085, 7, 4); j.scale(1, .55, 1.2); j.rotateX(.85);
     j.scale(.92, .92, .92); j.translate(0, 1.49, .13);
     push(j, flesh, () => .72);
   }
@@ -155,9 +155,9 @@ function buildUndeadGeometry() {
     push(lo, flesh, (x, y, z) => clamp(.92 - z * .4, .55, 1));
 
     const hand = [];                     // flat mitt + splayed fingers + thumb
-    { const m = new THREE.SphereGeometry(.05, 8, 6); m.scale(1, .55, 1.45); hand.push(m); }
-    for (let f = -1; f < 2; f++) { const fg = new THREE.CylinderGeometry(.014, .009, .15, 5); fg.rotateX(Math.PI / 2 - .35); fg.translate(f * .034, -.04, .12); hand.push(fg); }
-    { const th = new THREE.CylinderGeometry(.013, .01, .09, 5); th.rotateX(Math.PI / 2 - .7); th.rotateY(side * .7); th.translate(side * .05, -.02, .04); hand.push(th); }
+    { const m = new THREE.SphereGeometry(.05, 6, 4); m.scale(1, .55, 1.45); hand.push(m); }
+    for (let f = -1; f < 2; f++) { const fg = new THREE.CylinderGeometry(.014, .009, .15, 4); fg.rotateX(Math.PI / 2 - .35); fg.translate(f * .034, -.04, .12); hand.push(fg); }
+    { const th = new THREE.CylinderGeometry(.013, .01, .09, 4); th.rotateX(Math.PI / 2 - .7); th.rotateY(side * .7); th.translate(side * .05, -.02, .04); hand.push(th); }
     const claw = mergeRaw(hand);
     claw.rotateX(-1.5);
     claw.translate(side * .28, .82, .72);
@@ -166,19 +166,19 @@ function buildUndeadGeometry() {
 
   // ---- legs: mid-stride stance, one forward one trailing ----
   for (const [side, stride] of [[-1, .18], [1, -.18]]) {
-    const thigh = new THREE.CylinderGeometry(.082, .064, .44, 7);
+    const thigh = new THREE.CylinderGeometry(.082, .064, .44, 6);
     thigh.rotateX(stride * 1.1);
     thigh.translate(side * .14, .82, stride * .9);
     witherGeo(thigh, .018);
     push(thigh, coat, (x, y) => clamp(1 + (y - .8) * .4, .6, 1.05));
 
-    const shin = new THREE.CylinderGeometry(.054, .046, .42, 7);
+    const shin = new THREE.CylinderGeometry(.054, .046, .42, 6);
     shin.rotateX(-stride * .6);
     shin.translate(side * .14 + stride * .06, .38, stride * 1.7);
     witherGeo(shin, .018);
     push(shin, flesh, (x, y) => clamp(.8 + y * .9, .42, .9)); // mud to the knee
 
-    const foot = new THREE.SphereGeometry(.07, 8, 6); foot.scale(.9, .5, 1.65);
+    const foot = new THREE.SphereGeometry(.07, 6, 4); foot.scale(.9, .5, 1.65);
     foot.translate(side * .14 + stride * .06, .05, stride * 1.7 + .1);
     push(foot, flesh, () => .5);
   }
@@ -303,7 +303,7 @@ export class Horde {
     scene.add(this.mesh);
 
     // ----- corpses: the slain remain and heap up -----
-    this._corpseCap = Math.min(this.cap * 2, 7000);
+    this._corpseCap = Math.min(Math.ceil(this.cap * 1.4), 3600); // static, but still drawn every frame
     const corpseMat = new THREE.MeshStandardMaterial({
       color: 0x8a9296,             // greyer/colder than the living, baked colors still read
       map: undeadTex,
@@ -332,7 +332,7 @@ export class Horde {
     this._bury = [];
 
     // ----- far impostor crowd (the bulk of the tide) -----
-    const imp = Math.min(this.cap * 3, 9000);
+    const imp = Math.min(this.cap * 2, 5200); // cheap billboards, but transparency overdraws — keep modest
     const planeMat = new THREE.MeshBasicMaterial({
       map: silhouetteTexture(), transparent: true, alphaTest: 0.18,
       color: 0x34445a, opacity: 0.32, fog: true, depthWrite: false,

@@ -57,4 +57,4 @@ export class GameState {
 // horde size cap per fidelity tier (live near/mid agents; far field is impostors)
 // live (detailed, instanced) cap per tier; the far impostor crowd still renders the
 // distant mass, so the on-screen tide stays huge while we cut the heavy vertex load
-export const HORDE_CAP = { low: 1800, medium: 3600, high: 6000 };
+export const HORDE_CAP = { low: 1400, medium: 2600, high: 4200 };

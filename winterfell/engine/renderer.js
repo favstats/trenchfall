@@ -12,15 +12,19 @@ const FIDELITY = {
   // exposure pulled back slightly vs. before — the cinematic grade lifts shadows
   // and protects highlights, so we no longer need to over-expose to stay readable
   low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.34 },
-  medium: { shadow: 2048, pixelRatio: 1.25, bloom: true,  exposure: 1.38 },
-  high:   { shadow: 3072, pixelRatio: 1.5,  bloom: true,  exposure: 1.42 },
+  medium: { shadow: 1792, pixelRatio: 1.2,  bloom: false, exposure: 1.38 },
+  high:   { shadow: 2560, pixelRatio: 1.4,  bloom: true,  exposure: 1.42 },
 };
 
 function probeFidelity(hasGPU) {
   if (!hasGPU) return 'low';
-  const dpr = (typeof devicePixelRatio === 'number') ? devicePixelRatio : 1;
-  // crude: assume a capable GPU machine; high unless clearly a low-dpr/old setup
-  return dpr >= 1.5 ? 'high' : 'medium';
+  // dpr is a screen property, NOT a GPU-power signal — a retina laptop with weak
+  // integrated graphics would land on 'high' and crawl. Gate on cores/memory instead.
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+  if (cores >= 12 && mem >= 8) return 'high';
+  if (cores >= 8) return 'medium';
+  return 'low';
 }
 
 function createSkyTexture() {
@@ -150,7 +154,7 @@ function addSky(scene) {
 export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   const hasGPU = !!(navigator.gpu) && !forceWebGL;
   const renderer = new THREE.WebGPURenderer({
-    canvas, antialias: true, forceWebGL: !hasGPU,
+    canvas, antialias: false, forceWebGL: !hasGPU, // MSAA off — the grade/grain hide the edges, FPS matters more
   });
   await renderer.init();
 
