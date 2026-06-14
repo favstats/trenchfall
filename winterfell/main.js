@@ -342,8 +342,8 @@ async function frame(now) {
     combat.update(dt);
     // ---- win / lose ----
     // lose when the line is wiped or enough dead pour over and overrun the keep
+    // endless: there is no winning the Long Night — only how long you hold
     if (state.menRemaining <= 0 || horde.breachers() >= 16 || horde.wallCrest() >= 34) { state.phase = 'lost'; hud.showEnd(); }
-    else if (state.time >= state.waveDuration) { state.phase = 'won'; hud.showEnd(); }
   }
   if (field.update) field.update(dt, camera);
   rig.update(dt);

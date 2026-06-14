@@ -194,6 +194,7 @@ export class Combat {
       let dmg = cover?.meleeMul ?? 1;
       const heap = horde.heapAt?.(m.pos.x, m.pos.z) || 0;
       if (heap > 1.5) dmg *= Math.max(0.4, 1 - heap * 0.12); // bodies shield the line
+      if (a.giant) dmg *= 5;                                  // giants crush the line
       m.hp -= dmg;
       if (m.hp <= 0) { m.kill(); state.menLost++; }
     }
@@ -212,9 +213,17 @@ export class Combat {
       e._cd = (e._cd || 0) - dt;
       if (e._cd > 0) continue;
       const isTower = e.kind === 'tower';
+      if (e._belt === undefined) e._belt = isTower ? 10 : 60;
       const idx = horde.nearestTo(e.x, e.z, isTower ? 185 : 155);
-      if (idx < 0) { e._cd = 0.4; continue; }
+      if (idx < 0) { e._cd = 0.4; e._reloading = false; continue; }
       const a = horde.agents[idx];
+      if (--e._belt <= 0) {                     // belt/clip empty — work the reload
+        e._belt = isTower ? 10 : 60;
+        e._cd = isTower ? 2.0 : 3.6;
+        e._reloading = true;
+        continue;
+      }
+      e._reloading = false;
       e._cd = isTower ? 0.42 : 0.07;            // the nest is a sustained brrrt
       const muzY = horde.field.heightAt(e.x, e.z) + (isTower ? 6.2 : 1.5);
       this._from.set(e.x, muzY, e.z);

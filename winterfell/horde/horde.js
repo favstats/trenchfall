@@ -206,16 +206,20 @@ export class Horde {
     this._mound(a.x, a.z, 0.14); // every body builds the heap into a real mound
   }
 
-  spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50) {
+  spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50, giantChance = 0.035) {
     const room = this.cap - this.agents.length;
     n = Math.min(n, room);
     for (let i = 0; i < n; i++) {
       const x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 4);
       const z = zMin + Math.random() * (zMax - zMin);
-      const a = { x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.6 + Math.random() * 1.4, state: 'walk' };
+      const giant = Math.random() < giantChance;
+      const a = giant
+        ? { x, z, giant: true, hp: 34, ph: Math.random() * 6.28, spd: 1.5 + Math.random() * 0.5, state: 'walk' }
+        : { x, z, hp: 4, ph: Math.random() * 6.28, spd: 2.5 + Math.random() * 1.4, state: 'walk' }; // tougher rank-and-file
       const idx = this.agents.length;
       this.agents.push(a);
-      this._c.setHSL(0.56 + Math.random() * 0.05, 0.10 + Math.random() * 0.12, 0.24 + Math.random() * 0.10);
+      if (giant) this._c.setHSL(0.02, 0.45, 0.07);            // huge, dark, blood-touched
+      else this._c.setHSL(0.56 + Math.random() * 0.05, 0.10 + Math.random() * 0.12, 0.24 + Math.random() * 0.10);
       this.mesh.setColorAt(idx, this._c);
     }
     this.mesh.instanceColor.needsUpdate = true;
@@ -346,7 +350,7 @@ export class Horde {
       const y = base + level * 0.5 + bob * 0.5;
       a.y = y;
       a.faceY = Math.atan2(-mvx, -mvz) + sway;
-      a.scl = 1.05 + (a.spd - 2.6) * 0.05;
+      a.scl = a.giant ? 2.8 : 1.05 + (a.spd - 2.6) * 0.05; // giants tower over the tide
 
       // a packed crowd's weight builds the heap — jams grow into pyramids
       if (arrived) this._addHeap(a.x, a.z, 0.0009 + 0.0011 * level);
