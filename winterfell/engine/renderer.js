@@ -6,9 +6,9 @@ import { bloom } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/t
 import { season } from '../game/season.js';
 
 const FIDELITY = {
-  low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.12 },
-  medium: { shadow: 2048, pixelRatio: 1.45, bloom: true,  exposure: 1.18 },
-  high:   { shadow: 4096, pixelRatio: 1.75, bloom: true,  exposure: 1.22 },
+  low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.5 },
+  medium: { shadow: 2048, pixelRatio: 1.45, bloom: true,  exposure: 1.55 },
+  high:   { shadow: 4096, pixelRatio: 1.75, bloom: true,  exposure: 1.6 },
 };
 
 function probeFidelity(hasGPU) {
@@ -148,11 +148,11 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   scene.fog = new THREE.Fog(NIGHT, 42, 390);
   addSky(scene);
 
-  const hemi = new THREE.HemisphereLight(S.hemiSky, S.hemiGnd, S.hemiI);
+  const hemi = new THREE.HemisphereLight(S.hemiSky, S.hemiGnd, S.hemiI * 2.0); // brighter night
   scene.add(hemi);
 
   // moonlight from the north-west — tinted by the season
-  const sun = new THREE.DirectionalLight(S.sun, S.sunI);
+  const sun = new THREE.DirectionalLight(S.sun, S.sunI * 1.35);
   sun.position.set(-95, 125, -115);
   sun.castShadow = true;
   sun.shadow.mapSize.set(fq.shadow, fq.shadow);
@@ -164,12 +164,13 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   scene.add(sun);
   scene.add(sun.target);
 
-  const rim = new THREE.DirectionalLight(0x5f88c8, 0.72);
+  const rim = new THREE.DirectionalLight(0x6f96d0, 1.5);
   rim.position.set(120, 72, 95);
   scene.add(rim);
 
-  const coldFill = new THREE.DirectionalLight(0x8ab5ff, 0.24);
-  coldFill.position.set(0, 55, 160);
+  // strong fill from the camera side (south) so structures read toward the viewer
+  const coldFill = new THREE.DirectionalLight(0x9cc0ff, 1.05);
+  coldFill.position.set(0, 60, 180);
   scene.add(coldFill);
 
   // ----- camera -----
