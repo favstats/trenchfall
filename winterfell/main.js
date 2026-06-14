@@ -353,7 +353,7 @@ async function frame(now) {
       for (const m of sq.members) m.hp = 3 + tier;       // each wave of relief is hardier
       reinforceAt += Math.max(6, 17 - tier);             // and they come faster and faster
     }
-    horde.update(dt);
+    horde.update(dt, camera);
     combat.update(dt);
     // ---- win / lose ----
     // lose when the line is wiped or enough dead pour over and overrun the keep

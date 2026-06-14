@@ -142,7 +142,7 @@ export class Horde {
     return hz * this.HW + hx;
   }
   heapAt(x, z) { return this.heap[this._heapIdx(x, z)]; }
-  _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 6); }
+  _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 2); }
   // raise a rounded mound so the slain pile into real heaps (UEBS-style)
   _mound(x, z, amt) {
     const r = 2, C = this.HCELL;
@@ -203,7 +203,7 @@ export class Horde {
     a.dead = true; a.dieT = 0;
     a.fallY0 = a.y != null ? a.y : heightAt(a.x, a.z);
     a.fallRoll = (Math.random() - 0.5) * 1.5;
-    this._mound(a.x, a.z, 0.14); // every body builds the heap into a real mound
+    this._mound(a.x, a.z, 0.05); // bodies build the heap gradually (not instant mounds)
   }
 
   spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50, giantChance = 0.035) {
@@ -250,7 +250,7 @@ export class Horde {
     return best;
   }
 
-  update(dt) {
+  update(dt, camera) {
     const A = this.agents;
     const n = A.length;
     const o = this._o;
@@ -345,7 +345,7 @@ export class Horde {
       const sway = Math.sin(a.ph * 0.5) * 0.08;
 
       // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
-      const level = Math.min(a.cellLevel, 22);
+      const level = Math.min(a.cellLevel, 11);   // gentler pile, not a spiky tower
       const base = heightAt(a.x, a.z) + this.heapAt(a.x, a.z);
       const y = base + level * 0.5 + bob * 0.5;
       a.y = y;
@@ -353,7 +353,7 @@ export class Horde {
       a.scl = a.giant ? 2.8 : 1.05 + (a.spd - 2.6) * 0.05; // giants tower over the tide
 
       // a packed crowd's weight builds the heap — jams grow into pyramids
-      if (arrived) this._addHeap(a.x, a.z, 0.0009 + 0.0011 * level);
+      if (arrived) this._addHeap(a.x, a.z, 0.0004 + 0.0005 * level);
 
       o.position.set(a.x, y, a.z);
       o.rotation.set(level > 2 ? -0.4 : 0, a.faceY, sway * 0.6); // those climbing lean in
@@ -386,7 +386,7 @@ export class Horde {
         f.x = (Math.random() * 2 - 1) * (FIELD_HALF_X + 40);
       }
       o.position.set(f.x, 1.8 + Math.sin(f.ph + performance.now() * 0.001) * 0.05, f.z);
-      o.rotation.set(0, 0, 0);
+      o.rotation.set(0, camera ? Math.atan2(camera.position.x - f.x, camera.position.z - f.z) : 0, 0); // billboard to camera
       o.scale.setScalar(f.s);
       o.updateMatrix();
       this.far.setMatrixAt(i, o.matrix);

@@ -189,7 +189,7 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
     try {
       post = new THREE.PostProcessing(renderer);
       const scenePass = pass(scene, camera);
-      const bloomPass = bloom(scenePass, 0.9, 0.5, 0.12);
+      const bloomPass = bloom(scenePass, 0.5, 0.45, 0.2); // gentler — only bright sources glow
       post.outputNode = scenePass.add(bloomPass);
     } catch (e) { console.warn('[WF] bloom unavailable — direct render', e); post = null; }
   }
