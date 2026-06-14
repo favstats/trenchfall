@@ -18,9 +18,9 @@ export class GameState {
 
     // Dig-in command economy: trickle supply plus bounty for kills, spent on
     // trenches, wire, sandbags, and mustering fresh riflemen.
-    this.supply = 115;
-    this.supplyMax = 260;
-    this.supplyRate = 4.2;
+    this.supply = 185;
+    this.supplyMax = 420;
+    this.supplyRate = 5.4;
     this.costs = {
       trench: 42,
       wire: 28,
@@ -30,6 +30,8 @@ export class GameState {
       pit: 36,
       floodlight: 58,
       ammo: 52,
+      bunker: 110,
+      brazier: 46,
       recruit: 65,
     };
     this.buildMode = null;     // null | field-work kind

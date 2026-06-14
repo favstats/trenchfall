@@ -30,10 +30,12 @@ export function createHUD(root, state, hooks = {}) {
       <button class="callin" id="ciPit" data-k="M">PIT<small>36</small></button>
       <button class="callin" id="ciFloodlight" data-k="L">LIGHT<small>58</small></button>
       <button class="callin" id="ciAmmo" data-k="O">AMMO<small>52</small></button>
+      <button class="callin" id="ciBunker" data-k="Q">BUNKER<small>110</small></button>
+      <button class="callin" id="ciBrazier" data-k="E">BRAZIER<small>46</small></button>
     </div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
-    <div id="hint">LMB select/build · RMB move · T trench · N wire · B sandbags · G nest · Y tower · M pit · L light · O ammo</div>
+    <div id="hint">LMB select/build · RMB move · T trench · N wire · B bags · G nest · Y tower · M pit · L light · O ammo · Q bunker · E brazier</div>
     <div id="dragbox"></div>
     <div id="endscreen"><div class="end-card">
       <h1 id="endTitle">HELD</h1>
@@ -53,6 +55,7 @@ export function createHUD(root, state, hooks = {}) {
     trench: $('#ciTrench'), wire: $('#ciWire'), sandbag: $('#ciSandbag'),
     nest: $('#ciNest'), tower: $('#ciTower'), pit: $('#ciPit'),
     floodlight: $('#ciFloodlight'), ammo: $('#ciAmmo'),
+    bunker: $('#ciBunker'), brazier: $('#ciBrazier'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
@@ -68,6 +71,8 @@ export function createHUD(root, state, hooks = {}) {
   el.pit.onclick = () => hooks.onBuildPit && hooks.onBuildPit();
   el.floodlight.onclick = () => hooks.onBuildFloodlight && hooks.onBuildFloodlight();
   el.ammo.onclick = () => hooks.onBuildAmmo && hooks.onBuildAmmo();
+  el.bunker.onclick = () => hooks.onBuildBunker && hooks.onBuildBunker();
+  el.brazier.onclick = () => hooks.onBuildBrazier && hooks.onBuildBrazier();
   el.endAgain.onclick = () => location.reload();
 
   function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; }
@@ -99,6 +104,8 @@ export function createHUD(root, state, hooks = {}) {
     el.pit.classList.toggle('spent', (state.supply ?? 0) < state.costs.pit);
     el.floodlight.classList.toggle('spent', (state.supply ?? 0) < state.costs.floodlight);
     el.ammo.classList.toggle('spent', (state.supply ?? 0) < state.costs.ammo);
+    el.bunker.classList.toggle('spent', (state.supply ?? 0) < state.costs.bunker);
+    el.brazier.classList.toggle('spent', (state.supply ?? 0) < state.costs.brazier);
     el.trench.classList.toggle('active', state.buildMode === 'trench');
     el.wire.classList.toggle('active', state.buildMode === 'wire');
     el.sandbag.classList.toggle('active', state.buildMode === 'sandbag');
@@ -107,6 +114,8 @@ export function createHUD(root, state, hooks = {}) {
     el.pit.classList.toggle('active', state.buildMode === 'pit');
     el.floodlight.classList.toggle('active', state.buildMode === 'floodlight');
     el.ammo.classList.toggle('active', state.buildMode === 'ammo');
+    el.bunker.classList.toggle('active', state.buildMode === 'bunker');
+    el.brazier.classList.toggle('active', state.buildMode === 'brazier');
     el.trench.querySelector('small').textContent = state.costs.trench;
     el.wire.querySelector('small').textContent = state.costs.wire;
     el.sandbag.querySelector('small').textContent = state.costs.sandbag;
@@ -115,6 +124,8 @@ export function createHUD(root, state, hooks = {}) {
     el.pit.querySelector('small').textContent = state.costs.pit;
     el.floodlight.querySelector('small').textContent = state.costs.floodlight;
     el.ammo.querySelector('small').textContent = state.costs.ammo;
+    el.bunker.querySelector('small').textContent = state.costs.bunker;
+    el.brazier.querySelector('small').textContent = state.costs.brazier;
     el.possession.textContent = state.possession ? `DIRECT · ${state.possession}` : '';
     el.possession.classList.toggle('show', !!state.possession);
     el.crosshair.classList.toggle('show', !!state.possession);

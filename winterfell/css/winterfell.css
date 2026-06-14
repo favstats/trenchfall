@@ -82,8 +82,8 @@ body::after {
 /* call-ins, bottom-right */
 #callins {
   position: fixed; right: 16px; bottom: 44px; display: grid;
-  grid-template-columns: repeat(5, minmax(70px, 1fr)); gap: 7px; pointer-events: auto;
-  width: clamp(430px, 49vw, 650px);
+  grid-template-columns: repeat(6, minmax(68px, 1fr)); gap: 7px; pointer-events: auto;
+  width: clamp(520px, 54vw, 760px);
 }
 .callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .06em;
   color: #e7eefa; background: rgba(20,30,42,.85); border: 1px solid rgba(140,170,200,.3);
@@ -111,11 +111,27 @@ body::after {
 #crosshair.show { display: block; }
 
 #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-  width: min(760px, calc(100vw - 360px)); text-align: center;
+  width: min(920px, calc(100vw - 330px)); text-align: center;
   font-size: 11.5px; letter-spacing: .06em; opacity: .5; }
 
 #dragbox { position: fixed; display: none; border: 1.5px solid #5ad1ff;
   background: rgba(90,209,255,.12); pointer-events: none; z-index: 5; }
+
+@media (max-width: 980px) {
+  #objective { top: 126px; min-width: 210px; }
+  #tally { left: 206px; right: 12px; gap: 8px; justify-content: space-around; }
+  #tally span { font-size: 20px; }
+  #tally label { font-size: 8.5px; }
+  #economy { left: 12px; top: 12px; width: 176px; }
+  #callins {
+    left: 12px; right: 12px; bottom: 40px;
+    width: auto;
+    grid-template-columns: repeat(4, minmax(62px, 1fr));
+  }
+  .callin { min-height: 46px; padding: 6px 6px; font-size: 12px; }
+  #selPanel { bottom: 224px; max-width: calc(100vw - 24px); }
+  #hint { display: none; }
+}
 
 /* end screen */
 #endscreen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;

@@ -40,6 +40,8 @@ function seedFieldWorks() {
     ['nest', 24, WALL_Z - 16],
     ['ammo', 0, WALL_Z - 12],
     ['floodlight', 0, WALL_Z - 36],
+    ['bunker', 54, WALL_Z - 18],
+    ['brazier', -18, WALL_Z - 36],
   ]) field.placeBuildable?.(kind, x, z);
 }
 seedFieldWorks();
@@ -80,9 +82,26 @@ function placeSelectedWork(x, z) {
   if (!field.canPlaceBuildable?.(kind, x, z)) return true;
   if (!spendSupply(kind)) return true;
   field.placeBuildable(kind, x, z);
-  state.buildMode = null;
-  return true;
+  return true; // stay in build mode — place several, Esc to exit
 }
+
+// ----- drag-to-dig: draw continuous trench / wire / sandbag lines -----
+const LINEAR = new Set(['trench', 'wire', 'sandbag']);
+let drawing = false, lastDraw = null;
+const DRAW_STEP = 4.4;
+const segCost = (kind) => Math.max(5, Math.ceil((state.costs[kind] ?? 30) * 0.3));
+
+function drawSegment(px, pz, fx, fz) {
+  const kind = state.buildMode;
+  const dx = px - fx, dz = pz - fz;
+  const ang = (dx || dz) ? Math.atan2(-dz, dx) : (lastDraw?.ang ?? 0); // orient along the drag
+  if (state.supply < segCost(kind)) { drawing = false; return; }
+  const item = field.placeBuildable(kind, px, pz, { angle: ang, dense: true });
+  if (item) state.supply -= segCost(kind);
+  lastDraw = { x: px, z: pz, ang };
+}
+
+function beginDraw(p) { drawing = true; lastDraw = null; drawSegment(p.x, p.z, p.x, p.z); }
 
 function callReserve() {
   if (!spendSupply('recruit')) return;
@@ -159,6 +178,8 @@ const hud = createHUD(hudRoot, state, {
   onBuildPit: () => setBuildMode('pit'),
   onBuildFloodlight: () => setBuildMode('floodlight'),
   onBuildAmmo: () => setBuildMode('ammo'),
+  onBuildBunker: () => setBuildMode('bunker'),
+  onBuildBrazier: () => setBuildMode('brazier'),
 });
 
 // ---------------- input: selection + orders ----------------
@@ -172,7 +193,10 @@ canvas.addEventListener('mousedown', e => {
   if (possession.active) return;
   if (e.button === 0 && state.buildMode) {
     const p = picker.ground(e.clientX, e.clientY);
-    if (p) placeSelectedWork(p.x, p.z);
+    if (p) {
+      if (LINEAR.has(state.buildMode)) beginDraw(p);   // drag to dig a line
+      else placeSelectedWork(p.x, p.z);                // single emplacement
+    }
     down = null; dragging = false;
     return;
   }
@@ -180,11 +204,19 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
+  if (drawing) {
+    const p = picker.ground(e.clientX, e.clientY);
+    if (p && lastDraw && Math.hypot(p.x - lastDraw.x, p.z - lastDraw.z) >= DRAW_STEP) {
+      drawSegment(p.x, p.z, lastDraw.x, lastDraw.z);
+    }
+    return;
+  }
   if (down && !dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > DRAG_MIN) dragging = true;
   if (dragging) hud.showDragBox(down.x, down.y, e.clientX, e.clientY);
 });
 
 window.addEventListener('mouseup', e => {
+  if (drawing) { drawing = false; lastDraw = null; return; } // keep build mode — dig more lines
   if (possession.active) { down = null; dragging = false; hud.hideDragBox(); return; }
   if (e.button === 2) { // right-click order — lands on wall/embankment/ground
     const hits = picker.objects(e.clientX, e.clientY, field.placementTargets);
@@ -212,6 +244,7 @@ window.addEventListener('mouseup', e => {
 
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (k === 'escape') { state.buildMode = null; drawing = false; }
   if (k === 'f') {
     if (possession.active) possession.exit();
     else { const m = force.selected().flatMap(s => s.alive)[0]; if (m) possession.enter(m); }
@@ -228,6 +261,8 @@ window.addEventListener('keydown', e => {
   else if (k === 'm') setBuildMode('pit');
   else if (k === 'l') setBuildMode('floodlight');
   else if (k === 'o') setBuildMode('ammo');
+  else if (k === 'q') setBuildMode('bunker');
+  else if (k === 'e') setBuildMode('brazier');
   if (k === 'h') force.orderSelected('HOLD');
   else if (k === 'x') force.orderSelected('FALL_BACK', { x: force.selected()[0]?.centroid().x ?? 0, z: field.wallZ + 9 });
   else if (k === 'z') {
@@ -305,6 +340,17 @@ window.WF.test = {
   supply: (n = 100) => addSupply(n),
   crest: () => { for (let x = -50; x <= 50; x += 2) for (let z = WALL_Z - 6; z <= WALL_Z + 2; z += 2) horde.heap[horde._heapIdx(x, z)] = 13; },
   breachers: () => horde.breachers(),
+  digLine: (x1 = -45, z1 = WALL_Z - 20, x2 = 45, z2 = WALL_Z - 20, kind = 'trench') => {
+    state.buildMode = kind; state.supply = 9999;
+    beginDraw({ x: x1, z: z1 });
+    const steps = 26;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps, x = x1 + (x2 - x1) * t, z = z1 + (z2 - z1) * t;
+      if (Math.hypot(x - lastDraw.x, z - lastDraw.z) >= DRAW_STEP) drawSegment(x, z, lastDraw.x, lastDraw.z);
+    }
+    drawing = false; state.buildMode = null;
+    return field.works();
+  },
   dump: () => ({
     over: horde.agents.filter(a => a.over).length,
     atWall: horde.agents.filter(a => !a.dead && a.z >= 26).length,
@@ -317,6 +363,7 @@ window.WF.test = {
 if (params.get('end')) { state.phase = params.get('end'); state.kills = 842; state.menLost = 7; state.menRisen = 4; hud.showEnd(); }
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
+if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
 if (params.get('demo') === 'breach') { horde.spawnWave(800, WALL_Z - 14, WALL_Z - 3); window.WF.test.crest(); rig.frame(0, 14, 66); }
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
