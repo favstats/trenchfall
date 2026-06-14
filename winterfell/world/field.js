@@ -6,6 +6,7 @@
 // Defenders hold just behind it. The FIELD opens north (toward -z); the dead
 // pour from the far treeline (NORTH_Z) and advance south onto the wall.
 import * as THREE from '../engine/three.js';
+import { season } from '../game/season.js';
 
 export const WALL_Z = 30;
 export const NORTH_Z = -185;
@@ -380,7 +381,7 @@ function addTerrain(group, placementTargets, env) {
     map: snowMap,
     bumpMap: bump,
     bumpScale: 0.18,
-    color: 0xd8e4f1,
+    color: season().ground,
     roughness: 0.96,
     metalness: 0,
   }));
@@ -1294,7 +1295,7 @@ function addCliffs(group) {
   // a dense, two-deep, snow-capped mountain range hems each flank — tall and
   // overlapping so there are no gaps to see through, instanced for performance
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x1d232b, roughness: 1, metalness: 0, flatShading: true });
-  const snowMat = new THREE.MeshStandardMaterial({ color: 0xe9f1fb, roughness: 1, flatShading: true });
+  const snowMat = new THREE.MeshStandardMaterial({ color: season().capWhite ? 0xe9f1fb : season().cap, roughness: 1, flatShading: true });
   const rockGeo = new THREE.ConeGeometry(1, 1, 7);
   const snowGeo = new THREE.ConeGeometry(0.52, 0.4, 7);
   const inst = [];
@@ -1323,7 +1324,7 @@ function addCliffs(group) {
 
 function addTreeline(group) {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x090d10, roughness: 1 });
-  const treeMat = new THREE.MeshStandardMaterial({ color: 0x0e171c, roughness: 1 });
+  const treeMat = new THREE.MeshStandardMaterial({ color: season().tree, roughness: 1 });
   const trunkGeo = new THREE.CylinderGeometry(0.35, 0.5, 8, 5);
   const pineGeo = new THREE.ConeGeometry(5.2, 21, 7);
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, 120);
@@ -1673,7 +1674,7 @@ export function buildField(scene) {
   addDestructionPools(group, env);
   addTreeline(group);
   addMist(group, mists);
-  const snow = addSnow(group);
+  const snow = season().snow ? addSnow(group) : null; // snowfall only in winter
 
   scene.add(group);
 
@@ -1730,20 +1731,22 @@ export function buildField(scene) {
     for (const m of env.groundScars) if (m.visible && m.material.opacity > 0.18) m.material.opacity -= dt * 0.012;
     for (const m of env.wallScars) if (m.visible && m.material.opacity > 0.14) m.material.opacity -= dt * 0.018;
 
-    const pos = snow.geometry.attributes.position;
-    const arr = pos.array, vel = snow.userData.vel;
-    for (let i = 0; i < vel.length; i++) {
-      const ix = i * 3;
-      arr[ix] += Math.sin(time * 0.85 + i * 1.17) * dt * 0.55 - dt * 0.7;
-      arr[ix + 1] -= vel[i] * dt;
-      arr[ix + 2] += dt * 2.2;
-      if (arr[ix + 1] < 0.4 || arr[ix + 2] > 95 || arr[ix] < -FIELD_HALF_X - 95) {
-        arr[ix] = (rnd() * 2 - 1) * (FIELD_HALF_X + 85);
-        arr[ix + 1] = 78 + rnd() * 70;
-        arr[ix + 2] = NORTH_Z - 72 + rnd() * 58;
+    if (snow) {
+      const pos = snow.geometry.attributes.position;
+      const arr = pos.array, vel = snow.userData.vel;
+      for (let i = 0; i < vel.length; i++) {
+        const ix = i * 3;
+        arr[ix] += Math.sin(time * 0.85 + i * 1.17) * dt * 0.55 - dt * 0.7;
+        arr[ix + 1] -= vel[i] * dt;
+        arr[ix + 2] += dt * 2.2;
+        if (arr[ix + 1] < 0.4 || arr[ix + 2] > 95 || arr[ix] < -FIELD_HALF_X - 95) {
+          arr[ix] = (rnd() * 2 - 1) * (FIELD_HALF_X + 85);
+          arr[ix + 1] = 78 + rnd() * 70;
+          arr[ix + 2] = NORTH_Z - 72 + rnd() * 58;
+        }
       }
+      pos.needsUpdate = true;
     }
-    pos.needsUpdate = true;
   }
 
   return {

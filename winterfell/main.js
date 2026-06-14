@@ -11,6 +11,7 @@ import { WALL_Z, NORTH_Z } from './world/field.js';
 import { Combat } from './combat/combat.js';
 import { createHUD } from './ui/hud.js';
 import { initAudio, sfxBoom, sfxBuild } from './engine/audio.js';
+import { setSeason, pickSeason } from './game/season.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -20,6 +21,7 @@ window.WF = { ready: false, backend: null, fidelity: null, test: {} };
 const params = new URLSearchParams(location.search);
 const forced = params.get('fidelity');
 const forceWebGL = params.get('gl') === '1';
+setSeason(params.get('season') || pickSeason()); // not always winter
 const R = await createRenderer(canvas, forced || undefined, forceWebGL);
 const { scene, camera } = R;
 initAudio(); // Howler SFX (unlocks on first click/key)

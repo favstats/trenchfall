@@ -3,6 +3,7 @@
 import * as THREE from './three.js';
 import { pass } from './tsl.js';
 import { bloom } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/tsl/display/BloomNode.js';
+import { season } from '../game/season.js';
 
 const FIDELITY = {
   low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.12 },
@@ -140,17 +141,18 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   // ----- scene & atmosphere -----
+  const S = season();
   const scene = new THREE.Scene();
-  const NIGHT = new THREE.Color(0x07101d);
-  scene.background = NIGHT;
+  const NIGHT = new THREE.Color(S.fog);
+  scene.background = new THREE.Color(S.bg);
   scene.fog = new THREE.Fog(NIGHT, 42, 390);
   addSky(scene);
 
-  const hemi = new THREE.HemisphereLight(0xaec7ea, 0x070b10, 0.52);
+  const hemi = new THREE.HemisphereLight(S.hemiSky, S.hemiGnd, S.hemiI);
   scene.add(hemi);
 
-  // cold moonlight from the north-west
-  const sun = new THREE.DirectionalLight(0xd4e4ff, 2.05);
+  // moonlight from the north-west — tinted by the season
+  const sun = new THREE.DirectionalLight(S.sun, S.sunI);
   sun.position.set(-95, 125, -115);
   sun.castShadow = true;
   sun.shadow.mapSize.set(fq.shadow, fq.shadow);
