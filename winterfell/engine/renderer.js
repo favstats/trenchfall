@@ -1,6 +1,8 @@
 // renderer.js — WebGPU renderer (auto WebGL2 fallback), lighting, post stack,
 // fidelity dial. Knows nothing about units, horde, or gameplay.
 import * as THREE from './three.js';
+import { pass } from './tsl.js';
+import { bloom } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/tsl/display/BloomNode.js';
 
 const FIDELITY = {
   low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.12 },
@@ -180,7 +182,23 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
+  // bloom post-process so tracers, muzzle flashes, explosions, fire & the moon
+  // glow (progressive enhancement — falls back to direct render on any failure)
+  let post = null;
+  if (fq.bloom) {
+    try {
+      post = new THREE.PostProcessing(renderer);
+      const scenePass = pass(scene, camera);
+      const bloomPass = bloom(scenePass, 0.9, 0.5, 0.12);
+      post.outputNode = scenePass.add(bloomPass);
+    } catch (e) { console.warn('[WF] bloom unavailable — direct render', e); post = null; }
+  }
+
   async function render() {
+    if (post) {
+      try { await post.renderAsync(); return; }
+      catch (e) { console.warn('[WF] bloom render failed — falling back', e); post = null; }
+    }
     await renderer.renderAsync(scene, camera);
   }
 
