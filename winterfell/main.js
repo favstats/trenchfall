@@ -289,6 +289,7 @@ const hud = createHUD(hudRoot, state, {
   onBuildBrazier: () => setBuildMode('brazier'),
   onBuild: (kind) => setBuildMode(kind),
   onProduce: (key) => queueUnit(key),
+  onResearch: (i) => doResearch(i),
 });
 
 // ---------------- input: selection + orders ----------------

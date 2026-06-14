@@ -1,12 +1,14 @@
-// hud.js — DOM overlay: objective banner, force/selection readout, tallies,
-// call-in buttons, end screen, and the drag-select box. Reads GameState + Force.
+// hud.js — DOM overlay. Readouts (objective, tallies, economy, research), the
+// selection list, and a proper RTS COMMAND PANEL (bottom-center): construction
+// tabs when nothing is selected, and a per-building command card (train units /
+// research tech) when a building is selected — AoE/C&C style.
 export function createHUD(root, state, hooks = {}) {
   root.innerHTML = `
     <div id="bootTag">THE LONG NIGHT · DIG IN</div>
     <div id="objective" class="panel">
       <div class="obj-title">DIG IN</div>
-      <div class="obj-sub" id="objSub">hold the trench line · survive the night</div>
-      <div class="obj-timer" id="objTimer">2:30</div>
+      <div class="obj-sub" id="objSub">hold the line · survive the night</div>
+      <div class="obj-timer" id="objTimer">0:00</div>
     </div>
     <div id="tally" class="panel">
       <div><span id="tKills">0</span><label>DEAD FELLED</label></div>
@@ -15,32 +17,25 @@ export function createHUD(root, state, hooks = {}) {
     </div>
     <div id="economy" class="panel">
       <div class="econ-top"><label>SUPPLY</label><span id="tSupply">0</span><span id="tSupplyRate" class="rate">+0/s</span></div>
+      <div class="econ-top"><label>RESEARCH</label><span id="rscPts">0</span><span id="rscRate" class="rate">+0/s</span></div>
       <div class="gate-read"><label>GATE</label><div class="gate-track"><i id="gateBar"></i></div></div>
       <div class="works-read"><label>WORKS</label><span id="tWorks">0</span></div>
     </div>
-    <div id="research" class="panel"><div class="rsc-top"><label>RESEARCH</label><span id="rscPts">0</span><span id="rscRate" class="rate">+0/s</span></div><div id="rscTechs"></div></div>
-    <div id="bldPanel" class="panel"></div>
     <div id="selPanel" class="panel"><div class="sel-empty">no unit selected</div></div>
-    <div id="callins">
-      <button class="callin" id="ciMortar" data-k="V">MORTAR<small>×1</small></button>
-      <button class="callin" id="ciReserve" data-k="C">MUSTER<small>65</small></button>
-      <button class="callin" id="ciTrench" data-k="T">TRENCH<small>42</small></button>
-      <button class="callin" id="ciWire" data-k="N">WIRE<small>28</small></button>
-      <button class="callin" id="ciSandbag" data-k="B">SANDBAGS<small>32</small></button>
-      <button class="callin" id="ciNest" data-k="G">MG NEST<small>74</small></button>
-      <button class="callin" id="ciTower" data-k="Y">TOWER<small>88</small></button>
-      <button class="callin" id="ciPit" data-k="M">PIT<small>36</small></button>
-      <button class="callin" id="ciFloodlight" data-k="L">LIGHT<small>58</small></button>
-      <button class="callin" id="ciAmmo" data-k="O">AMMO<small>52</small></button>
-      <button class="callin" id="ciBunker" data-k="Q">BUNKER<small>110</small></button>
-      <button class="callin" id="ciBrazier" data-k="E">BRAZIER<small>46</small></button>
-      <button class="callin base" id="ciBarracks" data-k="K">BARRACKS<small>120</small></button>
-      <button class="callin base" id="ciDepot" data-k="J">DEPOT<small>95</small></button>
-      <button class="callin base" id="ciLab" data-k="U">LAB<small>130</small></button>
+
+    <div id="command" class="panel">
+      <div id="cmdHead"><span id="cmdTitle">CONSTRUCTION</span><span id="cmdSub"></span></div>
+      <div id="cmdTabs">
+        <button class="cmd-tab" data-tab="base">BASE</button>
+        <button class="cmd-tab" data-tab="defense">DEFENCE</button>
+        <button class="cmd-tab" data-tab="support">SUPPORT</button>
+      </div>
+      <div id="cmdGrid"></div>
     </div>
+
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
-    <div id="hint">ECONOMY: kills &amp; DEPOTS → supply · LABS → research (spend 1-4) · build works (front) &amp; base (courtyard: K barracks · J depot · U lab) · hover a button for its job</div>
+    <div id="hint">LMB select · drag box · RMB move/rally · click a building to command it · Esc cancel</div>
     <div id="dragbox"></div>
     <div id="endscreen"><div class="end-card">
       <h1 id="endTitle">HELD</h1>
@@ -54,152 +49,108 @@ export function createHUD(root, state, hooks = {}) {
   const el = {
     objSub: $('#objSub'), timer: $('#objTimer'),
     kills: $('#tKills'), men: $('#tMen'), risen: $('#tRisen'),
-    supply: $('#tSupply'), gateBar: $('#gateBar'), works: $('#tWorks'),
-    rscPts: $('#rscPts'), rscTechs: $('#rscTechs'),
-    supplyRate: $('#tSupplyRate'), rscRate: $('#rscRate'), bld: $('#bldPanel'),
+    supply: $('#tSupply'), supplyRate: $('#tSupplyRate'), rscPts: $('#rscPts'), rscRate: $('#rscRate'),
+    gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
-    mortar: $('#ciMortar'), reserve: $('#ciReserve'),
-    trench: $('#ciTrench'), wire: $('#ciWire'), sandbag: $('#ciSandbag'),
-    nest: $('#ciNest'), tower: $('#ciTower'), pit: $('#ciPit'),
-    floodlight: $('#ciFloodlight'), ammo: $('#ciAmmo'),
-    bunker: $('#ciBunker'), brazier: $('#ciBrazier'),
-    barracks: $('#ciBarracks'), depot: $('#ciDepot'), lab: $('#ciLab'),
+    cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
   };
 
-  el.mortar.onclick = () => hooks.onMortar && hooks.onMortar();
-  el.reserve.onclick = () => hooks.onReserve && hooks.onReserve();
-  el.trench.onclick = () => hooks.onBuildTrench && hooks.onBuildTrench();
-  el.wire.onclick = () => hooks.onBuildWire && hooks.onBuildWire();
-  el.sandbag.onclick = () => hooks.onBuildSandbag && hooks.onBuildSandbag();
-  el.nest.onclick = () => hooks.onBuildNest && hooks.onBuildNest();
-  el.tower.onclick = () => hooks.onBuildTower && hooks.onBuildTower();
-  el.pit.onclick = () => hooks.onBuildPit && hooks.onBuildPit();
-  el.floodlight.onclick = () => hooks.onBuildFloodlight && hooks.onBuildFloodlight();
-  el.ammo.onclick = () => hooks.onBuildAmmo && hooks.onBuildAmmo();
-  el.bunker.onclick = () => hooks.onBuildBunker && hooks.onBuildBunker();
-  el.brazier.onclick = () => hooks.onBuildBrazier && hooks.onBuildBrazier();
-  el.barracks.onclick = () => hooks.onBuild && hooks.onBuild('barracks');
-  el.depot.onclick = () => hooks.onBuild && hooks.onBuild('depot');
-  el.lab.onclick = () => hooks.onBuild && hooks.onBuild('lab');
-
-  // tooltips so the economy & each structure's role are self-explanatory
-  const TIPS = {
-    mortar: 'Mortar barrage on the densest mass of dead',
-    reserve: 'Muster a fresh rifle squad',
-    trench: 'TRENCH — drag to dig; cover for your line, slows the dead',
-    wire: 'BARBED WIRE — drag to lay; badly slows & bleeds the dead',
-    sandbag: 'SANDBAGS — drag to lay; light cover',
-    nest: 'MG NEST — crewed, auto-fires sustained bursts',
-    tower: 'WATCHTOWER — long-range precision fire',
-    pit: 'SPIKE PIT — heavy damage to the dead crossing it',
-    floodlight: 'FLOODLIGHT — lit enemies take more damage',
-    ammo: 'AMMO DUMP — boosts nearby fire',
-    bunker: 'BUNKER — heavy cover + crewed MG',
-    brazier: 'BRAZIER — fire that burns the dead',
-    barracks: 'BARRACKS (base) — musters free squads over time',
-    depot: 'DEPOT (base) — increases supply income (+/s)',
-    lab: 'LAB (base) — generates RESEARCH points',
+  // ---- catalog: what the construction tabs offer ----
+  const ICON = {
+    barracks: '⌂', depot: '▤', lab: '⌬', trench: '▭', wire: '╳', sandbag: '◷', nest: '⊙',
+    tower: '♜', bunker: '⬢', pit: '✸', floodlight: '☀', ammo: '◰', brazier: '♨',
+    mortar: '☄', reserve: '⚑', rifles: '†', mg: '⁂',
   };
-  for (const k in TIPS) if (el[k]) el[k].title = TIPS[k] + (state.costs[k] ? ` · ${state.costs[k]} supply` : '');
+  const CATALOG = {
+    base: [['BARRACKS', 'barracks'], ['DEPOT', 'depot'], ['LAB', 'lab']],
+    defense: [['TRENCH', 'trench'], ['WIRE', 'wire'], ['SANDBAGS', 'sandbag'], ['MG NEST', 'nest'], ['TOWER', 'tower'], ['BUNKER', 'bunker'], ['SPIKE PIT', 'pit']],
+    support: [['FLOODLIGHT', 'floodlight'], ['AMMO', 'ammo'], ['BRAZIER', 'brazier']],
+  };
+  const TIP = {
+    barracks: 'Trains squads. Build in the courtyard.', depot: 'Boosts supply income.', lab: 'Generates research.',
+    trench: 'Drag to dig. Cover + slows the dead.', wire: 'Drag to lay. Badly slows & bleeds.', sandbag: 'Drag to lay. Light cover.',
+    nest: 'Crewed MG, sustained bursts.', tower: 'Long-range precision fire.', bunker: 'Heavy cover + crewed MG.',
+    pit: 'Heavy damage to the dead.', floodlight: 'Lit enemies take more damage.', ammo: 'Boosts nearby fire.', brazier: 'Fire that burns the dead.',
+    mortar: 'Barrage the densest mass.', reserve: 'Muster a fresh squad.',
+  };
+  let tab = 'base';
 
-  // building action panel uses delegated clicks (its buttons are re-rendered)
-  el.bld.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-prod]');
-    if (btn && hooks.onProduce) hooks.onProduce(btn.dataset.prod);
+  el.cmdTabs.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab]'); if (t) tab = t.dataset.tab;
+  });
+  el.cmdGrid.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const [type, val] = b.dataset.act.split(':');
+    if (type === 'build') hooks.onBuild && hooks.onBuild(val);
+    else if (type === 'call' && val === 'mortar') hooks.onMortar && hooks.onMortar();
+    else if (type === 'call' && val === 'reserve') hooks.onReserve && hooks.onReserve();
+    else if (type === 'prod') hooks.onProduce && hooks.onProduce(val);
+    else if (type === 'rsc') hooks.onResearch && hooks.onResearch(+val);
   });
   el.endAgain.onclick = () => location.reload();
 
-  function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; }
+  const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  const can = c => (state.supply ?? 0) >= c;
+  const btn = (act, label, icon, cost, opts = {}) =>
+    `<button class="cmd-btn ${opts.spent ? 'spent' : ''} ${opts.active ? 'active' : ''}" data-act="${act}" title="${opts.tip || ''}">
+       <span class="cmd-ico">${icon || ''}</span><span class="cmd-lbl">${label}</span>${cost != null ? `<span class="cmd-cost">${cost}</span>` : ''}</button>`;
+
+  function renderCommand() {
+    const sb = state.selBuilding;
+    if (sb) {
+      el.cmdTabs.style.display = 'none';
+      el.cmdTitle.textContent = sb.kind.toUpperCase();
+      if (sb.kind === 'barracks') {
+        el.cmdSub.textContent = sb.prod ? `TRAINING ${sb.prod.key.toUpperCase()}` : (sb.queue ? `${sb.queue} QUEUED` : 'RMB = rally' + (sb.hasRally ? ' ✓' : ''));
+        el.cmdGrid.innerHTML =
+          btn('prod:rifles', 'RIFLES', ICON.rifles, 40, { spent: !can(40), tip: 'Train a rifle squad' }) +
+          btn('prod:mg', 'MG TEAM', ICON.mg, 60, { spent: !can(60), tip: 'Train a machine-gun team' }) +
+          (sb.prod ? `<div class="cmd-prog"><i style="width:${Math.round(sb.prod.pct * 100)}%"></i></div>` : '');
+      } else if (sb.kind === 'lab') {
+        el.cmdSub.textContent = `${Math.floor(state.research ?? 0)} RP`;
+        el.cmdGrid.innerHTML = (state.techs || []).map((t, i) => {
+          const c = state.techCost ? state.techCost(t) : t.base;
+          return btn('rsc:' + i, t.key, '✦', c, { spent: (state.research ?? 0) < c, tip: `Research ${t.key} (L${t.lvl})` })
+            .replace('cmd-cost">' + c, `cmd-cost">L${t.lvl} · ${c}`);
+        }).join('');
+      } else {
+        el.cmdSub.textContent = '';
+        el.cmdGrid.innerHTML = `<div class="cmd-info">${TIP[sb.kind] || ''}</div>`;
+      }
+    } else {
+      el.cmdTabs.style.display = 'flex';
+      el.cmdTitle.textContent = 'CONSTRUCTION';
+      el.cmdSub.textContent = tab.toUpperCase();
+      for (const t of el.cmdTabs.children) t.classList.toggle('on', t.dataset.tab === tab);
+      let html = CATALOG[tab].map(([label, kind]) => {
+        const c = state.costs[kind] ?? 0;
+        return btn('build:' + kind, label, ICON[kind], c, { spent: !can(c), active: state.buildMode === kind, tip: TIP[kind] });
+      }).join('');
+      if (tab === 'support') {
+        html += btn('call:mortar', 'MORTAR', ICON.mortar, '×' + (state.charges.mortar ?? 0), { spent: (state.charges.mortar ?? 0) <= 0, tip: TIP.mortar });
+        const rc = state.costs?.recruit ?? 0;
+        html += btn('call:reserve', 'RESERVE', ICON.reserve, rc, { spent: !can(rc), tip: TIP.reserve });
+      }
+      el.cmdGrid.innerHTML = html;
+    }
+  }
 
   function update(force) {
     el.kills.textContent = state.kills;
     el.men.textContent = state.menRemaining;
     el.risen.textContent = state.menRisen;
-    el.timer.textContent = fmt(state.time); // endless — counts how long you've held
+    el.timer.textContent = fmt(state.time);
     el.supply.textContent = Math.floor(state.supply ?? 0);
-    if (el.supplyRate) el.supplyRate.textContent = `+${(state.supplyRateNow ?? state.supplyRate ?? 0).toFixed(1)}/s`;
+    el.supplyRate.textContent = `+${(state.supplyRateNow ?? state.supplyRate ?? 0).toFixed(1)}/s`;
+    el.rscPts.textContent = Math.floor(state.research ?? 0);
+    el.rscRate.textContent = `+${(state.researchRate ?? 0).toFixed(1)}/s`;
     el.works.textContent = state.works ?? 0;
-    if (state.techs && el.rscTechs) {
-      el.rscPts.textContent = Math.floor(state.research ?? 0);
-      if (el.rscRate) el.rscRate.textContent = `+${(state.researchRate ?? 0).toFixed(1)}/s`;
-      el.rscTechs.innerHTML = state.techs.map((t, i) => {
-        const cost = state.techCost ? state.techCost(t) : t.base;
-        const can = (state.research ?? 0) >= cost;
-        return `<div class="rsc-tech ${can ? 'can' : ''}"><b>${i + 1} ${t.key}</b><span>L${t.lvl} · ${cost}</span></div>`;
-      }).join('');
-    }
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
-    el.mortar.classList.toggle('spent', state.charges.mortar <= 0);
-    el.mortar.querySelector('small').textContent = '×' + (state.charges.mortar ?? 0);
-    if ('reserve' in state.charges) {
-      el.reserve.classList.toggle('spent', state.charges.reserve <= 0);
-      el.reserve.querySelector('small').textContent = '×' + state.charges.reserve;
-    } else {
-      // supply economy: reserve = recruit
-      const cost = state.costs?.recruit ?? 0;
-      el.reserve.classList.toggle('spent', (state.supply ?? 0) < cost);
-      el.reserve.querySelector('small').textContent = cost ? `${cost}` : '';
-    }
-    el.trench.classList.toggle('spent', (state.supply ?? 0) < state.costs.trench);
-    el.wire.classList.toggle('spent', (state.supply ?? 0) < state.costs.wire);
-    el.sandbag.classList.toggle('spent', (state.supply ?? 0) < state.costs.sandbag);
-    el.nest.classList.toggle('spent', (state.supply ?? 0) < state.costs.nest);
-    el.tower.classList.toggle('spent', (state.supply ?? 0) < state.costs.tower);
-    el.pit.classList.toggle('spent', (state.supply ?? 0) < state.costs.pit);
-    el.floodlight.classList.toggle('spent', (state.supply ?? 0) < state.costs.floodlight);
-    el.ammo.classList.toggle('spent', (state.supply ?? 0) < state.costs.ammo);
-    el.bunker.classList.toggle('spent', (state.supply ?? 0) < state.costs.bunker);
-    el.brazier.classList.toggle('spent', (state.supply ?? 0) < state.costs.brazier);
-    el.trench.classList.toggle('active', state.buildMode === 'trench');
-    el.wire.classList.toggle('active', state.buildMode === 'wire');
-    el.sandbag.classList.toggle('active', state.buildMode === 'sandbag');
-    el.nest.classList.toggle('active', state.buildMode === 'nest');
-    el.tower.classList.toggle('active', state.buildMode === 'tower');
-    el.pit.classList.toggle('active', state.buildMode === 'pit');
-    el.floodlight.classList.toggle('active', state.buildMode === 'floodlight');
-    el.ammo.classList.toggle('active', state.buildMode === 'ammo');
-    el.bunker.classList.toggle('active', state.buildMode === 'bunker');
-    el.brazier.classList.toggle('active', state.buildMode === 'brazier');
-    el.trench.querySelector('small').textContent = state.costs.trench;
-    el.wire.querySelector('small').textContent = state.costs.wire;
-    el.sandbag.querySelector('small').textContent = state.costs.sandbag;
-    el.nest.querySelector('small').textContent = state.costs.nest;
-    el.tower.querySelector('small').textContent = state.costs.tower;
-    el.pit.querySelector('small').textContent = state.costs.pit;
-    el.floodlight.querySelector('small').textContent = state.costs.floodlight;
-    el.ammo.querySelector('small').textContent = state.costs.ammo;
-    el.bunker.querySelector('small').textContent = state.costs.bunker;
-    el.brazier.querySelector('small').textContent = state.costs.brazier;
-    for (const k of ['barracks', 'depot', 'lab']) {
-      if (!el[k]) continue;
-      el[k].classList.toggle('spent', (state.supply ?? 0) < (state.costs[k] ?? 0));
-      el[k].classList.toggle('active', state.buildMode === k);
-      const s = el[k].querySelector('small'); if (s) s.textContent = state.costs[k];
-    }
 
-    // selected-building action panel (RTS)
-    const sb = state.selBuilding;
-    if (sb) {
-      el.bld.classList.add('show');
-      if (sb.kind === 'barracks') {
-        const prog = sb.prod
-          ? `<div class="bld-prog"><i style="width:${Math.round(sb.prod.pct * 100)}%"></i></div><div class="bld-sub">training ${sb.prod.key.toUpperCase()} · ${sb.queue} queued</div>`
-          : `<div class="bld-sub">${sb.queue ? sb.queue + ' queued' : 'idle'}</div>`;
-        el.bld.innerHTML = `<div class="bld-name">BARRACKS</div>
-          <div class="bld-row"><button class="bld-btn" data-prod="rifles">RIFLES<small>40</small></button>
-          <button class="bld-btn" data-prod="mg">MG TEAM<small>60</small></button></div>${prog}
-          <div class="bld-sub">RMB sets rally${sb.hasRally ? ' ✓' : ''}</div>`;
-      } else if (sb.kind === 'depot') {
-        el.bld.innerHTML = `<div class="bld-name">DEPOT</div><div class="bld-sub">boosts supply income while it stands</div>`;
-      } else if (sb.kind === 'lab') {
-        el.bld.innerHTML = `<div class="bld-name">LAB</div><div class="bld-sub">generates research — spend with 1-4</div>`;
-      } else {
-        el.bld.innerHTML = `<div class="bld-name">${sb.kind.toUpperCase()}</div>`;
-      }
-    } else el.bld.classList.remove('show');
+    renderCommand();
 
     if (state.possession) {
       el.possession.textContent = `DIRECT · ${state.possession}   ${state.reloading ? 'RELOADING…' : 'AMMO ' + (state.ammo ?? '')}`;
@@ -208,6 +159,7 @@ export function createHUD(root, state, hooks = {}) {
     el.crosshair.classList.toggle('show', !!state.possession);
 
     const sel = force.selected();
+    el.sel.style.display = state.selBuilding ? 'none' : '';
     if (!sel.length) { el.sel.innerHTML = '<div class="sel-empty">no unit selected</div>'; return; }
     el.sel.innerHTML = sel.map(s => `
       <div class="sel-row ${s.type}">
@@ -229,9 +181,7 @@ export function createHUD(root, state, hooks = {}) {
   function showEnd() {
     el.endTitle.textContent = state.held ? 'THE LINE HELD' : 'THE WORKS ARE OVERRUN';
     el.endTitle.className = state.held ? 'win' : 'lose';
-    el.endSub.textContent = state.held
-      ? 'the line holds — dawn is still a long way off'
-      : 'the dead overrun the works';
+    el.endSub.textContent = state.held ? 'the line holds — dawn is still far off' : 'the dead overrun the works';
     el.endStats.innerHTML = `
       <div><span>${state.kills}</span>dead felled</div>
       <div><span>${state.menLost}</span>men lost</div>

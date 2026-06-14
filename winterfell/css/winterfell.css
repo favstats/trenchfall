@@ -106,18 +106,36 @@ body::after {
 .sel-order.hold { background: rgba(255,120,90,.18); color: #ff9d86; }
 
 /* call-ins, bottom-right — small chips */
-#callins {
-  position: fixed; right: 8px; bottom: 8px; display: grid;
-  grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 4px; pointer-events: auto;
-  width: clamp(330px, 40vw, 480px);
+/* ---- RTS command panel (bottom-centre) ---- */
+#command {
+  position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%);
+  width: clamp(420px, 52vw, 660px); padding: 7px 9px 9px;
+  background: rgba(9,14,21,.82); border: 1px solid rgba(130,160,195,.32);
+  border-radius: 8px; box-shadow: 0 4px 22px rgba(0,0,0,.45); pointer-events: auto;
 }
-.callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: .04em;
-  color: #e7eefa; background: rgba(20,30,42,.8); border: 1px solid rgba(140,170,200,.28);
-  border-radius: 5px; padding: 4px 4px; min-height: 32px; cursor: pointer; transition: .12s; }
-.callin:hover { background: rgba(40,60,84,.95); border-color: #6fb0e0; }
-.callin small { display: block; font-size: 8px; opacity: .55; margin-top: 1px; }
-.callin.spent { opacity: .35; pointer-events: none; }
-.callin.active { border-color: #ffd27a; background: rgba(90,70,35,.82); color: #ffe0a0; }
+#cmdHead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+#cmdTitle { font-family: 'Saira Stencil One', sans-serif; font-size: 14px; letter-spacing: .05em; color: #e7eefa; }
+#cmdSub { font-size: 9px; letter-spacing: .12em; opacity: .55; text-transform: uppercase; }
+#cmdTabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.cmd-tab { flex: 1; font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: .1em;
+  color: #b9c8da; background: rgba(20,30,42,.7); border: 1px solid rgba(120,150,185,.22);
+  border-radius: 5px 5px 0 0; padding: 4px; cursor: pointer; }
+.cmd-tab:hover { background: rgba(40,60,84,.9); }
+.cmd-tab.on { color: #07121d; background: #9fd0ff; border-color: #9fd0ff; }
+#cmdGrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.cmd-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 50px; gap: 1px; cursor: pointer; transition: .1s;
+  color: #e7eefa; background: rgba(24,34,48,.92); border: 1px solid rgba(140,170,200,.3); border-radius: 6px; }
+.cmd-btn:hover { background: rgba(44,66,92,.98); border-color: #6fb0e0; transform: translateY(-1px); }
+.cmd-ico { font-size: 17px; line-height: 1; color: #cfe2f6; }
+.cmd-lbl { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 8.5px; letter-spacing: .04em; }
+.cmd-cost { font-family: 'Special Elite', monospace; font-size: 8.5px; color: #9fe0a8; }
+.cmd-btn.spent { opacity: .38; pointer-events: none; }
+.cmd-btn.active { border-color: #ffd27a; background: rgba(92,72,34,.9); }
+.cmd-btn.active .cmd-ico { color: #ffe0a0; }
+.cmd-prog { grid-column: 1 / -1; height: 6px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; }
+.cmd-prog i { display: block; height: 100%; background: linear-gradient(90deg, #9fd0ff, #9fe0a8); }
+.cmd-info { grid-column: 1 / -1; font-size: 10px; opacity: .7; padding: 4px 2px; letter-spacing: .04em; }
 
 #possessionTag {
   position: fixed; left: 50%; top: 58%; transform: translate(-50%, -50%);
