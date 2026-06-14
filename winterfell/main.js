@@ -15,6 +15,7 @@ import { setSeason, pickSeason } from './game/season.js';
 import { createWeather } from './world/weather.js';
 import { createMinimap } from './ui/minimap.js';
 import { createEmbers } from './world/embers.js';
+import { createLightShafts } from './world/lightshafts.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -37,6 +38,7 @@ const force = new Force(scene, state);
 const horde = new Horde(scene, state, field);
 const weather = createWeather(scene); // drifting snow / ash in the air, follows the camera
 const embers = createEmbers(scene);   // warm ash rising off the smouldering killing ground
+const lightShafts = createLightShafts(scene, field); // volumetric beams under the floodlights
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
@@ -600,6 +602,7 @@ async function frame(now) {
   if (field.update) field.update(dt, camera);
   weather.update(dt, camera);
   embers.update(dt);
+  lightShafts.update(dt);
   rig.update(dt);
   possession.update(dt);
   updateGhost();
