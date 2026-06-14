@@ -667,30 +667,40 @@ function addDefenses(group, env) {
     roughness: 0.42,
     metalness: 0.08,
   });
-  const stakes = new THREE.InstancedMesh(stakeGeo, stakeMat, 260);
-  const shards = new THREE.InstancedMesh(shardGeo, shardMat, 95);
+  // tidy belts of angled stakes in staggered rows facing the enemy (not random litter)
+  const rows = [WALL_Z - 13, WALL_Z - 29, WALL_Z - 47];
+  const perRow = 22, span = FIELD_HALF_X * 2 - 18;
+  const stakes = new THREE.InstancedMesh(stakeGeo, stakeMat, rows.length * perRow);
   const o = new THREE.Object3D();
-  for (let i = 0; i < 260; i++) {
-    const lane = Math.floor(i / 65);
-    const x = -FIELD_HALF_X + rnd() * FIELD_HALF_X * 2 + Math.sin(i) * 5;
-    const z = WALL_Z - 10 - lane * 13 - rnd() * 13;
-    o.position.set(x, terrainHeight(x, z) + 1.3, z);
-    o.rotation.set((rnd() - 0.5) * 0.9, rnd() * Math.PI, Math.PI - 0.45 - rnd() * 0.55);
-    o.updateMatrix();
-    env.breakables.push({ kind: 'stake', mesh: stakes, index: i, x, z, hp: 16 + rnd() * 10, alive: true });
-    stakes.setMatrixAt(i, o.matrix);
+  let si = 0;
+  for (let r = 0; r < rows.length; r++) {
+    const z = rows[r], stagger = (r % 2) * (span / perRow / 2);
+    for (let c = 0; c < perRow; c++) {
+      const x = -FIELD_HALF_X + 9 + stagger + c * (span / (perRow - 1));
+      if (Math.abs(x) < GATE_W / 2 + 5 || Math.abs(x) > FIELD_HALF_X - 4) continue; // clear gate lane & flanks
+      o.position.set(x, terrainHeight(x, z) + 1.3, z);
+      o.rotation.set(-0.52 + (rnd() - 0.5) * 0.08, 0, 0); // uniform lean toward the dead
+      o.scale.set(1, 1, 1);
+      o.updateMatrix();
+      env.breakables.push({ kind: 'stake', mesh: stakes, index: si, x, z, hp: 16 + rnd() * 8, alive: true });
+      stakes.setMatrixAt(si++, o.matrix);
+    }
   }
-  for (let i = 0; i < 95; i++) {
-    const x = -FIELD_HALF_X + rnd() * FIELD_HALF_X * 2;
-    const z = WALL_Z - 16 - rnd() * 72;
+  stakes.count = si;
+  // one neat line of dragonglass shards
+  const shards = new THREE.InstancedMesh(shardGeo, shardMat, 28);
+  let hi = 0;
+  for (let c = 0; c < 28; c++) {
+    const x = -FIELD_HALF_X + 14 + c * ((FIELD_HALF_X * 2 - 28) / 27);
+    if (Math.abs(x) < GATE_W / 2 + 5) continue;
+    const z = WALL_Z - 39 + (c % 2) * 2.4;
     o.position.set(x, groundHeight(x, z) + 0.8, z);
-    o.rotation.set((rnd() - 0.5) * 0.32, rnd() * Math.PI, (rnd() - 0.5) * 0.22);
-    const s = 0.75 + rnd() * 0.75;
-    o.scale.set(s, s, s);
+    o.rotation.set(0, 0, 0); o.scale.setScalar(0.85 + rnd() * 0.25);
     o.updateMatrix();
-    env.breakables.push({ kind: 'shard', mesh: shards, index: i, x, z, hp: 12 + rnd() * 8, alive: true });
-    shards.setMatrixAt(i, o.matrix);
+    env.breakables.push({ kind: 'shard', mesh: shards, index: hi, x, z, hp: 12, alive: true });
+    shards.setMatrixAt(hi++, o.matrix);
   }
+  shards.count = hi;
   stakes.castShadow = true;
   shards.castShadow = true;
   group.add(stakes, shards);
@@ -699,12 +709,14 @@ function addDefenses(group, env) {
 function addRocks(group, env) {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x5b626b, roughness: 0.96, metalness: 0 });
   const geo = new THREE.DodecahedronGeometry(1, 0);
-  const rocks = new THREE.InstancedMesh(geo, rockMat, 82);
+  const rocks = new THREE.InstancedMesh(geo, rockMat, 30);
   const o = new THREE.Object3D();
-  for (let i = 0; i < 82; i++) {
-    const x = (rnd() * 2 - 1) * (FIELD_HALF_X + 28);
+  for (let i = 0; i < 30; i++) {
+    // keep boulders out near the flanks/cliffs, not littering the battlefield centre
+    const side = rnd() < 0.5 ? -1 : 1;
+    const x = side * (FIELD_HALF_X * 0.66 + rnd() * 70);
     const z = NORTH_Z + 15 + rnd() * 205;
-    const s = 0.45 + rnd() * 2.4;
+    const s = 0.6 + rnd() * 2.6;
     o.position.set(x, groundHeight(x, z) + s * 0.25, z);
     o.rotation.set(rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI);
     o.scale.set(s * (0.8 + rnd() * 1.6), s * (0.32 + rnd() * 0.5), s * (0.7 + rnd() * 1.4));
@@ -844,13 +856,21 @@ const BUILD_STATS = {
   ammo: { hp: 96, radius: 7.2, clearance: 7 },
   bunker: { hp: 260, radius: 8.8, clearance: 11 },
   brazier: { hp: 78, radius: 12.5, clearance: 7 },
+  // base structures — raised in the courtyard behind the wall
+  barracks: { hp: 240, radius: 9, clearance: 13 },
+  depot: { hp: 200, radius: 9, clearance: 12 },
+  lab: { hp: 180, radius: 9, clearance: 12 },
 };
+
+const BASE_KINDS = new Set(['barracks', 'depot', 'lab']);
 
 function canPlaceBuildable(env, kind, x, z, dense) {
   kind = normalizeBuildKind(kind);
   if (!env) return false;
   if (Math.abs(x) > FIELD_HALF_X - 8) return false;
-  if (z < NORTH_Z + 18 || z > WALL_Z - 8) return false;
+  if (BASE_KINDS.has(kind)) {
+    if (z < WALL_Z + 6 || z > WALL_Z + 62) return false;   // courtyard, behind the wall
+  } else if (z < NORTH_Z + 18 || z > WALL_Z - 8) return false; // killing ground, in front
   if (dense) return true; // drawn/dug lines lay segments shoulder to shoulder
   const clearance = BUILD_STATS[kind]?.clearance ?? 7;
   for (const b of env.buildables) {
@@ -1106,8 +1126,8 @@ function placeBuildable(kind, x, z, opts = {}) {
   env.group.add(g);
   env.buildables.push(item);
   // real excavation: carve the terrain so the trench is dug into the ground
-  if (kind === 'trench') { digCarve(x, z, 2.8, 5.6); spawnDebris(env, x, z, 2.6, 5, false); }
-  else if (kind === 'pit') { digCarve(x, z, 2.2, 4.4); spawnDebris(env, x, z, 2.4, 4, false); }
+  if (kind === 'trench') { digCarve(x, z, 2.8, 5.6); spawnDebris(env, x, z, 2.2, 2, false); }
+  else if (kind === 'pit') { digCarve(x, z, 2.2, 4.4); spawnDebris(env, x, z, 2.2, 2, false); }
   return item;
 }
 
@@ -1210,6 +1230,29 @@ function gateHealth() {
   const env = activeEnv;
   if (!env?.gate) return 1;
   return clamp(env.gate.hp / env.gate.maxHp, 0, 1);
+}
+
+// Helm's Deep flanks — sheer cliffs hem the gorge so the wall butts into rock
+// at both ends (the dead can only come down the throat between them)
+function addCliffs(group) {
+  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x262b31, roughness: 1, metalness: 0 });
+  const snowMat = new THREE.MeshStandardMaterial({ color: 0xdfe7f1, roughness: 1 });
+  const z0 = NORTH_Z - 40, z1 = WALL_Z + 70, n = 16;
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < n; i++) {
+      const z = z0 + (i + rnd() * 0.4) * ((z1 - z0) / n);
+      const h = 36 + rnd() * 28;
+      const w = 26 + rnd() * 20, d = 30 + rnd() * 20;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cliffMat);
+      m.position.set(side * (FIELD_HALF_X + 12 + rnd() * 8), h / 2 - 4, z);
+      m.rotation.y = (rnd() - 0.5) * 0.5;
+      m.castShadow = true; m.receiveShadow = true;
+      group.add(m);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 1.6, d * 0.9), snowMat);
+      cap.position.set(m.position.x, h - 4.4, z); cap.rotation.y = m.rotation.y;
+      group.add(cap);
+    }
+  }
 }
 
 function addTreeline(group) {
@@ -1560,6 +1603,7 @@ export function buildField(scene) {
   const { wall, gate } = addWall(group, torches, placementTargets, env);
   addDefenses(group, env);
   addRocks(group, env);
+  addCliffs(group);
   addDestructionPools(group, env);
   addTreeline(group);
   addMist(group, mists);
