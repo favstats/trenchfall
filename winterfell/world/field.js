@@ -1349,6 +1349,35 @@ function digCarve(x, z, depth = 1.7, radius = 5.2) {
   refreshTerrain(env, x, z, radius + 2.5);
 }
 
+// a visible explosion: expanding fireball + rising smoke + flash light + debris
+function explodeFx(x, y, z, scale = 1) {
+  const env = activeEnv;
+  if (!env) return;
+  if (!env._fireTex) {
+    env._fireTex = makeRadialTexture(128, [
+      [0.0, 'rgba(255,250,210,1)'], [0.28, 'rgba(255,160,46,.95)'],
+      [0.62, 'rgba(150,46,12,.5)'], [1.0, 'rgba(0,0,0,0)'],
+    ]);
+    env._smokeTex = makeRadialTexture(128, [
+      [0.0, 'rgba(46,42,38,.9)'], [0.55, 'rgba(30,28,25,.45)'], [1.0, 'rgba(0,0,0,0)'],
+    ]);
+  }
+  const fire = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  fire.position.set(x, y + 1.6 * scale, z);
+  env.group.add(fire);
+  const smoke = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: env._smokeTex, transparent: true, opacity: 0.9, depthWrite: false, fog: false }));
+  smoke.position.set(x, y + 2.4 * scale, z);
+  env.group.add(smoke);
+  const light = new THREE.PointLight(0xffa040, 26 * scale, 70 * scale, 2);
+  light.position.set(x, y + 4 * scale, z);
+  env.group.add(light);
+  env.lights.push({ light, t: 0.45 });
+  spawnDebris(env, x, z, 4.2 * scale, 16, true);
+  env.blasts.push({ fire, smoke, t: 0, life: 0.6 + 0.25 * scale, scale });
+}
+
 function deformTerrain(env, x, z, radius, depth) {
   if (!env.terrainGeo || depth <= 0) return;
   deforms.push({ x, z, r: radius, delta: -depth, mode: 'bowl' });
@@ -1482,6 +1511,7 @@ export function buildField(scene) {
     buildables: [],
     dig: new Float32Array(DIG_W * DIG_H),
     terrainDirty: false,
+    blasts: [],
   };
   activeEnv = env;
   const terrain = addTerrain(group, placementTargets, env);
@@ -1496,9 +1526,29 @@ export function buildField(scene) {
   scene.add(group);
 
   let time = 0;
-  function update(dt) {
+  function update(dt, camera) {
     time += dt;
     if (env.terrainDirty) { env.terrainGeo.computeVertexNormals(); env.terrainDirty = false; }
+
+    // explosions: fireball expands & fades, smoke billows up and drifts
+    for (let i = env.blasts.length - 1; i >= 0; i--) {
+      const b = env.blasts[i];
+      b.t += dt;
+      const k = b.t / b.life;
+      if (k >= 1) {
+        env.group.remove(b.fire); env.group.remove(b.smoke);
+        b.fire.geometry.dispose(); b.fire.material.dispose(); b.smoke.material.dispose();
+        env.blasts.splice(i, 1);
+        continue;
+      }
+      b.fire.scale.setScalar((2.5 + k * 9) * b.scale);
+      b.fire.material.opacity = Math.max(0, 1 - k * 1.6);
+      b.smoke.scale.setScalar((4 + k * 12) * b.scale);
+      b.smoke.material.opacity = 0.85 * (1 - k);
+      b.smoke.position.y += dt * 5;
+      if (camera) b.smoke.quaternion.copy(camera.quaternion);
+    }
+
     for (const item of torches) {
       const f = 0.78 + Math.sin(time * 9.5 + item.torch.userData.phase) * 0.15 + Math.sin(time * 23 + item.torch.userData.phase) * 0.07;
       item.light.intensity = item.base * f;
@@ -1550,6 +1600,7 @@ export function buildField(scene) {
     heightAt,
     blast: blastEnvironment,
     damageEnvironment: blastEnvironment,
+    explodeFx,
     placeBuildable,
     canPlaceBuildable: (kind, x, z) => canPlaceBuildable(env, kind, x, z),
     buildPressure,

@@ -6,8 +6,8 @@ import * as THREE from '../engine/three.js';
 import { WALL_Z, GATE_W } from '../world/field.js';
 
 const WEAPON = {
-  rifle: { range: 130, cd: 0.72, dmg: 2, spread: 0.04 },
-  mg:    { range: 155, cd: 0.11, dmg: 2, spread: 0.08 },
+  rifle: { range: 130, cd: 0.72, dmg: 2, spread: 0.04, mag: 12, reload: 2.4 },
+  mg:    { range: 155, cd: 0.11, dmg: 2, spread: 0.08, mag: 60, reload: 5.2 },
 };
 const MELEE_RANGE = 4.2;
 const MELEE_CD = 1.1;
@@ -142,9 +142,10 @@ export class Combat {
 
     // ---- soldiers fire ----
     for (const m of force.soldiers) {
-      if (!m.alive) continue;
+      if (!m.alive || m.possessed) continue;  // possessed soldier is player-driven
       m.reload -= dt;
       if (m.reload > 0) continue;
+      m.reloading = false;
       const w = WEAPON[m.squad.type] || WEAPON.rifle;
       if (m.squad.holdFire) continue;
       const cover = horde.field.coverAt?.(m.pos.x, m.pos.z);
@@ -154,7 +155,12 @@ export class Combat {
       if (idx < 0) continue;
       const a = horde.agents[idx];
       m.faceTo(a.x, a.z);
-      m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * (0.85 + Math.random() * 0.3);
+      if (m.mag === undefined) m.mag = w.mag;
+      if (--m.mag <= 0) {                       // empty — work the bolt / change the belt
+        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1); m.reloading = true;
+      } else {
+        m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * (0.85 + Math.random() * 0.3);
+      }
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
@@ -237,6 +243,11 @@ export class Combat {
   // forward cone takes the hit (tracer always drawn so it reads as firing)
   playerShot(avatar, yaw) {
     const { horde, fx, state } = this;
+    if (avatar.reload > 0) return;            // still reloading
+    const W = WEAPON.rifle;
+    avatar.mag = (avatar.mag ?? W.mag) - 1;
+    if (avatar.mag <= 0) { avatar.mag = W.mag; avatar.reload = W.reload; avatar.reloading = true; }
+    else avatar.reloading = false;
     const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
     const ox = avatar.pos.x, oz = avatar.pos.z, range = 150;
     let best = -1, bestT = 1e9;

@@ -126,7 +126,9 @@ export function createHUD(root, state, hooks = {}) {
     el.ammo.querySelector('small').textContent = state.costs.ammo;
     el.bunker.querySelector('small').textContent = state.costs.bunker;
     el.brazier.querySelector('small').textContent = state.costs.brazier;
-    el.possession.textContent = state.possession ? `DIRECT · ${state.possession}` : '';
+    if (state.possession) {
+      el.possession.textContent = `DIRECT · ${state.possession}   ${state.reloading ? 'RELOADING…' : 'AMMO ' + (state.ammo ?? '')}`;
+    } else el.possession.textContent = '';
     el.possession.classList.toggle('show', !!state.possession);
     el.crosshair.classList.toggle('show', !!state.possession);
 

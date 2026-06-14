@@ -157,6 +157,8 @@ export class Soldier {
       p.legL.rotation.x *= 0.8; p.legR.rotation.x *= 0.8;
       p.armL.rotation.x *= 0.8; p.armR.rotation.x *= 0.8;
     }
+    // reload pose — drop the muzzle while working the action / changing mags
+    p.rifle.rotation.x = (this.reloading && this.reload > 0.05) ? 0.7 : 0;
   }
 
   dispose() { this.scene.remove(this.g); }

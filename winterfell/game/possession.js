@@ -56,6 +56,9 @@ export class Possession {
     const a = this.avatar;
     if (!a || !a.alive) { this.exit(); return; }
 
+    a.reload = Math.max(0, (a.reload || 0) - dt); // tick the reload timer
+    if (this.combat?.state) { this.combat.state.ammo = a.mag ?? 12; this.combat.state.reloading = a.reload > 0; }
+
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);   // forward
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);    // right
 

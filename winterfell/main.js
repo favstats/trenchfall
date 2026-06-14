@@ -148,6 +148,7 @@ function pickMortarTarget() {
 function detonate(x, z, radius = 11, damage = 130, crater = 1.35) {
   const y = field.heightAt(x, z);
   field.blast(x, y, z, { radius, damage, crater });
+  field.explodeFx?.(x, y, z, radius / 10); // visible fireball + smoke + flash
   for (let i = horde.agents.length - 1; i >= 0; i--) {
     const a = horde.agents[i];
     if (a.dead) continue;
