@@ -33,10 +33,13 @@ function seedFieldWorks() {
     ['trench', -70, WALL_Z - 22],
     ['trench', 70, WALL_Z - 22],
     ['trench', -26, WALL_Z - 16],
-    ['sandbag', 24, WALL_Z - 16],
+    ['sandbag', -50, WALL_Z - 16],
     ['wire', -70, WALL_Z - 43],
     ['wire', 70, WALL_Z - 43],
     ['wire', 0, WALL_Z - 50],
+    ['nest', 24, WALL_Z - 16],
+    ['ammo', 0, WALL_Z - 12],
+    ['floodlight', 0, WALL_Z - 36],
   ]) field.placeBuildable?.(kind, x, z);
 }
 seedFieldWorks();
@@ -151,6 +154,11 @@ const hud = createHUD(hudRoot, state, {
   onBuildTrench: () => setBuildMode('trench'),
   onBuildWire: () => setBuildMode('wire'),
   onBuildSandbag: () => setBuildMode('sandbag'),
+  onBuildNest: () => setBuildMode('nest'),
+  onBuildTower: () => setBuildMode('tower'),
+  onBuildPit: () => setBuildMode('pit'),
+  onBuildFloodlight: () => setBuildMode('floodlight'),
+  onBuildAmmo: () => setBuildMode('ammo'),
 });
 
 // ---------------- input: selection + orders ----------------
@@ -215,6 +223,11 @@ window.addEventListener('keydown', e => {
   else if (k === 't') setBuildMode('trench');
   else if (k === 'n') setBuildMode('wire');
   else if (k === 'b') setBuildMode('sandbag');
+  else if (k === 'g') setBuildMode('nest');
+  else if (k === 'y') setBuildMode('tower');
+  else if (k === 'm') setBuildMode('pit');
+  else if (k === 'l') setBuildMode('floodlight');
+  else if (k === 'o') setBuildMode('ammo');
   if (k === 'h') force.orderSelected('HOLD');
   else if (k === 'x') force.orderSelected('FALL_BACK', { x: force.selected()[0]?.centroid().x ?? 0, z: field.wallZ + 9 });
   else if (k === 'z') {

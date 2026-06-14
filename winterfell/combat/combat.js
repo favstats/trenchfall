@@ -158,7 +158,8 @@ export class Combat {
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
       fx.shot(this._from, this._to);
 
-      a.hp -= w.dmg;
+      const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);
+      a.hp -= w.dmg * (cover?.damageMul ?? 1) * (lit?.damageMul ?? 1);
       if (a.hp <= 0) {
         fx.burst(this._to);
         horde.kill(idx);   // leaves a corpse + grows the heap
@@ -221,7 +222,8 @@ export class Combat {
     }
     const a = horde.agents[best];
     fx.shot(from, this._to.set(a.x, horde.field.heightAt(a.x, a.z) + 1.2, a.z));
-    a.hp -= 2;
+    const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);
+    a.hp -= 2 * (lit?.damageMul ?? 1);
     if (a.hp <= 0) { fx.burst(this._to); horde.kill(best); state.kills++; }
   }
 

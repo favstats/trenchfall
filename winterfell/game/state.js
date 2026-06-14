@@ -21,8 +21,18 @@ export class GameState {
     this.supply = 115;
     this.supplyMax = 260;
     this.supplyRate = 4.2;
-    this.costs = { trench: 42, wire: 28, sandbag: 32, recruit: 65 };
-    this.buildMode = null;     // null | 'trench' | 'wire' | 'sandbag'
+    this.costs = {
+      trench: 42,
+      wire: 28,
+      sandbag: 32,
+      nest: 74,
+      tower: 88,
+      pit: 36,
+      floodlight: 58,
+      ammo: 52,
+      recruit: 65,
+    };
+    this.buildMode = null;     // null | field-work kind
     this.gateHp = 1;
     this.works = 0;
     this.possession = null;    // label of directly controlled soldier, if any

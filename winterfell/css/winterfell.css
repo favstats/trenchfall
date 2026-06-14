@@ -82,12 +82,12 @@ body::after {
 /* call-ins, bottom-right */
 #callins {
   position: fixed; right: 16px; bottom: 44px; display: grid;
-  grid-template-columns: repeat(3, minmax(78px, 1fr)); gap: 8px; pointer-events: auto;
-  width: clamp(270px, 34vw, 430px);
+  grid-template-columns: repeat(5, minmax(70px, 1fr)); gap: 7px; pointer-events: auto;
+  width: clamp(430px, 49vw, 650px);
 }
 .callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .06em;
   color: #e7eefa; background: rgba(20,30,42,.85); border: 1px solid rgba(140,170,200,.3);
-  border-radius: 7px; padding: 9px 10px; min-height: 58px; cursor: pointer; transition: .15s; }
+  border-radius: 7px; padding: 8px 8px; min-height: 52px; cursor: pointer; transition: .15s; }
 .callin:hover { background: rgba(40,60,84,.95); border-color: #6fb0e0; }
 .callin small { display: block; font-size: 10px; opacity: .6; margin-top: 2px; }
 .callin.spent { opacity: .35; pointer-events: none; }
@@ -111,6 +111,7 @@ body::after {
 #crosshair.show { display: block; }
 
 #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  width: min(760px, calc(100vw - 360px)); text-align: center;
   font-size: 11.5px; letter-spacing: .06em; opacity: .5; }
 
 #dragbox { position: fixed; display: none; border: 1.5px solid #5ad1ff;

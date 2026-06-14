@@ -717,6 +717,8 @@ function buildAssets(env) {
     snow: new THREE.MeshStandardMaterial({ color: 0xdbe7f3, roughness: 1, metalness: 0 }),
     earth: new THREE.MeshStandardMaterial({ color: 0x1b1712, roughness: 1, metalness: 0 }),
     sand: new THREE.MeshStandardMaterial({ color: 0x746a55, roughness: 0.98, metalness: 0 }),
+    canvas: new THREE.MeshStandardMaterial({ color: 0x384333, roughness: 0.9, metalness: 0 }),
+    glass: new THREE.MeshBasicMaterial({ color: 0xffd67a, transparent: true, opacity: 0.85, fog: false }),
     log: new THREE.BoxGeometry(8.4, 0.52, 0.72),
     brace: new THREE.BoxGeometry(0.52, 3.2, 0.52),
     spike: new THREE.ConeGeometry(0.24, 3.4, 5),
@@ -725,6 +727,13 @@ function buildAssets(env) {
     bag: new THREE.BoxGeometry(1.22, 0.38, 0.64),
     wire: new THREE.BoxGeometry(9.2, 0.055, 0.055),
     post: new THREE.CylinderGeometry(0.08, 0.11, 1.25, 5),
+    crate: new THREE.BoxGeometry(1.25, 0.85, 1.1),
+    plank: new THREE.BoxGeometry(0.34, 5.8, 0.34),
+    deck: new THREE.BoxGeometry(4.8, 0.32, 4.8),
+    barrel: new THREE.CylinderGeometry(0.13, 0.13, 3.4, 8),
+    tripod: new THREE.CylinderGeometry(0.055, 0.07, 1.9, 5),
+    lamp: new THREE.CylinderGeometry(0.34, 0.26, 0.42, 10),
+    pit: new THREE.CylinderGeometry(3.1, 2.6, 0.45, 18),
     snowCap: new THREE.BoxGeometry(8.8, 0.18, 0.92),
   };
   return env.buildAssets;
@@ -741,19 +750,51 @@ function castBuildable(g) {
 function normalizeBuildKind(kind) {
   if (kind === 'barricade') return 'sandbag';
   if (kind === 'spikes') return 'wire';
+  if (kind === 'mg') return 'nest';
+  if (kind === 'mine') return 'pit';
+  if (kind === 'spotlight') return 'floodlight';
   return kind;
 }
+
+const BUILD_STATS = {
+  trench: { hp: 230, radius: 8.0, clearance: 11 },
+  wire: { hp: 72, radius: 6.2, clearance: 6 },
+  sandbag: { hp: 118, radius: 6.8, clearance: 8 },
+  nest: { hp: 185, radius: 8.4, clearance: 10 },
+  tower: { hp: 130, radius: 9.2, clearance: 10 },
+  pit: { hp: 64, radius: 5.9, clearance: 7 },
+  floodlight: { hp: 92, radius: 18, clearance: 8 },
+  ammo: { hp: 96, radius: 7.2, clearance: 7 },
+};
 
 function canPlaceBuildable(env, kind, x, z) {
   kind = normalizeBuildKind(kind);
   if (!env) return false;
   if (Math.abs(x) > FIELD_HALF_X - 8) return false;
   if (z < NORTH_Z + 18 || z > WALL_Z - 8) return false;
-  const clearance = kind === 'trench' ? 11 : kind === 'sandbag' ? 8 : 6;
+  const clearance = BUILD_STATS[kind]?.clearance ?? 7;
   for (const b of env.buildables) {
     if (b.alive && Math.hypot(b.x - x, b.z - z) < clearance) return false;
   }
   return true;
+}
+
+function addSandbags(g, a, n, rows, zBase = 0, arc = false) {
+  for (let row = 0; row < rows; row++) {
+    for (let i = 0; i < n; i++) {
+      const bag = new THREE.Mesh(a.bag, a.sand);
+      if (arc) {
+        const t = -Math.PI * 0.78 + (i / Math.max(1, n - 1)) * Math.PI * 1.56;
+        const r = 3.25 + row * 0.46;
+        bag.position.set(Math.cos(t) * r, 0.28 + row * 0.32, zBase + Math.sin(t) * r);
+        bag.rotation.y = -t + Math.PI / 2 + (rnd() - 0.5) * 0.22;
+      } else {
+        bag.position.set((i - (n - 1) / 2) * 1.02, 0.26 + row * 0.38, zBase + (row % 2) * 0.32);
+        bag.rotation.y = (rnd() - 0.5) * 0.32;
+      }
+      g.add(bag);
+    }
+  }
 }
 
 function placeBuildable(kind, x, z) {
@@ -764,15 +805,16 @@ function placeBuildable(kind, x, z) {
   const g = new THREE.Group();
   g.position.set(x, groundHeight(x, z) + 0.08, z);
   g.rotation.y = (rnd() - 0.5) * 0.5;
+  const stats = BUILD_STATS[kind] ?? BUILD_STATS.sandbag;
   const item = {
     id: ++env.buildId,
     kind,
     group: g,
     x, z,
     alive: true,
-    hp: kind === 'trench' ? 230 : kind === 'sandbag' ? 118 : 72,
-    maxHp: kind === 'trench' ? 230 : kind === 'sandbag' ? 118 : 72,
-    radius: kind === 'trench' ? 8.0 : kind === 'sandbag' ? 6.8 : 6.2,
+    hp: stats.hp,
+    maxHp: stats.hp,
+    radius: stats.radius,
   };
 
   if (kind === 'trench') {
@@ -812,15 +854,108 @@ function placeBuildable(kind, x, z) {
       spike.rotation.set(0.58 + rnd() * 0.25, rnd() * Math.PI, (rnd() - 0.5) * 0.24);
       g.add(spike);
     }
-  } else {
-    for (let row = 0; row < 3; row++) {
-      for (let i = 0; i < 8; i++) {
-        const bag = new THREE.Mesh(a.bag, a.sand);
-        bag.position.set((i - 3.5) * 1.02, 0.26 + row * 0.38, (row % 2) * 0.32);
-        bag.rotation.y = (rnd() - 0.5) * 0.32;
-        g.add(bag);
-      }
+  } else if (kind === 'sandbag') {
+    addSandbags(g, a, 8, 3);
+  } else if (kind === 'nest') {
+    addSandbags(g, a, 12, 3, 0.25, true);
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.24, 14), a.earth);
+    deck.position.y = 0.14;
+    g.add(deck);
+    const barrel = new THREE.Mesh(a.barrel, a.iron);
+    barrel.position.set(0, 1.18, -1.7);
+    barrel.rotation.x = Math.PI / 2;
+    g.add(barrel);
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.42, 0.8), a.iron);
+    receiver.position.set(0, 1.16, -0.35);
+    g.add(receiver);
+    for (const [px, pz, rz] of [[-0.55, 0.45, 0.45], [0.55, 0.45, -0.45], [0, -0.55, 0]]) {
+      const leg = new THREE.Mesh(a.tripod, a.iron);
+      leg.position.set(px, 0.58, pz);
+      leg.rotation.z = rz;
+      g.add(leg);
     }
+    for (const [cx, cz] of [[-2.0, 1.7], [2.0, 1.55]]) {
+      const crate = new THREE.Mesh(a.crate, a.wood);
+      crate.position.set(cx, 0.46, cz);
+      crate.rotation.y = (rnd() - 0.5) * 0.35;
+      g.add(crate);
+    }
+  } else if (kind === 'tower') {
+    for (const sx of [-1.8, 1.8]) for (const sz of [-1.8, 1.8]) {
+      const leg = new THREE.Mesh(a.plank, a.wood);
+      leg.position.set(sx, 2.65, sz);
+      leg.rotation.z = sx * 0.035;
+      leg.rotation.x = -sz * 0.035;
+      g.add(leg);
+    }
+    const deck = new THREE.Mesh(a.deck, a.wood);
+    deck.position.y = 5.25;
+    g.add(deck);
+    addSandbags(g, a, 5, 2, -2.28);
+    const ladder = new THREE.Mesh(new THREE.BoxGeometry(1.2, 4.8, 0.16), a.wood);
+    ladder.position.set(-2.58, 2.6, 0);
+    ladder.rotation.z = -0.22;
+    g.add(ladder);
+    const lamp = new THREE.Mesh(a.lamp, a.glass);
+    lamp.position.set(0, 5.72, -2.25);
+    lamp.rotation.x = Math.PI / 2;
+    g.add(lamp);
+  } else if (kind === 'pit') {
+    const pit = new THREE.Mesh(a.pit, a.earth);
+    pit.position.y = 0.05;
+    pit.scale.set(1, 0.22, 1);
+    g.add(pit);
+    for (let i = 0; i < 13; i++) {
+      const spike = new THREE.Mesh(a.spike, i % 4 === 0 ? a.iron : a.wood);
+      const ang = rnd() * Math.PI * 2;
+      const rr = 0.3 + rnd() * 2.15;
+      spike.position.set(Math.cos(ang) * rr, 0.5, Math.sin(ang) * rr);
+      spike.rotation.set(0.25 + rnd() * 0.35, rnd() * Math.PI, (rnd() - 0.5) * 0.28);
+      spike.scale.setScalar(0.82 + rnd() * 0.35);
+      g.add(spike);
+    }
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.12, 6, 22), a.snow);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.2;
+    g.add(rim);
+  } else if (kind === 'floodlight') {
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 4.2, 7), a.iron);
+    mast.position.y = 2.1;
+    g.add(mast);
+    for (const sx of [-1.1, 1.1]) {
+      const brace = new THREE.Mesh(a.brace, a.wood);
+      brace.position.set(sx, 0.88, 0);
+      brace.rotation.z = sx < 0 ? -0.75 : 0.75;
+      brace.scale.set(0.65, 0.65, 0.65);
+      g.add(brace);
+    }
+    const lamp = new THREE.Mesh(a.lamp, a.glass);
+    lamp.position.set(0, 4.42, -0.32);
+    lamp.rotation.x = Math.PI / 2;
+    lamp.scale.set(1.5, 1.5, 1.1);
+    g.add(lamp);
+    const beam = new THREE.Mesh(
+      new THREE.ConeGeometry(3.2, 18, 24, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffd78a, transparent: true, opacity: 0.09, depthWrite: false, fog: false }),
+    );
+    beam.position.set(0, 2.3, -8.2);
+    beam.rotation.x = -Math.PI / 2;
+    g.add(beam);
+    const light = new THREE.PointLight(0xffcf8a, 5.5, 34, 1.7);
+    light.position.set(0, 4.25, -0.7);
+    g.add(light);
+  } else if (kind === 'ammo') {
+    for (let i = 0; i < 7; i++) {
+      const crate = new THREE.Mesh(a.crate, i % 3 === 0 ? a.iron : a.wood);
+      crate.position.set((i % 3 - 1) * 1.15, 0.42 + Math.floor(i / 3) * 0.62, (Math.floor(i / 3) - 0.7) * 1.0);
+      crate.rotation.y = (rnd() - 0.5) * 0.35;
+      g.add(crate);
+    }
+    const tarp = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.18, 2.9), a.canvas);
+    tarp.position.set(0, 1.55, -0.15);
+    tarp.rotation.z = (rnd() - 0.5) * 0.08;
+    g.add(tarp);
+    addSandbags(g, a, 5, 1, 1.72);
   }
 
   castBuildable(g);
@@ -851,13 +986,20 @@ function buildPressure(x, z, dt) {
       speedMul = Math.min(speedMul, 0.38 + (1 - k) * 0.22);
       damage += dt * (1.6 + k * 4.4);
       item.hp -= dt * (1.2 + k * 2.8);
+    } else if (item.kind === 'pit') {
+      speedMul = Math.min(speedMul, 0.18 + (1 - k) * 0.24);
+      damage += dt * (4.6 + k * 9.5);
+      item.hp -= dt * (0.6 + k * 1.8);
     } else if (item.kind === 'trench') {
       speedMul = Math.min(speedMul, 0.22 + (1 - k) * 0.32);
       damage += dt * (0.25 + k * 0.9);
       item.hp -= dt * (0.7 + k * 2.4);
+    } else if (item.kind === 'floodlight') {
+      speedMul = Math.min(speedMul, 0.82);
+      item.hp -= dt * (0.45 + k * 1.5);
     } else {
-      speedMul = Math.min(speedMul, 0.16 + (1 - k) * 0.36);
-      item.hp -= dt * (4.8 + k * 13.0);
+      speedMul = Math.min(speedMul, item.kind === 'tower' ? 0.36 + (1 - k) * 0.35 : 0.16 + (1 - k) * 0.36);
+      item.hp -= dt * (item.kind === 'ammo' ? 7.0 + k * 16.0 : 4.8 + k * 13.0);
     }
     if (item.hp <= 0) destroyBuildable(env, item);
   }
@@ -869,14 +1011,32 @@ function coverAt(x, z) {
   if (!env) return null;
   let best = null;
   for (const item of env.buildables) {
-    if (!item.alive || (item.kind !== 'trench' && item.kind !== 'sandbag')) continue;
+    if (!item.alive || !['trench', 'sandbag', 'nest', 'tower', 'ammo'].includes(item.kind)) continue;
     const d = Math.hypot(item.x - x, item.z - z);
     if (d > item.radius) continue;
     const k = 1 - d / item.radius;
-    const c = item.kind === 'trench'
-      ? { kind: item.kind, k, reloadMul: 0.74, rangeMul: 1.12, meleeMul: 0.55 }
-      : { kind: item.kind, k, reloadMul: 0.86, rangeMul: 1.05, meleeMul: 0.72 };
+    let c;
+    if (item.kind === 'trench') c = { kind: item.kind, k, reloadMul: 0.74, rangeMul: 1.12, meleeMul: 0.55, damageMul: 1.0 };
+    else if (item.kind === 'sandbag') c = { kind: item.kind, k, reloadMul: 0.86, rangeMul: 1.05, meleeMul: 0.72, damageMul: 1.0 };
+    else if (item.kind === 'nest') c = { kind: item.kind, k, reloadMul: 0.52, rangeMul: 1.18, meleeMul: 0.48, damageMul: 1.18 };
+    else if (item.kind === 'tower') c = { kind: item.kind, k, reloadMul: 0.82, rangeMul: 1.38, meleeMul: 0.88, damageMul: 1.05 };
+    else c = { kind: item.kind, k, reloadMul: 0.62, rangeMul: 1.0, meleeMul: 0.84, damageMul: 1.08 };
     if (!best || c.k > best.k) best = c;
+  }
+  return best;
+}
+
+function targetVulnerabilityAt(x, z) {
+  const env = activeEnv;
+  if (!env) return null;
+  let best = null;
+  for (const item of env.buildables) {
+    if (!item.alive || item.kind !== 'floodlight') continue;
+    const d = Math.hypot(item.x - x, item.z - z);
+    if (d > item.radius) continue;
+    const k = 1 - d / item.radius;
+    const v = { kind: item.kind, k, damageMul: 1.18 + k * 0.35 };
+    if (!best || v.k > best.k) best = v;
   }
   return best;
 }
@@ -1234,6 +1394,7 @@ export function buildField(scene) {
     canPlaceBuildable: (kind, x, z) => canPlaceBuildable(env, kind, x, z),
     buildPressure,
     coverAt,
+    targetVulnerabilityAt,
     repairGate,
     gateHealth,
     works: () => env.buildables.filter(b => b.alive).length,
