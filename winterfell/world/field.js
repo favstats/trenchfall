@@ -1413,6 +1413,26 @@ function addMist(group, mists) {
   }
 }
 
+// upright camera-facing fog banks rolling low over the field — volumetric depth
+function addGroundFog(group) {
+  const tex = makeRadialTexture(256, [
+    [0.0, 'rgba(208,224,244,.45)'], [0.45, 'rgba(150,172,200,.2)'], [1.0, 'rgba(0,0,0,0)'],
+  ]);
+  const tint = new THREE.Color(season().fog).lerp(new THREE.Color(0xffffff), 0.68);
+  const list = [];
+  const geo = new THREE.PlaneGeometry(1, 1);
+  for (let i = 0; i < 22; i++) {
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, fog: false, color: tint });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set((rnd() * 2 - 1) * (FIELD_HALF_X + 8), 3 + rnd() * 4, NORTH_Z + 24 + rnd() * 205);
+    m.scale.set(48 + rnd() * 54, 22 + rnd() * 18, 1);
+    m.renderOrder = 3;
+    m.userData = { base: 0.09 + rnd() * 0.13, speed: 1.1 + rnd() * 2.6, ph: rnd() * 6.28 };
+    list.push(m); group.add(m);
+  }
+  return list;
+}
+
 function addSnow(group) {
   const COUNT = 1550;
   const geo = new THREE.BufferGeometry();
@@ -1696,6 +1716,7 @@ export function buildField(scene) {
   addDestructionPools(group, env);
   addTreeline(group);
   addMist(group, mists);
+  const groundFog = addGroundFog(group);
   const snow = season().snow ? addSnow(group) : null; // snowfall only in winter
 
   scene.add(group);
@@ -1753,6 +1774,14 @@ export function buildField(scene) {
       if (m.position.x > FIELD_HALF_X + 78) m.position.x = -FIELD_HALF_X - 78;
       m.rotation.z += dt * 0.008;
       m.material.opacity = m.userData.base * (0.72 + Math.sin(time * 0.5 + m.userData.phase) * 0.18);
+    }
+
+    // upright fog banks: drift across, billboard to camera, breathe
+    for (const m of groundFog) {
+      m.position.x += m.userData.speed * dt;
+      if (m.position.x > FIELD_HALF_X + 70) m.position.x = -FIELD_HALF_X - 70;
+      if (camera) m.quaternion.copy(camera.quaternion);
+      m.material.opacity = m.userData.base * (0.7 + Math.sin(time * 0.4 + m.userData.ph) * 0.3);
     }
 
     for (let i = env.lights.length - 1; i >= 0; i--) {
