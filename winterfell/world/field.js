@@ -595,7 +595,7 @@ function addWall(group, torches, placementTargets, env) {
 
   const keep = new THREE.Group();
   const keepMat = new THREE.MeshStandardMaterial({ color: 0x4b535d, roughness: 0.94, metalness: 0.02, bumpMap: stoneBump, bumpScale: 0.09 });
-  const keepZ = WALL_Z + 2.2;
+  const keepZ = WALL_Z + 46; // set back in the courtyard so it doesn't bury the gate
   const keepCore = new THREE.Mesh(new THREE.BoxGeometry(22, 25, 11), keepMat);
   keepCore.position.set(0, 12.5, keepZ);
   keep.add(keepCore);
@@ -1144,6 +1144,38 @@ function placeBuildable(kind, x, z, opts = {}) {
     tarp.rotation.z = (rnd() - 0.5) * 0.08;
     g.add(tarp);
     addSandbags(g, a, 5, 1, 1.72);
+  } else if (kind === 'barracks') {
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 5.5), a.wood);
+    hut.position.y = 1.7; g.add(hut);
+    const roof = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 8.2, 3, 1, false, 0, Math.PI), a.canvas);
+    roof.rotation.z = Math.PI / 2; roof.position.y = 3.7; g.add(roof);
+    const flagpole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 5), a.iron);
+    flagpole.position.set(-3.6, 5, -2.4); g.add(flagpole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3), new THREE.MeshStandardMaterial({ color: 0x8a2230, roughness: 0.9, side: THREE.DoubleSide }));
+    flag.position.set(-2.5, 6.7, -2.4); g.add(flag);
+    for (const cx of [-2.4, 0, 2.4]) { const cr = new THREE.Mesh(a.crate, a.wood); cr.position.set(cx, 0.45, 3.4); g.add(cr); }
+  } else if (kind === 'depot') {
+    for (let i = 0; i < 8; i++) {
+      const barrel = new THREE.Mesh(a.barrel, i % 2 ? a.iron : a.wood);
+      barrel.scale.set(0.32, 0.32, 0.32);
+      barrel.position.set((i % 4 - 1.5) * 1.5, 1.0, (Math.floor(i / 4) - 0.5) * 1.7);
+      g.add(barrel);
+    }
+    const stack = new THREE.Mesh(new THREE.BoxGeometry(6, 1.7, 4), a.canvas);
+    stack.position.y = 0.85; g.add(stack);
+    const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.2, 4.6), a.canvas);
+    tarp.position.y = 1.8; g.add(tarp);
+  } else if (kind === 'lab') {
+    const tent = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 6), a.canvas);
+    tent.position.y = 1.5; g.add(tent);
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 0.3, 0.6, 14, 1, true), a.iron);
+    dish.rotation.x = -1.0; dish.position.set(2, 4.4, -1); g.add(dish);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 4.5, 5), a.iron);
+    mast.position.set(2, 2.4, -1); g.add(mast);
+    const glow = new THREE.PointLight(0x6fd0ff, 2.4, 22, 2.0);
+    glow.position.set(-1.5, 2.6, 1.8); g.add(glow);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, fog: false }));
+    lamp.position.copy(glow.position); g.add(lamp);
   }
 
   castBuildable(g);
@@ -1259,27 +1291,34 @@ function gateHealth() {
 // Helm's Deep flanks — sheer cliffs hem the gorge so the wall butts into rock
 // at both ends (the dead can only come down the throat between them)
 function addCliffs(group) {
-  // snow-capped mountain peaks ridge the flanks (cones read as mountains, not boxes)
-  const rock = new THREE.MeshStandardMaterial({ color: 0x232931, roughness: 1, metalness: 0, flatShading: true });
-  const snow = new THREE.MeshStandardMaterial({ color: 0xe9f0f8, roughness: 1, flatShading: true });
-  const z0 = NORTH_Z - 30, z1 = WALL_Z + 60;
+  // a dense, two-deep, snow-capped mountain range hems each flank — tall and
+  // overlapping so there are no gaps to see through, instanced for performance
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x1d232b, roughness: 1, metalness: 0, flatShading: true });
+  const snowMat = new THREE.MeshStandardMaterial({ color: 0xe9f1fb, roughness: 1, flatShading: true });
+  const rockGeo = new THREE.ConeGeometry(1, 1, 7);
+  const snowGeo = new THREE.ConeGeometry(0.52, 0.4, 7);
+  const inst = [];
+  const z0 = NORTH_Z - 110, z1 = WALL_Z + 110;
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 8; i++) {
-      const z = z0 + (i + (rnd() - 0.5) * 0.6) * ((z1 - z0) / 7);
-      const h = 64 + rnd() * 56;
-      const r = 36 + rnd() * 24;
-      const x = side * (FIELD_HALF_X + 20 + rnd() * 34);
-      const peak = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6 + ((rnd() * 3) | 0)), rock);
-      peak.position.set(x, h / 2 - 12, z);    // base sunk below the field
-      peak.rotation.y = rnd() * Math.PI;
-      peak.castShadow = true; peak.receiveShadow = true;
-      group.add(peak);
-      const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.46, h * 0.34, 6), snow);
-      cap.position.set(x, h / 2 - 12 + h * 0.36, z);
-      cap.rotation.y = peak.rotation.y;
-      group.add(cap);
+    for (let row = 0; row < 2; row++) {
+      const baseX = side * (FIELD_HALF_X + 14 + row * 36);
+      for (let z = z0; z <= z1; z += 11) {
+        const h = (row ? 104 : 72) + rnd() * 44;
+        const r = 26 + rnd() * 17;
+        inst.push({ x: baseX + (rnd() - 0.5) * 12, z: z + (rnd() - 0.5) * 7, h, r, ry: rnd() * Math.PI });
+      }
     }
   }
+  const rock = new THREE.InstancedMesh(rockGeo, rockMat, inst.length);
+  const snow = new THREE.InstancedMesh(snowGeo, snowMat, inst.length);
+  rock.castShadow = true; rock.receiveShadow = true;
+  const o = new THREE.Object3D();
+  inst.forEach((c, i) => {
+    o.rotation.set(0, c.ry, 0); o.scale.set(c.r, c.h, c.r);
+    o.position.set(c.x, c.h / 2 - 18, c.z); o.updateMatrix(); rock.setMatrixAt(i, o.matrix);
+    o.position.set(c.x, c.h / 2 - 18 + c.h * 0.32, c.z); o.updateMatrix(); snow.setMatrixAt(i, o.matrix);
+  });
+  group.add(rock, snow);
 }
 
 function addTreeline(group) {
@@ -1720,6 +1759,7 @@ export function buildField(scene) {
     coverAt,
     targetVulnerabilityAt,
     emplacements: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'nest' || b.kind === 'tower' || b.kind === 'bunker')) : []),
+    baseBuildings: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'barracks' || b.kind === 'depot' || b.kind === 'lab')) : []),
     repairGate,
     gateHealth,
     works: () => env.buildables.filter(b => b.alive).length,

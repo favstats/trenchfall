@@ -33,6 +33,9 @@ export function createHUD(root, state, hooks = {}) {
       <button class="callin" id="ciAmmo" data-k="O">AMMO<small>52</small></button>
       <button class="callin" id="ciBunker" data-k="Q">BUNKER<small>110</small></button>
       <button class="callin" id="ciBrazier" data-k="E">BRAZIER<small>46</small></button>
+      <button class="callin base" id="ciBarracks" data-k="K">BARRACKS<small>120</small></button>
+      <button class="callin base" id="ciDepot" data-k="J">DEPOT<small>95</small></button>
+      <button class="callin base" id="ciLab" data-k="U">LAB<small>130</small></button>
     </div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
@@ -58,6 +61,7 @@ export function createHUD(root, state, hooks = {}) {
     nest: $('#ciNest'), tower: $('#ciTower'), pit: $('#ciPit'),
     floodlight: $('#ciFloodlight'), ammo: $('#ciAmmo'),
     bunker: $('#ciBunker'), brazier: $('#ciBrazier'),
+    barracks: $('#ciBarracks'), depot: $('#ciDepot'), lab: $('#ciLab'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
@@ -75,6 +79,9 @@ export function createHUD(root, state, hooks = {}) {
   el.ammo.onclick = () => hooks.onBuildAmmo && hooks.onBuildAmmo();
   el.bunker.onclick = () => hooks.onBuildBunker && hooks.onBuildBunker();
   el.brazier.onclick = () => hooks.onBuildBrazier && hooks.onBuildBrazier();
+  el.barracks.onclick = () => hooks.onBuild && hooks.onBuild('barracks');
+  el.depot.onclick = () => hooks.onBuild && hooks.onBuild('depot');
+  el.lab.onclick = () => hooks.onBuild && hooks.onBuild('lab');
   el.endAgain.onclick = () => location.reload();
 
   function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; }
@@ -136,6 +143,12 @@ export function createHUD(root, state, hooks = {}) {
     el.ammo.querySelector('small').textContent = state.costs.ammo;
     el.bunker.querySelector('small').textContent = state.costs.bunker;
     el.brazier.querySelector('small').textContent = state.costs.brazier;
+    for (const k of ['barracks', 'depot', 'lab']) {
+      if (!el[k]) continue;
+      el[k].classList.toggle('spent', (state.supply ?? 0) < (state.costs[k] ?? 0));
+      el[k].classList.toggle('active', state.buildMode === k);
+      const s = el[k].querySelector('small'); if (s) s.textContent = state.costs[k];
+    }
     if (state.possession) {
       el.possession.textContent = `DIRECT · ${state.possession}   ${state.reloading ? 'RELOADING…' : 'AMMO ' + (state.ammo ?? '')}`;
     } else el.possession.textContent = '';

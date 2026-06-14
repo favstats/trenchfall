@@ -33,6 +33,9 @@ export class GameState {
       bunker: 110,
       brazier: 46,
       recruit: 65,
+      barracks: 120,   // base: auto-musters squads
+      depot: 95,       // base: boosts supply income
+      lab: 130,        // base: generates research
     };
     this.buildMode = null;     // null | field-work kind
     this.gateHp = 1;

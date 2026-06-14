@@ -66,6 +66,7 @@ const GHOST_SIZE = {
   trench: [12, 1.4, 5.6], wire: [9.4, 1.2, 2], sandbag: [7, 1.2, 3],
   nest: [5, 1.8, 5], tower: [4.2, 8, 4.2], pit: [6.4, 1, 6.4],
   floodlight: [1.6, 5, 1.6], ammo: [5, 2.2, 4], bunker: [6.2, 2.4, 4.6], brazier: [2.2, 3.2, 2.2],
+  barracks: [8, 4, 6], depot: [6.6, 2, 4.6], lab: [7, 3, 6],
 };
 const ghost = new THREE.Group();
 const ghostRing = new THREE.Mesh(
@@ -109,13 +110,20 @@ function spendSupply(kind) {
 }
 
 function updateEconomy(dt) {
-  addSupply(dt * state.supplyRate);
-  if (state.kills > lastKillSupply) {
-    const dk = state.kills - lastKillSupply;
-    addSupply(dk * 0.22);
-    state.research = (state.research || 0) + dk * 0.5; // kills fund research
-    lastKillSupply = state.kills;
+  // base structures behind the wall drive the economy
+  let supplyRate = state.supplyRate, researchRate = 0;
+  for (const b of (field.baseBuildings?.() || [])) {
+    if (b.kind === 'depot') supplyRate += 2.4;
+    else if (b.kind === 'lab') researchRate += 0.9;             // research comes from labs
+    else if (b.kind === 'barracks') {
+      b._cd = (b._cd ?? 16) - dt;
+      if (b._cd <= 0) { b._cd = 16; force.addSquad('GARRISON', 'rifle', b.x + (Math.random() * 2 - 1) * 8, WALL_Z, 6); }
+    }
   }
+  addSupply(dt * supplyRate);
+  state.research = (state.research || 0) + dt * researchRate;
+  state.researchRate = researchRate;
+  if (state.kills > lastKillSupply) { addSupply((state.kills - lastKillSupply) * 0.22); lastKillSupply = state.kills; } // kills give supply, not research
   state.gateHp = field.gateHealth?.() ?? 1;
   state.works = field.works?.() ?? 0;
 }
@@ -251,6 +259,7 @@ const hud = createHUD(hudRoot, state, {
   onBuildAmmo: () => setBuildMode('ammo'),
   onBuildBunker: () => setBuildMode('bunker'),
   onBuildBrazier: () => setBuildMode('brazier'),
+  onBuild: (kind) => setBuildMode(kind),
 });
 
 // ---------------- input: selection + orders ----------------
@@ -336,6 +345,9 @@ window.addEventListener('keydown', e => {
   else if (k === 'o') setBuildMode('ammo');
   else if (k === 'q') setBuildMode('bunker');
   else if (k === 'e') setBuildMode('brazier');
+  else if (k === 'k') setBuildMode('barracks');
+  else if (k === 'j') setBuildMode('depot');
+  else if (k === 'u') setBuildMode('lab');
   if (k === 'h') force.orderSelected('HOLD');
   else if (k === 'x') force.orderSelected('FALL_BACK', { x: force.selected()[0]?.centroid().x ?? 0, z: field.wallZ + 9 });
   else if (k === 'z') {

@@ -159,7 +159,7 @@ export class Combat {
       if (m.mag === undefined) m.mag = w.mag;
       const fr = state.fireRate || 1; // CADENCE research speeds the whole line up
       if (--m.mag <= 0) {                       // empty — work the bolt / change the belt
-        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1) * fr; m.reloading = true; sfxReload();
+        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1) * fr; m.reloading = true;
       } else {
         m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * fr * (0.85 + Math.random() * 0.3);
       }
