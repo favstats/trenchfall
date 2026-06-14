@@ -45,9 +45,10 @@ canvas.addEventListener('mousemove', e => {
 });
 
 window.addEventListener('mouseup', e => {
-  if (e.button === 2) { // right-click order
-    const p = picker.ground(e.clientX, e.clientY);
-    if (p) force.orderSelected(e.shiftKey ? 'ATTACK_MOVE' : 'MOVE', p);
+  if (e.button === 2) { // right-click order — lands on wall/embankment/ground
+    const hits = picker.objects(e.clientX, e.clientY, field.placementTargets);
+    const p = hits.length ? hits[0].point : picker.ground(e.clientX, e.clientY);
+    if (p) force.orderSelected(e.shiftKey ? 'ATTACK_MOVE' : 'MOVE', { x: p.x, z: p.z });
     return;
   }
   if (e.button !== 0 || !down) return;
@@ -111,7 +112,13 @@ window.WF.test = {
   killSome: (n = 3) => force.soldiers.slice(0, n).forEach(m => m.kill()),
 };
 
-if (params.get('look') === 'wall') rig.frame(-28, 44, 20);
+if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
+if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
+if (params.get('demo') === 'climb') {
+  // send 3 RIFLES (mustered behind) up onto the rampart
+  const sq = force.squads.find(s => s.label === '3 RIFLES');
+  if (sq) { sq.setSelected(true); sq.giveOrder('MOVE', -28, field.wallZ); }
+}
 
 requestAnimationFrame(() => {
   window.WF.ready = true;

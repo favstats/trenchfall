@@ -2,6 +2,7 @@
 // idle / move / aim / fire / dead states and simple gait animation. Geometry and
 // materials are shared across all soldiers. Group origin sits at the feet (y=0).
 import * as THREE from '../engine/three.js';
+import { heightAt } from '../world/field.js';
 
 let SHARED = null;
 function shared() {
@@ -72,6 +73,8 @@ export class Soldier {
     this.g = g;
     this.parts = { legL, legR, armL, armR, torso, rifle, ring };
     this.pos = g.position;
+    this.elevation = heightAt(x, z);     // current standing height (climbs ramps)
+    g.position.y = this.elevation;
     this.target = new THREE.Vector2(x, z);
     this.heading = 0;        // yaw (radians), 0 = facing -z
     this.state = 'idle';     // idle | move | aim | dead
@@ -100,11 +103,11 @@ export class Soldier {
   update(dt) {
     const p = this.parts;
     if (!this.alive) {
-      // topple: rotate flat and sink slightly
+      // topple: rotate flat and sink slightly (from wherever it fell)
       this.deadT += dt;
       const k = Math.min(this.deadT / 0.5, 1);
       this.g.rotation.x = -Math.PI / 2 * k * 0.92;
-      this.g.position.y = -0.2 * k;
+      this.g.position.y = this.elevation - 0.2 * k;
       return;
     }
 
@@ -122,6 +125,10 @@ export class Soldier {
       this.state = 'idle';
     }
 
+    // follow terrain (climb the embankment / stand on the rampart)
+    const h = heightAt(this.pos.x, this.pos.z);
+    this.elevation += (h - this.elevation) * Math.min(1, dt * 9);
+    this.g.position.y = this.elevation;
     this.g.rotation.y = this.heading;
 
     // gait / pose

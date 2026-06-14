@@ -3,7 +3,7 @@
 // only wires input events to them.
 import * as THREE from '../engine/three.js';
 import { Soldier } from './soldier.js';
-import { WALL_Z, FIELD_HALF_X } from '../world/field.js';
+import { WALL_Z, FIELD_HALF_X, WALL_T, RAMP_D } from '../world/field.js';
 
 const SPACING = 2.6;
 
@@ -55,12 +55,13 @@ export class Force {
     this.state = state;
     this.squads = [];
 
-    const z = WALL_Z + 9; // deploy just behind the wall
-    // three rifle squads spread across the wall, one MG team at the gate
-    this.squads.push(new Squad(scene, '1 RIFLES', 'rifle', -70, z, 6, state));
-    this.squads.push(new Squad(scene, '2 RIFLES', 'rifle', 70, z, 6, state));
-    this.squads.push(new Squad(scene, '3 RIFLES', 'rifle', -28, z + 3, 6, state));
-    this.squads.push(new Squad(scene, 'MG TEAM', 'mg', 22, z + 3, 3, state));
+    const onWall = WALL_Z;                          // standing on the rampart
+    const behind = WALL_Z + WALL_T / 2 + RAMP_D + 7; // mustered behind the embankment
+    // two rifle squads man the wall; one rifle squad + MG team wait below
+    this.squads.push(new Squad(scene, '1 RIFLES', 'rifle', -70, onWall, 6, state));
+    this.squads.push(new Squad(scene, '2 RIFLES', 'rifle', 70, onWall, 6, state));
+    this.squads.push(new Squad(scene, '3 RIFLES', 'rifle', -28, behind, 6, state));
+    this.squads.push(new Squad(scene, 'MG TEAM', 'mg', 22, behind, 3, state));
 
     this._recount();
   }
