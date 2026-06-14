@@ -189,6 +189,8 @@ function makeMasonryTexture(size = 512, cols = 7, rows = 9) {
   });
 }
 
+function stampMasonry() { const t = makeMasonryTexture(256, 5, 6); t.repeat.set(2, 1.4); return t; }
+
 function makeGrainTexture(base, accent, contrast = 0.24) {
   return makeCanvasTexture(512, (g, size) => {
     g.fillStyle = base;
@@ -1146,37 +1148,47 @@ function placeBuildable(kind, x, z, opts = {}) {
     g.add(tarp);
     addSandbags(g, a, 5, 1, 1.72);
   } else if (kind === 'barracks') {
-    const hut = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 5.5), a.wood);
-    hut.position.y = 1.7; g.add(hut);
-    const roof = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 8.2, 3, 1, false, 0, Math.PI), a.canvas);
-    roof.rotation.z = Math.PI / 2; roof.position.y = 3.7; g.add(roof);
-    const flagpole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 5), a.iron);
-    flagpole.position.set(-3.6, 5, -2.4); g.add(flagpole);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3), new THREE.MeshStandardMaterial({ color: 0x8a2230, roughness: 0.9, side: THREE.DoubleSide }));
-    flag.position.set(-2.5, 6.7, -2.4); g.add(flag);
-    for (const cx of [-2.4, 0, 2.4]) { const cr = new THREE.Mesh(a.crate, a.wood); cr.position.set(cx, 0.45, 3.4); g.add(cr); }
+    const wm = a._wallMat || (a._wallMat = new THREE.MeshStandardMaterial({ map: stampMasonry(), color: 0x8a929c, roughness: 0.92 }));
+    const win = a._winMat || (a._winMat = new THREE.MeshBasicMaterial({ color: 0xffb24a, fog: false }));
+    const base = new THREE.Mesh(new THREE.BoxGeometry(9, 2.2, 6), wm); base.position.y = 1.1; g.add(base);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(8.4, 1.8, 5.4), a.wood); upper.position.y = 3.1; g.add(upper);
+    const roof = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 9, 3, 1, false, 0, Math.PI), a.darkWood || a.wood);
+    roof.rotation.z = Math.PI / 2; roof.position.y = 4.5; g.add(roof);
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(9.1, 0.3, 0.5), a.snow); ridge.position.y = 6.0; g.add(ridge);
+    for (const wx of [-3, -1, 1, 3]) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.1), win); w.position.set(wx, 1.4, 3.02); g.add(w); }
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.0, 0.15), a.wood); door.position.set(0, 1.0, 3.05); g.add(door);
+    const chim = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), wm); chim.position.set(3.2, 5.4, -1.6); g.add(chim);
+    const ember = new THREE.PointLight(0xff7a2a, 1.6, 16, 2); ember.position.set(3.2, 6.6, -1.6); g.add(ember);
+    addSandbags(g, a, 7, 1, 3.7);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6, 5), a.iron); pole.position.set(-4.4, 3, -2.6); g.add(pole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x7e1f2c, roughness: 0.9, side: THREE.DoubleSide }));
+    flag.position.set(-3.2, 5.2, -2.6); g.add(flag); env.spinners.push({ m: flag, wave: true, ph: rnd() * 6 });
   } else if (kind === 'depot') {
-    for (let i = 0; i < 8; i++) {
-      const barrel = new THREE.Mesh(a.barrel, i % 2 ? a.iron : a.wood);
-      barrel.scale.set(0.32, 0.32, 0.32);
-      barrel.position.set((i % 4 - 1.5) * 1.5, 1.0, (Math.floor(i / 4) - 0.5) * 1.7);
-      g.add(barrel);
-    }
-    const stack = new THREE.Mesh(new THREE.BoxGeometry(6, 1.7, 4), a.canvas);
-    stack.position.y = 0.85; g.add(stack);
-    const tarp = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.2, 4.6), a.canvas);
-    tarp.position.y = 1.8; g.add(tarp);
+    const wm = a._wallMat || (a._wallMat = new THREE.MeshStandardMaterial({ map: stampMasonry(), color: 0x8a929c, roughness: 0.92 }));
+    for (const sx of [-4, 4]) { const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 4.4, 0.8), wm); pillar.position.set(sx, 2.2, -2.4); g.add(pillar); const p2 = pillar.clone(); p2.position.z = 2.4; g.add(p2); }
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.5, 6.4), a.canvas); canopy.position.y = 4.4; g.add(canopy);
+    for (let i = 0; i < 9; i++) { const cr = new THREE.Mesh(a.crate, i % 3 ? a.wood : a.iron); cr.position.set((i % 3 - 1) * 2.2, 0.45 + Math.floor(i / 3) * 0.9, (Math.floor(i / 3) - 1) * 1.9); cr.rotation.y = (rnd() - 0.5) * 0.2; g.add(cr); }
+    for (const bx of [-3.4, -2.5, 3.0, 3.7]) { const d = new THREE.Mesh(a.barrel, a.iron); d.scale.set(0.34, 0.34, 0.34); d.position.set(bx, 0.95, 2.6); g.add(d); }
+    const crane = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 7), a.iron); crane.position.set(0, 5.2, 0); g.add(crane);
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 4), a.iron); cable.position.set(0, 4, 3); g.add(cable);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 5), a.iron); pole.position.set(-4.6, 2.5, -2.8); g.add(pole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), new THREE.MeshStandardMaterial({ color: 0x3a5a82, roughness: 0.9, side: THREE.DoubleSide }));
+    flag.position.set(-3.6, 4.4, -2.8); g.add(flag); env.spinners.push({ m: flag, wave: true, ph: rnd() * 6 });
   } else if (kind === 'lab') {
-    const tent = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 6), a.canvas);
-    tent.position.y = 1.5; g.add(tent);
-    const dish = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 0.3, 0.6, 14, 1, true), a.iron);
-    dish.rotation.x = -1.0; dish.position.set(2, 4.4, -1); g.add(dish);
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 4.5, 5), a.iron);
-    mast.position.set(2, 2.4, -1); g.add(mast);
-    const glow = new THREE.PointLight(0x6fd0ff, 2.4, 22, 2.0);
-    glow.position.set(-1.5, 2.6, 1.8); g.add(glow);
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, fog: false }));
-    lamp.position.copy(glow.position); g.add(lamp);
+    const wm = a._wallMat || (a._wallMat = new THREE.MeshStandardMaterial({ map: stampMasonry(), color: 0x8a929c, roughness: 0.92 }));
+    const win = a._winMat || (a._winMat = new THREE.MeshBasicMaterial({ color: 0xffb24a, fog: false }));
+    const hall = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 6.5), wm); hall.position.y = 1.7; g.add(hall);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.5, 7), a.darkWood || a.wood); roof.position.y = 3.6; g.add(roof);
+    for (const wx of [-2.5, -0.8, 0.9, 2.6]) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.1), win); w.position.set(wx, 1.8, 3.28); g.add(w); }
+    // rotating radar dish on a mast
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 5.5, 6), a.iron); mast.position.set(2.4, 4.4, -1.5); g.add(mast);
+    const dishPivot = new THREE.Group(); dishPivot.position.set(2.4, 7.0, -1.5); g.add(dishPivot);
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 0.3, 0.7, 16, 1, true), a.iron); dish.rotation.x = -1.0; dish.position.z = 0.6; dishPivot.add(dish);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff4a4a, fog: false })); tip.position.set(0, 1.1, 0); dishPivot.add(tip);
+    env.spinners.push({ m: dishPivot, s: 0.7 });
+    const glow = new THREE.PointLight(0x6fd0ff, 2.6, 24, 2.0); glow.position.set(-1.6, 2.8, 2); g.add(glow);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: 0x9fe0ff, fog: false })); lamp.position.copy(glow.position); g.add(lamp);
+    const gen = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.2), a.iron); gen.position.set(-3, 0.6, 2.6); g.add(gen);
   }
 
   castBuildable(g);
@@ -1185,6 +1197,13 @@ function placeBuildable(kind, x, z, opts = {}) {
   // real excavation: carve the terrain so the trench is dug into the ground
   if (kind === 'trench') { digCarve(x, z, 2.8, 5.6); spawnDebris(env, x, z, 2.2, 2, false); }
   else if (kind === 'pit') { digCarve(x, z, 2.2, 4.4); spawnDebris(env, x, z, 2.2, 2, false); }
+  else if (!opts.dense) {
+    // construction: structures rise from the ground with a puff of dust
+    g.scale.set(1, 0.04, 1);
+    item.build = { t: 0, dur: kind === 'barracks' || kind === 'lab' || kind === 'bunker' ? 1.6 : 1.1 };
+    env.constructing.push(item);
+    spawnDebris(env, x, z, 3.2, 7, false);
+  }
   return item;
 }
 
@@ -1662,6 +1681,8 @@ export function buildField(scene) {
     buildId: 0,
     buildables: [],
     dig: new Float32Array(DIG_W * DIG_H),
+    constructing: [],
+    spinners: [],
     terrainDirty: false,
     blasts: [],
   };
@@ -1682,6 +1703,22 @@ export function buildField(scene) {
   function update(dt, camera) {
     time += dt;
     if (env.terrainDirty) { env.terrainGeo.computeVertexNormals(); env.terrainDirty = false; }
+
+    // construction: raise structures from the ground with a small settle
+    for (let i = env.constructing.length - 1; i >= 0; i--) {
+      const it = env.constructing[i];
+      it.build.t += dt;
+      const k = Math.min(it.build.t / it.build.dur, 1);
+      const e = 1 - Math.pow(1 - k, 3);
+      it.group.scale.y = 0.04 + 0.96 * e;
+      it.group.scale.x = it.group.scale.z = 0.9 + 0.1 * e;
+      if (k >= 1) { it.group.scale.set(1, 1, 1); env.constructing.splice(i, 1); }
+    }
+    // animated building parts — sweeping radar dishes, fluttering banners
+    for (const sp of env.spinners) {
+      if (sp.wave) sp.m.rotation.z = Math.sin(time * 2.4 + sp.ph) * 0.12;
+      else sp.m.rotation.y += dt * (sp.s || 0.6);
+    }
 
     // explosions: fireball expands & fades, smoke billows up and drifts
     for (let i = env.blasts.length - 1; i >= 0; i--) {

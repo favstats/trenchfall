@@ -465,6 +465,12 @@ if (params.get('build')) state.buildMode = params.get('build'); // QA: preview t
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
+if (params.get('demo') === 'base') {
+  field.placeBuildable('barracks', -28, WALL_Z + 24);
+  field.placeBuildable('depot', 0, WALL_Z + 24);
+  field.placeBuildable('lab', 30, WALL_Z + 24);
+  rig.frame(0, WALL_Z + 22, 46); rig.setPitch(0.5);
+}
 if (params.get('demo') === 'breach') { horde.spawnWave(800, WALL_Z - 14, WALL_Z - 3); window.WF.test.crest(); rig.frame(0, 14, 66); }
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
