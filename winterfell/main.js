@@ -540,9 +540,22 @@ window.addEventListener('resize', R.setSize);
 
 // ---------------- loop ----------------
 let last = performance.now();
+// adaptive resolution: hold the framerate by trading pixels when the GPU falls behind
+let fpsAcc = 0, fpsFrames = 0, renderScale = 1;
+function adaptResolution(dt) {
+  fpsAcc += dt; fpsFrames++;
+  if (fpsAcc < 0.5) return;                       // sample over ~0.5s windows
+  const fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0;
+  if (fps < 47 && renderScale > 0.55) renderScale -= 0.12;        // falling behind → drop res
+  else if (fps > 57 && renderScale < 1) renderScale += 0.06;      // headroom → claw it back
+  else return;
+  renderScale = R.setRenderScale?.(renderScale) ?? renderScale;
+}
+
 async function frame(now) {
   const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
   last = now;
+  adaptResolution(dt);
   if (state.phase === 'battle') {
     state.time += dt;
     updateEconomy(dt);

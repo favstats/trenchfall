@@ -162,7 +162,9 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   let fidelity = forcedFidelity || probeFidelity(backend === 'webgpu');
   let fq = FIDELITY[fidelity];
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fq.pixelRatio));
+  const basePixelRatio = Math.min(window.devicePixelRatio || 1, fq.pixelRatio);
+  let renderScale = 1; // adaptive-resolution multiplier (1 = full; drops under load)
+  renderer.setPixelRatio(basePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = fq.exposure;
@@ -246,7 +248,17 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
     await renderer.renderAsync(scene, camera);
   }
 
-  return { renderer, scene, camera, sun, render, setSize, backend, fidelity };
+  // adaptive resolution: the main loop calls this with a [0.55,1] scale to trade
+  // pixels for framerate when the GPU falls behind
+  function setRenderScale(s) {
+    s = Math.max(0.55, Math.min(1, s));
+    if (Math.abs(s - renderScale) < 0.01) return renderScale;
+    renderScale = s;
+    renderer.setPixelRatio(basePixelRatio * renderScale);
+    return renderScale;
+  }
+
+  return { renderer, scene, camera, sun, render, setSize, setRenderScale, backend, fidelity };
 }
 
 // filmic night grade as a TSL node: shadow/highlight split-tone, a gentle
