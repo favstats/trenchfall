@@ -275,25 +275,42 @@ function makeRadialTexture(size, stops) {
   return t;
 }
 
+// An organic blood-and-char splatter that reads on snow OR grass: a charred core,
+// a ragged crimson pool (not a smooth pink halo), and scattered spatter droplets.
 function makeScorchTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const g = c.getContext('2d');
-  const grd = g.createRadialGradient(128, 128, 2, 128, 128, 128);
-  grd.addColorStop(0.00, 'rgba(18,13,10,.92)');
-  grd.addColorStop(0.30, 'rgba(45,26,20,.58)');
-  grd.addColorStop(0.58, 'rgba(85,26,24,.24)');
-  grd.addColorStop(1.00, 'rgba(0,0,0,0)');
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 256, 256);
-  g.strokeStyle = 'rgba(220,220,230,.12)';
-  for (let i = 0; i < 24; i++) {
+  const cx = 128, cy = 128;
+  // ragged crimson pool — several overlapping lobes so the edge is irregular
+  g.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 9; i++) {
     const a = rnd() * Math.PI * 2;
-    const r = 38 + rnd() * 74;
-    g.beginPath();
-    g.moveTo(128 + Math.cos(a) * 16, 128 + Math.sin(a) * 16);
-    g.lineTo(128 + Math.cos(a) * r, 128 + Math.sin(a) * r);
-    g.stroke();
+    const d = rnd() * 46;
+    const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+    const rr = 40 + rnd() * 46;
+    const grd = g.createRadialGradient(px, py, 1, px, py, rr);
+    grd.addColorStop(0.0, 'rgba(74,9,9,0.95)');
+    grd.addColorStop(0.55, 'rgba(96,14,12,0.6)');
+    grd.addColorStop(1.0, 'rgba(96,14,12,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(px, py, rr, 0, Math.PI * 2); g.fill();
+  }
+  // charred, soaked-dark core
+  const core = g.createRadialGradient(cx, cy, 1, cx, cy, 60);
+  core.addColorStop(0.0, 'rgba(20,6,6,0.96)');
+  core.addColorStop(0.5, 'rgba(34,8,7,0.7)');
+  core.addColorStop(1.0, 'rgba(34,8,7,0)');
+  g.fillStyle = core;
+  g.beginPath(); g.arc(cx, cy, 60, 0, Math.PI * 2); g.fill();
+  // flung spatter droplets around the rim
+  for (let i = 0; i < 60; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = 52 + rnd() * 72;
+    const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+    const rr = 1.2 + rnd() * 4.5;
+    g.fillStyle = `rgba(${80 + (rnd() * 30) | 0},${10 + (rnd() * 8) | 0},9,${0.35 + rnd() * 0.5})`;
+    g.beginPath(); g.arc(px, py, rr, 0, Math.PI * 2); g.fill();
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -832,7 +849,7 @@ function buildAssets(env) {
     iron: new THREE.MeshStandardMaterial({ color: 0x14191d, roughness: 0.62, metalness: 0.48 }),
     snow: new THREE.MeshStandardMaterial({ color: 0xdbe7f3, roughness: 1, metalness: 0 }),
     earth: new THREE.MeshStandardMaterial({ color: 0x1b1712, roughness: 1, metalness: 0 }),
-    sand: new THREE.MeshStandardMaterial({ color: 0x746a55, roughness: 0.98, metalness: 0 }),
+    sand: new THREE.MeshStandardMaterial({ color: 0x9c8a64, roughness: 1, metalness: 0, map: makeGrainTexture('#8a7850', 'rgba(60,46,30,.4)', 0.5) }),
     canvas: new THREE.MeshStandardMaterial({ color: 0x384333, roughness: 0.9, metalness: 0 }),
     glass: new THREE.MeshBasicMaterial({ color: 0xffd67a, transparent: true, opacity: 0.85, fog: false }),
     flame: new THREE.MeshBasicMaterial({
@@ -852,7 +869,7 @@ function buildAssets(env) {
     spike: new THREE.ConeGeometry(0.24, 3.4, 5),
     trench: new THREE.PlaneGeometry(12.4, 5.8),
     berm: new THREE.BoxGeometry(12.2, 0.5, 0.86),
-    bag: new THREE.BoxGeometry(1.22, 0.38, 0.64),
+    bag: new THREE.SphereGeometry(0.5, 7, 5).scale(1.24, 0.46, 0.72), // bulging hessian pillow, not a brick
     wire: new THREE.BoxGeometry(9.2, 0.055, 0.055),
     post: new THREE.CylinderGeometry(0.08, 0.11, 1.25, 5),
     crate: new THREE.BoxGeometry(1.25, 0.85, 1.1),
@@ -1664,8 +1681,10 @@ function placeGroundScar(env, x, z, radius) {
   m.visible = true;
   m.position.set(x, groundHeight(x, z) + 0.06, z);
   m.rotation.set(-Math.PI / 2, 0, rnd() * Math.PI);
-  m.scale.set(radius * 2.05, radius * 2.05, 1);
-  m.material.opacity = 0.74;
+  // tighter, slightly oval pool — no more 20m pink smear
+  const s = radius * 1.1;
+  m.scale.set(s * (0.9 + rnd() * 0.2), s * (0.9 + rnd() * 0.2), 1);
+  m.material.opacity = 0.6;
 }
 
 function placeWallScar(env, x, z, radius) {

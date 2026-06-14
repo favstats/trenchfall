@@ -58,7 +58,7 @@ seedFieldWorks();
 // the dead muster at the back, by the godswood, and march south on the wall
 // the dead first appear as distant specks at the godswood, far to the north,
 // then march the long way in — a calm before the tide reaches the wall
-horde.spawnWave(14, NORTH_Z - 16, NORTH_Z + 6); // only a few stragglers at first light
+horde.spawnWave(14, NORTH_Z - 16, NORTH_Z + 6, 0.025, 0.05); // only a few stragglers at first light
 const combat = new Combat(scene, force, horde, state);
 const possession = new Possession(camera, rig, force, combat, canvas);
 let lastKillSupply = 0;
@@ -525,7 +525,7 @@ window.addEventListener('resize', R.setSize);
 // ---------------- loop ----------------
 let last = performance.now();
 async function frame(now) {
-  const dt = Math.min((now - last) / 1000, 0.05);
+  const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
   last = now;
   if (state.phase === 'battle') {
     state.time += dt;
@@ -543,6 +543,7 @@ async function frame(now) {
         Math.min(targetLive - horde.count, Math.ceil(3 + ramp * 38 + noiseK * 26)),
         NORTH_Z - 16, NORTH_Z + 16,
         0.03 + noiseK * 0.025,
+        0.08 + ramp * 0.08 + noiseK * 0.1,
       );
       spawnAcc = 0;
     }
@@ -551,6 +552,7 @@ async function frame(now) {
         Math.floor(30 + ramp * 240 + noiseK * 120),
         NORTH_Z - 16, NORTH_Z + 30,
         0.035 + noiseK * 0.025,
+        0.1 + ramp * 0.08 + noiseK * 0.14,
       );
       surgeAt += 30;
     }
@@ -592,7 +594,7 @@ async function frame(now) {
     cam: camera.position.toArray().map(n => +n.toFixed(1)),
     men: state.menRemaining, kills: state.kills,
     lost: state.menLost, risen: state.menRisen,
-    horde: horde.count, corpses: horde.corpseCount, crest: horde.wallCrest(),
+    horde: horde.count, runners: horde.runnerCount, corpses: horde.corpseCount, crest: horde.wallCrest(),
     phase: state.phase,
     selected: force.selected().map(s => s.label),
     selBuilding: state.selBuilding?.kind || null,
@@ -614,7 +616,7 @@ window.WF.test = {
   squads: () => force.squads.map(s => ({ label: s.label, count: s.count, order: s.order, c: s.centroid().toArray() })),
   killSome: (n = 3) => force.soldiers.slice(0, n).forEach(m => m.kill()),
   horde: () => horde.count,
-  spawn: (n = 200) => horde.spawnWave(n),
+  spawn: (n = 200, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50, giantChance = 0.035, runnerChance = 0.12) => horde.spawnWave(n, zMin, zMax, giantChance, runnerChance),
   possess: () => { const m = force.soldiers.find(s => s.alive); if (m) { possession.enter(m); possession.keys.add('w'); possession.firing = true; } return !!m; },
   release: () => possession.exit(),
   reserve: () => callReserve(),
@@ -680,7 +682,7 @@ if (params.get('demo') === 'hill') {
     const g = () => (Math.random() + Math.random() + Math.random() - 1.5);
     horde._addCorpse(g() * 18, WALL_Z - 16 + g() * 12);
   }
-  horde.spawnWave(400, WALL_Z - 26, WALL_Z - 6, 0.05); // living swarming the heap
+  horde.spawnWave(400, WALL_Z - 26, WALL_Z - 6, 0.05, 0.18); // living swarming the heap
   rig.frame(0, WALL_Z - 16, 78); rig.setPitch(0.62);
 }
 if (params.get('demo') === 'rts') {
@@ -695,7 +697,23 @@ if (params.get('demo') === 'base') {
   field.placeBuildable('lab', 30, WALL_Z + 24);
   rig.frame(0, WALL_Z + 22, 46); rig.setPitch(0.5);
 }
-if (params.get('demo') === 'breach') { horde.spawnWave(800, WALL_Z - 14, WALL_Z - 3); window.WF.test.crest(); rig.frame(0, 14, 66); }
+if (params.get('demo') === 'zombies') {
+  horde.spawnWave(170, WALL_Z - 70, WALL_Z - 36, 0.08, 0.35);
+  rig.frame(0, WALL_Z - 50, 42); rig.setPitch(0.42);
+}
+if (params.get('demo') === 'works') {
+  // sandbags + a nest + several blast scars, to QA the barricades and the blood/char
+  field.placeBuildable('sandbag', -16, WALL_Z - 24);
+  field.placeBuildable('sandbag', -2, WALL_Z - 24);
+  field.placeBuildable('nest', 18, WALL_Z - 26);
+  for (const [bx, bz, br] of [[-22, WALL_Z - 34, 9], [4, WALL_Z - 40, 11], [24, WALL_Z - 36, 8], [-6, WALL_Z - 30, 10]]) {
+    detonate(bx, bz, br, 100, 1.1);
+  }
+  // place the works right by the seeded floodlights so the QA capture is lit at night
+  field.placeBuildable('floodlight', 0, WALL_Z - 18);
+  rig.frame(0, WALL_Z - 30, 70); rig.setPitch(0.5);
+}
+if (params.get('demo') === 'breach') { horde.spawnWave(800, WALL_Z - 14, WALL_Z - 3, 0.035, 0.22); window.WF.test.crest(); rig.frame(0, 14, 66); }
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
 if (params.get('demo') === 'possess') {

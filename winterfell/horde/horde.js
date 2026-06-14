@@ -14,31 +14,65 @@ const FAR_CROWD_BACK_Z = NORTH_Z - 92;
 // hunched, reaching undead silhouette merged into a single geometry (origin at feet)
 function buildUndeadGeometry() {
   const parts = [];
-  const add = (g, x, y, z, rx = 0, ry = 0, rz = 0) => {
+  const colors = [];
+  const add = (g, x, y, z, rx = 0, ry = 0, rz = 0, color = 0x9fb5b5) => {
     if (rx) g.rotateX(rx);
     if (ry) g.rotateY(ry);
     if (rz) g.rotateZ(rz);
     g.translate(x, y, z);
     parts.push(g);
+    colors.push(new THREE.Color(color));
   };
-  add(new THREE.CylinderGeometry(0.12, 0.17, 1.1, 6), -0.2, 0.55, 0);              // leg L
-  add(new THREE.CylinderGeometry(0.12, 0.17, 1.1, 6), 0.2, 0.55, 0.02);            // leg R
-  add(new THREE.CylinderGeometry(0.34, 0.46, 0.98, 7), 0, 1.48, -0.18, 0.42);      // hunched torso
-  add(new THREE.SphereGeometry(0.28, 8, 6), 0, 2.0, -0.48);                       // lolling head
-  add(new THREE.CylinderGeometry(0.09, 0.12, 0.96, 6), -0.48, 1.5, -0.38, 1.24, 0, -0.18);
-  add(new THREE.CylinderGeometry(0.09, 0.12, 0.96, 6), 0.48, 1.5, -0.38, 1.24, 0, 0.18);
+
+  const flesh = 0x9fb8b6, frost = 0xc7d9d8, bone = 0xb9b2a1, cloth = 0x17212b, rot = 0x391512;
+  add(new THREE.CylinderGeometry(0.15, 0.2, 0.72, 7), -0.22, 0.82, 0.02, 0.1, 0, -0.08, flesh); // thigh L
+  add(new THREE.CylinderGeometry(0.13, 0.17, 0.76, 7), -0.23, 0.32, -0.07, -0.12, 0, 0.1, flesh); // shin L
+  add(new THREE.CylinderGeometry(0.15, 0.2, 0.72, 7), 0.23, 0.82, 0.02, -0.04, 0, 0.09, flesh);
+  add(new THREE.CylinderGeometry(0.13, 0.17, 0.76, 7), 0.25, 0.32, 0.03, 0.1, 0, -0.08, flesh);
+  add(new THREE.BoxGeometry(0.38, 0.1, 0.24), -0.23, 0.03, -0.23, 0, -0.18, 0, cloth);
+  add(new THREE.BoxGeometry(0.38, 0.1, 0.24), 0.25, 0.03, -0.18, 0, 0.12, 0, cloth);
+
+  add(new THREE.BoxGeometry(0.72, 0.28, 0.48), 0, 1.12, -0.02, 0.08, 0, 0, cloth); // torn waist
+  add(new THREE.CylinderGeometry(0.3, 0.48, 1.0, 8).scale(1, 1, 0.76), 0, 1.56, -0.18, 0.42, 0, 0, flesh);
+  add(new THREE.CylinderGeometry(0.055, 0.07, 0.92, 6), 0, 1.59, 0.16, 0.38, 0, 0, bone); // spine ridge
+  for (let r = 0; r < 4; r++) {
+    add(new THREE.BoxGeometry(0.72 - r * 0.08, 0.035, 0.045), 0, 1.78 - r * 0.13, -0.54 + r * 0.02, 0.42, 0, 0, bone);
+  }
+  add(new THREE.CylinderGeometry(0.045, 0.055, 0.96, 6), 0, 1.96, -0.22, 0, 0, Math.PI / 2, bone); // collarbone
+
+  add(new THREE.SphereGeometry(0.29, 10, 7).scale(0.84, 1.08, 0.78), 0, 2.08, -0.48, -0.08, 0, 0, frost);
+  add(new THREE.BoxGeometry(0.3, 0.13, 0.18), 0, 1.84, -0.6, -0.08, 0, 0, bone); // hanging jaw
+  add(new THREE.SphereGeometry(0.035, 6, 4), -0.085, 2.1, -0.71, 0, 0, 0, 0x8fe5ff);
+  add(new THREE.SphereGeometry(0.035, 6, 4), 0.085, 2.1, -0.71, 0, 0, 0, 0x8fe5ff);
+
+  add(new THREE.CylinderGeometry(0.11, 0.15, 0.68, 7), -0.5, 1.7, -0.3, 1.05, 0, 0.44, flesh);
+  add(new THREE.CylinderGeometry(0.085, 0.12, 0.72, 7), -0.62, 1.3, -0.68, 1.42, 0, 0.18, flesh);
+  add(new THREE.CylinderGeometry(0.11, 0.15, 0.68, 7), 0.5, 1.7, -0.3, 1.05, 0, -0.44, flesh);
+  add(new THREE.CylinderGeometry(0.085, 0.12, 0.72, 7), 0.62, 1.3, -0.68, 1.42, 0, -0.18, flesh);
+  for (const side of [-1, 1]) for (let f = 0; f < 3; f++) {
+    add(new THREE.ConeGeometry(0.025, 0.22, 5), side * (0.58 + f * 0.055), 0.96, -0.96 - f * 0.02, Math.PI / 2, 0, side * 0.18, bone);
+  }
+
+  for (const [x, z, a, len] of [[-0.25, -0.52, -0.16, 0.66], [0.04, -0.56, 0.04, 0.72], [0.28, -0.46, 0.18, 0.58]]) {
+    add(new THREE.PlaneGeometry(0.18, len), x, 1.2, z, 0.22, 0, a, cloth);
+  }
+  add(new THREE.BoxGeometry(0.16, 0.11, 0.05), -0.3, 1.47, -0.58, 0.42, 0, 0, rot);
+  add(new THREE.BoxGeometry(0.13, 0.1, 0.05), 0.34, 1.62, -0.56, 0.42, 0, 0, rot);
 
   // manual merge (avoids pulling a second three via the addon util)
   let vTotal = 0, iTotal = 0;
   for (const g of parts) { vTotal += g.attributes.position.count; iTotal += g.index.count; }
-  const pos = new Float32Array(vTotal * 3), nor = new Float32Array(vTotal * 3), uv = new Float32Array(vTotal * 2);
+  const pos = new Float32Array(vTotal * 3), nor = new Float32Array(vTotal * 3), uv = new Float32Array(vTotal * 2), col = new Float32Array(vTotal * 3);
   const idx = new Uint16Array(iTotal);
   let vo = 0, io = 0;
-  for (const g of parts) {
+  for (let gi = 0; gi < parts.length; gi++) {
+    const g = parts[gi];
     const p = g.attributes.position.array, n = g.attributes.normal.array, ix = g.index.array;
     const u = g.attributes.uv?.array;
     pos.set(p, vo * 3); nor.set(n, vo * 3);
     if (u) uv.set(u, vo * 2);
+    const c = colors[gi];
+    for (let v = 0; v < g.attributes.position.count; v++) col.set([c.r, c.g, c.b], (vo + v) * 3);
     for (let k = 0; k < ix.length; k++) idx[io + k] = ix[k] + vo;
     vo += g.attributes.position.count; io += ix.length;
   }
@@ -46,47 +80,100 @@ function buildUndeadGeometry() {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   return geo;
 }
 
-function silhouetteTexture() {
-  const c = document.createElement('canvas'); c.width = 48; c.height = 64;
+function undeadSkinTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
   const g = c.getContext('2d');
-  g.clearRect(0, 0, 48, 64);
-  g.fillStyle = 'rgba(13,20,30,0.92)';
+  let seed = 331;
+  const rr = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const base = g.createLinearGradient(0, 0, 512, 512);
+  base.addColorStop(0, '#9eb8b7');
+  base.addColorStop(0.45, '#687d80');
+  base.addColorStop(1, '#1c2930');
+  g.fillStyle = base; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 2600; i++) {
+    const v = 95 + rr() * 80, a = 0.05 + rr() * 0.14;
+    g.fillStyle = `rgba(${v},${v + 12},${v + 15},${a})`;
+    g.fillRect((rr() * 512) | 0, (rr() * 512) | 0, 1 + (rr() * 2) | 0, 1 + (rr() * 2) | 0);
+  }
+  for (let i = 0; i < 42; i++) {
+    const x = rr() * 512, y = rr() * 512, len = 38 + rr() * 95;
+    g.strokeStyle = `rgba(${35 + rr() * 25},${75 + rr() * 45},${90 + rr() * 55},${0.22 + rr() * 0.24})`;
+    g.lineWidth = 1 + rr() * 2.2;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let s = 0; s < 4; s++) g.quadraticCurveTo(x + (rr() - 0.5) * len, y + (rr() - 0.5) * len, x + (rr() - 0.5) * len, y + (rr() - 0.5) * len);
+    g.stroke();
+  }
+  for (let i = 0; i < 28; i++) {
+    const x = rr() * 512, y = rr() * 512, r = 9 + rr() * 32;
+    const grad = g.createRadialGradient(x, y, 1, x, y, r);
+    grad.addColorStop(0, 'rgba(83,12,14,.55)');
+    grad.addColorStop(1, 'rgba(83,12,14,0)');
+    g.fillStyle = grad; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  for (let i = 0; i < 34; i++) {
+    g.strokeStyle = `rgba(220,238,255,${0.25 + rr() * 0.35})`;
+    g.lineWidth = 1 + rr() * 1.6;
+    const y = rr() * 512;
+    g.beginPath(); g.moveTo(rr() * 512, y); g.lineTo(rr() * 512, y + (rr() - 0.5) * 36); g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+function silhouetteTexture() {
+  const c = document.createElement('canvas'); c.width = 96; c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 96, 128);
+  g.shadowColor = 'rgba(70,110,140,.32)';
+  g.shadowBlur = 7;
+  g.fillStyle = 'rgba(13,20,30,0.84)';
   g.beginPath();
-  g.ellipse(24, 13, 5.5, 6.3, -0.2, 0, Math.PI * 2);
+  g.ellipse(48, 25, 9, 11, -0.2, 0, Math.PI * 2);
   g.fill();
   g.beginPath();
-  g.moveTo(17, 21);
-  g.quadraticCurveTo(23, 15, 31, 21);
-  g.lineTo(34, 43);
-  g.quadraticCurveTo(27, 46, 15, 42);
+  g.moveTo(34, 41);
+  g.quadraticCurveTo(46, 29, 63, 40);
+  g.lineTo(68, 88);
+  g.quadraticCurveTo(51, 95, 30, 86);
   g.closePath();
   g.fill();
-  for (const [x0, x1, foot] of [[20, 16, 14], [27, 31, 34]]) {
+  for (const [x0, x1, foot] of [[41, 32, 27], [55, 64, 70]]) {
     g.beginPath();
-    g.moveTo(x0, 40);
-    g.lineTo(x1, 61);
-    g.lineTo(foot, 62);
-    g.lineTo(x0 - 1, 43);
+    g.moveTo(x0, 84);
+    g.lineTo(x1, 124);
+    g.lineTo(foot, 126);
+    g.lineTo(x0 - 3, 89);
     g.closePath();
     g.fill();
   }
   for (const side of [-1, 1]) {
     g.beginPath();
-    g.moveTo(24 + side * 7, 23);
-    g.lineTo(24 + side * 19, 38);
-    g.lineTo(24 + side * 16, 41);
-    g.lineTo(24 + side * 5, 28);
+    g.moveTo(48 + side * 14, 46);
+    g.lineTo(48 + side * 37, 76);
+    g.lineTo(48 + side * 31, 83);
+    g.lineTo(48 + side * 9, 55);
     g.closePath();
     g.fill();
   }
-  g.globalAlpha = 0.45;
-  g.fillStyle = '#28384a';
-  g.fillRect(18, 22, 2, 14);
-  g.fillRect(28, 24, 2, 12);
+  g.shadowBlur = 0;
+  g.globalAlpha = 0.5;
+  g.strokeStyle = '#4f6f83';
+  g.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    g.beginPath(); g.moveTo(38 + i * 4, 44 + i * 7); g.lineTo(28 + i * 8, 52 + i * 5); g.stroke();
+  }
+  g.globalAlpha = 0.35;
+  g.fillStyle = '#7fdfff';
+  g.fillRect(43, 24, 3, 2); g.fillRect(51, 24, 3, 2);
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
@@ -106,12 +193,18 @@ export class Horde {
     // ----- live (simulated) undead -----
     const geo = buildUndeadGeometry();
     this._geo = geo;
+    const undeadTex = undeadSkinTexture();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xd6e0de,
+      color: 0xdce9e8,
+      map: undeadTex,
+      bumpMap: undeadTex,
+      bumpScale: 0.055,
+      vertexColors: true,
       roughness: 0.96,
       metalness: 0,
-      emissive: 0x101821,
-      emissiveIntensity: 0.06,
+      emissive: 0x122333,
+      emissiveIntensity: 0.1,
+      side: THREE.DoubleSide,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
     this.mesh.castShadow = true;
@@ -122,7 +215,16 @@ export class Horde {
 
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(this.cap * 2, 7000);
-    const corpseMat = new THREE.MeshStandardMaterial({ color: 0x222a2b, roughness: 1, metalness: 0 });
+    const corpseMat = new THREE.MeshStandardMaterial({
+      color: 0x667073,
+      map: undeadTex,
+      bumpMap: undeadTex,
+      bumpScale: 0.04,
+      vertexColors: true,
+      roughness: 1,
+      metalness: 0,
+      side: THREE.DoubleSide,
+    });
     this.corpses = new THREE.InstancedMesh(geo, corpseMat, this._corpseCap);
     this.corpses.castShadow = true; this.corpses.receiveShadow = true;
     this.corpses.count = 0;
@@ -168,6 +270,7 @@ export class Horde {
 
   get count() { return this.agents.length; }
   get corpseCount() { return this._corpseN; }
+  get runnerCount() { return this.agents.reduce((n, a) => n + (!a.dead && a.runner ? 1 : 0), 0); }
 
   _heapIdx(x, z) {
     const hx = THREE.MathUtils.clamp(Math.floor((x + FIELD_HALF_X) / this.HCELL), 0, this.HW - 1);
@@ -215,9 +318,12 @@ export class Horde {
   // reanimate a fallen body at a position (your dead turning against you)
   spawnAt(x, z) {
     if (this.agents.length >= this.cap) return;
-    const a = { x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.4 + Math.random() * 1.2, state: 'walk' };
+    const a = {
+      x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.4 + Math.random() * 1.2, state: 'walk',
+      sx: 0.88 + Math.random() * 0.22, sy: 0.92 + Math.random() * 0.18, sz: 0.86 + Math.random() * 0.22,
+    };
     const idx = this.agents.length; this.agents.push(a);
-    this._c.setHSL(0.57, 0.18, 0.25); // the risen wear a colder, bloodier hue
+    this._c.setHSL(0.56 + Math.random() * 0.05, 0.15, 0.34 + Math.random() * 0.12); // the risen wear a colder, bloodier hue
     this.mesh.setColorAt(idx, this._c); this.mesh.instanceColor.needsUpdate = true;
     this.mesh.count = this.agents.length;
   }
@@ -235,7 +341,8 @@ export class Horde {
     o.position.set(x + (Math.random() - 0.5) * 0.9, y + 0.32, z + (Math.random() - 0.5) * 0.9);
     // jumbled, tangled bodies — lie at all angles, not flat tiles
     o.rotation.set(-Math.PI / 2 + (Math.random() - 0.5) * 1.6, Math.random() * 6.28, (Math.random() - 0.5) * 1.6);
-    o.scale.setScalar(1.12 + Math.random() * 0.34);
+    const cs = 1.12 + Math.random() * 0.34;
+    o.scale.set(cs * (0.88 + Math.random() * 0.25), cs * (0.82 + Math.random() * 0.28), cs * (0.9 + Math.random() * 0.22));
     o.updateMatrix();
     this.corpses.setMatrixAt(i, o.matrix);
     this.corpses.count = this._corpseN;
@@ -253,20 +360,24 @@ export class Horde {
     this._mound(a.x, a.z, 0.05); // bodies build the heap gradually (not instant mounds)
   }
 
-  spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50, giantChance = 0.035) {
+  spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50, giantChance = 0.035, runnerChance = 0.12) {
     const room = this.cap - this.agents.length;
     n = Math.min(n, room);
     for (let i = 0; i < n; i++) {
       const x = (Math.random() * 2 - 1) * (FIELD_HALF_X - 4);
       const z = zMin + Math.random() * (zMax - zMin);
       const giant = Math.random() < giantChance;
+      const runner = !giant && Math.random() < runnerChance;
       const a = giant
-        ? { x, z, giant: true, hp: 34, ph: Math.random() * 6.28, spd: 1.5 + Math.random() * 0.5, state: 'walk' }
-        : { x, z, hp: 4, ph: Math.random() * 6.28, spd: 2.5 + Math.random() * 1.4, state: 'walk' }; // tougher rank-and-file
+        ? { x, z, giant: true, hp: 34, ph: Math.random() * 6.28, spd: 1.5 + Math.random() * 0.5, state: 'walk', sx: 1.05 + Math.random() * 0.12, sy: 1.12 + Math.random() * 0.16, sz: 1.02 + Math.random() * 0.14 }
+        : runner
+          ? { x, z, runner: true, hp: 3, ph: Math.random() * 6.28, spd: 6.2 + Math.random() * 1.8, state: 'run', sx: 0.66 + Math.random() * 0.16, sy: 1.06 + Math.random() * 0.22, sz: 0.68 + Math.random() * 0.18 }
+        : { x, z, hp: 4, ph: Math.random() * 6.28, spd: 2.5 + Math.random() * 1.4, state: 'walk', sx: 0.82 + Math.random() * 0.34, sy: 0.92 + Math.random() * 0.28, sz: 0.82 + Math.random() * 0.3 }; // tougher rank-and-file
       const idx = this.agents.length;
       this.agents.push(a);
-      if (giant) this._c.setHSL(0.02, 0.45, 0.07);            // huge, dark, blood-touched
-      else this._c.setHSL(0.56 + Math.random() * 0.05, 0.10 + Math.random() * 0.12, 0.24 + Math.random() * 0.10);
+      if (giant) this._c.setHSL(0.01, 0.5, 0.12 + Math.random() * 0.04);            // huge, dark, blood-touched
+      else if (runner) this._c.setHSL(0.58 + Math.random() * 0.04, 0.2 + Math.random() * 0.18, 0.5 + Math.random() * 0.12);
+      else this._c.setHSL(0.52 + Math.random() * 0.08, 0.12 + Math.random() * 0.18, 0.36 + Math.random() * 0.16);
       this.mesh.setColorAt(idx, this._c);
     }
     this.mesh.instanceColor.needsUpdate = true;
@@ -327,7 +438,8 @@ export class Horde {
         const y = (a.fallY0 - groundY) * (1 - e) + groundY + 0.12;
         o.position.set(a.x, y, a.z);
         o.rotation.set(-Math.PI / 2 * e, a.faceY || 0, a.fallRoll * e); // tip forward + roll
-        o.scale.setScalar(a.scl || 1.1);
+        const ds = a.scl || 1.1;
+        o.scale.set(ds * (a.sx || 1), ds * (a.sy || 1), ds * (a.sz || 1));
         o.updateMatrix();
         this.mesh.setMatrixAt(i, o.matrix);
         if (t >= 1) this._bury.push(a);
@@ -347,7 +459,8 @@ export class Horde {
         a.y = y; a.faceY = Math.atan2(-ddx, -ddz);
         o.position.set(a.x, y, a.z);
         o.rotation.set(0.18, a.faceY, 0);
-        o.scale.setScalar(a.scl || 1.1);
+        const os = a.scl || 1.1;
+        o.scale.set(os * (a.sx || 1), os * (a.sy || 1), os * (a.sz || 1));
         o.updateMatrix();
         this.mesh.setMatrixAt(i, o.matrix);
         continue;
@@ -387,9 +500,9 @@ export class Horde {
       a.z += (mvz + sz * 0.45) * spd * dt;
       a.x = THREE.MathUtils.clamp(a.x, -FIELD_HALF_X, FIELD_HALF_X);
 
-      a.ph += dt * (4 + a.spd);
-      const bob = Math.abs(Math.sin(a.ph)) * 0.12;
-      const sway = Math.sin(a.ph * 0.5) * 0.08;
+      a.ph += dt * (a.runner ? 13 + a.spd * 0.55 : 4 + a.spd);
+      const bob = Math.abs(Math.sin(a.ph)) * (a.runner ? 0.22 : 0.12);
+      const sway = Math.sin(a.ph * (a.runner ? 0.72 : 0.5)) * (a.runner ? 0.18 : 0.08);
 
       // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
       const level = Math.min(a.cellLevel, 11);   // gentler pile, not a spiky tower
@@ -397,14 +510,14 @@ export class Horde {
       const y = base + level * 0.5 + bob * 0.5;
       a.y = y;
       a.faceY = Math.atan2(-mvx, -mvz) + sway;
-      a.scl = a.giant ? 2.8 : 1.05 + (a.spd - 2.6) * 0.05; // giants tower over the tide
+      a.scl = a.giant ? 2.8 : a.runner ? 1.0 + (a.spd - 6.2) * 0.035 : 1.05 + (a.spd - 2.6) * 0.05; // giants tower over the tide
 
       // a packed crowd's weight builds the heap — jams grow into pyramids
       if (arrived) this._addHeap(a.x, a.z, 0.0004 + 0.0005 * level);
 
       o.position.set(a.x, y, a.z);
-      o.rotation.set(level > 2 ? -0.4 : 0, a.faceY, sway * 0.6); // those climbing lean in
-      o.scale.setScalar(a.scl);
+      o.rotation.set(a.runner ? -0.5 : level > 2 ? -0.4 : 0, a.faceY, sway * 0.6); // runners lunge; climbers lean in
+      o.scale.set(a.scl * (a.sx || 1), a.scl * (a.sy || 1), a.scl * (a.sz || 1));
       o.updateMatrix();
       this.mesh.setMatrixAt(i, o.matrix);
     }
