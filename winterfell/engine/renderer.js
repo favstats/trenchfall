@@ -119,6 +119,27 @@ function addSky(scene) {
   );
   moon.position.set(-170, 145, -264);
   scene.add(moon);
+
+  // god-rays: soft light shafts fanning down from the moon over the battlefield
+  const sc = document.createElement('canvas'); sc.width = 16; sc.height = 256;
+  const sg = sc.getContext('2d');
+  const grd = sg.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, 'rgba(198,220,255,.55)'); grd.addColorStop(0.45, 'rgba(160,194,255,.16)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  sg.fillStyle = grd; sg.fillRect(0, 0, 16, 256);
+  const shaftTex = new THREE.CanvasTexture(sc); shaftTex.colorSpace = THREE.SRGBColorSpace;
+  const shafts = new THREE.Group();
+  shafts.position.set(-170, 150, -258);
+  shafts.rotation.x = -0.22; // lean the beams toward the field
+  for (let i = 0; i < 7; i++) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(11, 320),
+      new THREE.MeshBasicMaterial({ map: shaftTex, transparent: true, opacity: 0.16 + (i % 2) * 0.05, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }),
+    );
+    m.position.y = -150; m.rotation.z = (i - 3) * 0.11;
+    shafts.add(m);
+  }
+  shafts.frustumCulled = false;
+  scene.add(shafts);
 }
 
 export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
