@@ -22,6 +22,9 @@ export const BOUNDS = {
 
 const Z_TOP = WALL_Z + WALL_T / 2;
 const Z_BOT = Z_TOP + RAMP_D;
+const MAX_DEFORMS = 96;
+const deforms = [];
+let activeEnv = null;
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -71,14 +74,34 @@ function terrainHeight(x, z) {
   return broad + crust + windRows + wallDrift + killingLow + farRise - 0.25;
 }
 
+function deformOffsetAt(x, z) {
+  let h = 0;
+  for (const d of deforms) {
+    const dist = Math.hypot(x - d.x, z - d.z);
+    if (dist > d.r) continue;
+    if (d.mode === 'ring') {
+      if (dist < d.inner) continue;
+      const t = (dist - d.inner) / Math.max(0.001, d.r - d.inner);
+      h += d.delta * Math.sin(t * Math.PI);
+    } else {
+      h += d.delta * Math.cos((dist / d.r) * Math.PI / 2);
+    }
+  }
+  return h;
+}
+
+function groundHeight(x, z) {
+  return terrainHeight(x, z) + deformOffsetAt(x, z);
+}
+
 export function heightAt(x, z) {
   const onSpan = Math.abs(x) <= FIELD_HALF_X && Math.abs(x) >= GATE_W / 2 + 0.5;
   if (onSpan && z >= WALL_Z - WALL_T / 2 && z <= Z_TOP) return WALL_H;
   if (onSpan && z > Z_TOP && z <= Z_BOT) {
     const k = (z - Z_TOP) / RAMP_D;
-    return lerp(WALL_H, terrainHeight(x, z), k);
+    return lerp(WALL_H, groundHeight(x, z), k);
   }
-  return terrainHeight(x, z);
+  return groundHeight(x, z);
 }
 
 function makeCanvasTexture(size, painter, srgb = true) {
@@ -206,6 +229,31 @@ function makeRadialTexture(size, stops) {
   return t;
 }
 
+function makeScorchTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(128, 128, 2, 128, 128, 128);
+  grd.addColorStop(0.00, 'rgba(18,13,10,.92)');
+  grd.addColorStop(0.30, 'rgba(45,26,20,.58)');
+  grd.addColorStop(0.58, 'rgba(85,26,24,.24)');
+  grd.addColorStop(1.00, 'rgba(0,0,0,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = 'rgba(220,220,230,.12)';
+  for (let i = 0; i < 24; i++) {
+    const a = rnd() * Math.PI * 2;
+    const r = 38 + rnd() * 74;
+    g.beginPath();
+    g.moveTo(128 + Math.cos(a) * 16, 128 + Math.sin(a) * 16);
+    g.lineTo(128 + Math.cos(a) * r, 128 + Math.sin(a) * r);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function makeHorizonTexture() {
   const c = document.createElement('canvas');
   c.width = 1024; c.height = 320;
@@ -251,8 +299,8 @@ function cast(obj) {
 }
 
 function makeRamp(x0, x1, mat) {
-  const ground0 = terrainHeight(x0, Z_BOT);
-  const ground1 = terrainHeight(x1, Z_BOT);
+  const ground0 = groundHeight(x0, Z_BOT);
+  const ground1 = groundHeight(x1, Z_BOT);
   const A0 = [x0, WALL_H, Z_TOP], B0 = [x0, ground0, Z_BOT], C0 = [x0, ground0, Z_TOP];
   const A1 = [x1, WALL_H, Z_TOP], B1 = [x1, ground1, Z_BOT], C1 = [x1, ground1, Z_TOP];
   const geo = new THREE.BufferGeometry();
@@ -271,12 +319,12 @@ function makeRamp(x0, x1, mat) {
   return m;
 }
 
-function addTerrain(group, placementTargets) {
+function addTerrain(group, placementTargets, env) {
   const geo = new THREE.PlaneGeometry(900, 900, 176, 176);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = -pos.getY(i);
-    pos.setZ(i, terrainHeight(x, z));
+    pos.setZ(i, groundHeight(x, z));
   }
   geo.computeVertexNormals();
 
@@ -297,6 +345,8 @@ function addTerrain(group, placementTargets) {
   terrain.receiveShadow = true;
   group.add(terrain);
   placementTargets.push(terrain);
+  env.terrain = terrain;
+  env.terrainGeo = geo;
 
   const kill = new THREE.Mesh(
     new THREE.PlaneGeometry(FIELD_HALF_X * 2, 92, 1, 1),
@@ -316,7 +366,7 @@ function addTerrain(group, placementTargets) {
   return terrain;
 }
 
-function addWall(group, torches, placementTargets) {
+function addWall(group, torches, placementTargets, env) {
   const stoneTex = makeGrainTexture('#59616b', 'rgba(210,225,240,.24)', 0.22);
   stoneTex.repeat.set(3.5, 1.2);
   const stoneBump = makeGrainTexture('#808080', 'rgba(255,255,255,.18)', 0.18);
@@ -351,6 +401,7 @@ function addWall(group, torches, placementTargets) {
   });
 
   const wall = new THREE.Group();
+  const gateBreakables = [];
   const spanLen = FIELD_HALF_X - GATE_W / 2;
   for (const side of [-1, 1]) {
     const span = new THREE.Mesh(new THREE.BoxGeometry(spanLen, WALL_H, WALL_T), stone);
@@ -392,6 +443,7 @@ function addWall(group, torches, placementTargets) {
     o.position.set(x, WALL_H + 1.15, WALL_Z - 0.1);
     o.rotation.set(0, 0, 0);
     o.updateMatrix();
+    env.breakables.push({ kind: 'merlon', mesh: merlons, index: mi, x, z: WALL_Z, hp: 42, alive: true });
     merlons.setMatrixAt(mi++, o.matrix);
   }
   merlons.count = mi;
@@ -422,6 +474,7 @@ function addWall(group, torches, placementTargets) {
   const door = new THREE.Mesh(new THREE.BoxGeometry(GATE_W - 1.2, WALL_H + 0.8, 1.25), gateMat);
   door.position.set(0, (WALL_H + 0.8) / 2, WALL_Z + 0.15);
   gate.add(door);
+  gateBreakables.push(door);
   const plankGeo = new THREE.BoxGeometry(0.5, WALL_H + 0.9, 1.38);
   const planks = new THREE.InstancedMesh(plankGeo, gateMat, 18);
   for (let i = 0; i < 18; i++) {
@@ -431,15 +484,18 @@ function addWall(group, torches, placementTargets) {
     planks.setMatrixAt(i, o.matrix);
   }
   gate.add(planks);
+  gateBreakables.push(planks);
   for (const y of [3.15, 6.7]) {
     const band = new THREE.Mesh(new THREE.BoxGeometry(GATE_W - 2.2, 0.42, 1.48), iron);
     band.position.set(0, y, WALL_Z + 1.52);
     gate.add(band);
+    gateBreakables.push(band);
   }
   for (const x of [-3.2, 3.2]) {
     const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.42, WALL_H - 1, 1.55), iron);
     hinge.position.set(x, WALL_H / 2, WALL_Z + 1.55);
     gate.add(hinge);
+    gateBreakables.push(hinge);
   }
   const archGeo = new THREE.BoxGeometry(1.7, 1.25, 1.9);
   for (let i = 0; i < 15; i++) {
@@ -496,6 +552,7 @@ function addWall(group, torches, placementTargets) {
   addTorches(wall, torches);
   cast(wall);
   group.add(wall);
+  env.gate = { parts: gateBreakables, hp: 360, broken: false };
 
   return { wall, gate };
 }
@@ -537,7 +594,7 @@ function addTorches(wall, torches) {
   }
 }
 
-function addDefenses(group) {
+function addDefenses(group, env) {
   const stakeGeo = new THREE.ConeGeometry(0.34, 3.6, 5);
   const stakeMat = new THREE.MeshStandardMaterial({ color: 0x3a2b20, roughness: 0.93 });
   const shardGeo = new THREE.ConeGeometry(0.26, 2.3, 5);
@@ -558,16 +615,18 @@ function addDefenses(group) {
     o.position.set(x, terrainHeight(x, z) + 1.3, z);
     o.rotation.set((rnd() - 0.5) * 0.9, rnd() * Math.PI, Math.PI - 0.45 - rnd() * 0.55);
     o.updateMatrix();
+    env.breakables.push({ kind: 'stake', mesh: stakes, index: i, x, z, hp: 16 + rnd() * 10, alive: true });
     stakes.setMatrixAt(i, o.matrix);
   }
   for (let i = 0; i < 95; i++) {
     const x = -FIELD_HALF_X + rnd() * FIELD_HALF_X * 2;
     const z = WALL_Z - 16 - rnd() * 72;
-    o.position.set(x, terrainHeight(x, z) + 0.8, z);
+    o.position.set(x, groundHeight(x, z) + 0.8, z);
     o.rotation.set((rnd() - 0.5) * 0.32, rnd() * Math.PI, (rnd() - 0.5) * 0.22);
     const s = 0.75 + rnd() * 0.75;
     o.scale.set(s, s, s);
     o.updateMatrix();
+    env.breakables.push({ kind: 'shard', mesh: shards, index: i, x, z, hp: 12 + rnd() * 8, alive: true });
     shards.setMatrixAt(i, o.matrix);
   }
   stakes.castShadow = true;
@@ -575,7 +634,7 @@ function addDefenses(group) {
   group.add(stakes, shards);
 }
 
-function addRocks(group) {
+function addRocks(group, env) {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x5b626b, roughness: 0.96, metalness: 0 });
   const geo = new THREE.DodecahedronGeometry(1, 0);
   const rocks = new THREE.InstancedMesh(geo, rockMat, 82);
@@ -584,14 +643,65 @@ function addRocks(group) {
     const x = (rnd() * 2 - 1) * (FIELD_HALF_X + 28);
     const z = NORTH_Z + 15 + rnd() * 205;
     const s = 0.45 + rnd() * 2.4;
-    o.position.set(x, terrainHeight(x, z) + s * 0.25, z);
+    o.position.set(x, groundHeight(x, z) + s * 0.25, z);
     o.rotation.set(rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI);
     o.scale.set(s * (0.8 + rnd() * 1.6), s * (0.32 + rnd() * 0.5), s * (0.7 + rnd() * 1.4));
     o.updateMatrix();
+    env.breakables.push({ kind: 'rock', mesh: rocks, index: i, x, z, hp: 55 + s * 18, alive: true });
     rocks.setMatrixAt(i, o.matrix);
   }
   rocks.castShadow = rocks.receiveShadow = true;
   group.add(rocks);
+}
+
+function addDestructionPools(group, env) {
+  const scorchTex = makeScorchTexture();
+  const groundMat = new THREE.MeshBasicMaterial({
+    map: scorchTex,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true,
+  });
+  const wallMat = new THREE.MeshBasicMaterial({
+    map: scorchTex,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true,
+  });
+  const plane = new THREE.PlaneGeometry(1, 1);
+  for (let i = 0; i < 36; i++) {
+    const m = new THREE.Mesh(plane, groundMat.clone());
+    m.rotation.x = -Math.PI / 2;
+    m.visible = false;
+    m.renderOrder = 4;
+    env.groundScars.push(m);
+    group.add(m);
+  }
+  for (let i = 0; i < 18; i++) {
+    const m = new THREE.Mesh(plane, wallMat.clone());
+    m.visible = false;
+    m.renderOrder = 5;
+    env.wallScars.push(m);
+    group.add(m);
+  }
+
+  env.debrisMesh = new THREE.InstancedMesh(
+    new THREE.DodecahedronGeometry(0.55, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2e3339, roughness: 0.98, metalness: 0 }),
+    520,
+  );
+  env.debrisMesh.castShadow = true;
+  env.debrisMesh.receiveShadow = true;
+  env.debrisMesh.count = 520;
+  const o = new THREE.Object3D();
+  o.position.set(0, -9999, 0);
+  o.scale.setScalar(0.001);
+  o.updateMatrix();
+  for (let i = 0; i < env.debrisMesh.count; i++) env.debrisMesh.setMatrixAt(i, o.matrix);
+  env.debrisMesh.instanceMatrix.needsUpdate = true;
+  group.add(env.debrisMesh);
 }
 
 function addTreeline(group) {
@@ -703,15 +813,164 @@ function addSnow(group) {
   return snow;
 }
 
+function hideInstance(item) {
+  const o = new THREE.Object3D();
+  o.position.set(item.x, -9999, item.z);
+  o.scale.setScalar(0.001);
+  o.updateMatrix();
+  item.mesh.setMatrixAt(item.index, o.matrix);
+  item.mesh.instanceMatrix.needsUpdate = true;
+  item.alive = false;
+}
+
+function refreshTerrain(env, x, z, radius, full = false) {
+  if (!env.terrainGeo) return;
+  const pos = env.terrainGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const vx = pos.getX(i), vz = -pos.getY(i);
+    if (!full && Math.hypot(vx - x, vz - z) > radius) continue;
+    if (vz > WALL_Z - WALL_T * 0.5 && vz < Z_BOT + 4 && Math.abs(vx) > GATE_W / 2) continue;
+    pos.setZ(i, groundHeight(vx, vz));
+  }
+  pos.needsUpdate = true;
+  env.terrainGeo.computeVertexNormals();
+}
+
+function deformTerrain(env, x, z, radius, depth) {
+  if (!env.terrainGeo || depth <= 0) return;
+  deforms.push({ x, z, r: radius, delta: -depth, mode: 'bowl' });
+  deforms.push({ x, z, r: radius * 1.48, inner: radius * 0.74, delta: depth * 0.28, mode: 'ring' });
+  const full = deforms.length > MAX_DEFORMS;
+  while (deforms.length > MAX_DEFORMS) deforms.shift();
+  refreshTerrain(env, x, z, radius * 1.55, full);
+}
+
+function placeGroundScar(env, x, z, radius) {
+  const m = env.groundScars[env.groundScarHead++ % env.groundScars.length];
+  m.visible = true;
+  m.position.set(x, groundHeight(x, z) + 0.06, z);
+  m.rotation.set(-Math.PI / 2, 0, rnd() * Math.PI);
+  m.scale.set(radius * 2.05, radius * 2.05, 1);
+  m.material.opacity = 0.74;
+}
+
+function placeWallScar(env, x, z, radius) {
+  const m = env.wallScars[env.wallScarHead++ % env.wallScars.length];
+  m.visible = true;
+  m.position.set(
+    clamp(x, -FIELD_HALF_X + 4, FIELD_HALF_X - 4),
+    WALL_H * 0.62 + rnd() * 2.6,
+    WALL_Z - WALL_T * 0.5 - 0.08,
+  );
+  m.rotation.set(0, 0, rnd() * Math.PI);
+  m.scale.set(radius * 1.55, radius * 1.35, 1);
+  m.material.opacity = 0.66;
+  if (z > WALL_Z + 1) m.position.z = WALL_Z + WALL_T * 0.5 + 0.08;
+}
+
+function spawnDebris(env, x, z, radius, count, stone = false) {
+  if (!env.debrisMesh) return;
+  const o = new THREE.Object3D();
+  for (let i = 0; i < count; i++) {
+    const a = rnd() * Math.PI * 2;
+    const d = radius * (0.15 + rnd() * 0.95);
+    const px = x + Math.cos(a) * d;
+    const pz = z + Math.sin(a) * d;
+    const s = (stone ? 0.45 : 0.24) + rnd() * (stone ? 1.1 : 0.55);
+    o.position.set(px, groundHeight(px, pz) + s * 0.18, pz);
+    o.rotation.set(rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI);
+    o.scale.set(s * (0.7 + rnd() * 1.2), s * (0.35 + rnd() * 0.8), s * (0.7 + rnd() * 1.2));
+    o.updateMatrix();
+    env.debrisMesh.setMatrixAt(env.debrisHead++ % env.debrisMesh.count, o.matrix);
+  }
+  env.debrisMesh.instanceMatrix.needsUpdate = true;
+}
+
+function damageBreakables(env, x, z, radius, damage) {
+  const dirty = new Set();
+  for (const item of env.breakables) {
+    if (!item.alive) continue;
+    const d = Math.hypot(item.x - x, item.z - z);
+    if (d > radius + (item.kind === 'merlon' ? 8 : 1.5)) continue;
+    const hit = damage * (1 - Math.min(d / Math.max(radius, 0.001), 1)) + rnd() * 18;
+    item.hp -= hit;
+    if (item.hp > 0) continue;
+    hideInstance(item);
+    dirty.add(item.mesh);
+    spawnDebris(env, item.x, item.z, item.kind === 'rock' ? 2.6 : 1.5, item.kind === 'rock' ? 5 : 3, item.kind !== 'stake');
+  }
+  for (const mesh of dirty) mesh.instanceMatrix.needsUpdate = true;
+}
+
+function breakGate(env) {
+  if (!env.gate || env.gate.broken) return;
+  env.gate.broken = true;
+  for (const p of env.gate.parts) p.visible = false;
+  spawnDebris(env, 0, WALL_Z + 1, 11, 34, true);
+  placeWallScar(env, 0, WALL_Z, 10);
+}
+
+function damageStructures(env, x, z, radius, damage, visible = true) {
+  const nearWall = Math.abs(z - WALL_Z) < radius + 10;
+  if (!nearWall) return;
+  if (visible) placeWallScar(env, x, z, radius);
+  if (Math.abs(x) < GATE_W / 2 + 7 && env.gate && !env.gate.broken) {
+    env.gate.hp -= damage * 1.35;
+    if (env.gate.hp <= 0) breakGate(env);
+  }
+  if (visible) spawnDebris(env, clamp(x, -FIELD_HALF_X, FIELD_HALF_X), WALL_Z, Math.min(radius, 9), Math.ceil(radius * 1.5), true);
+}
+
+function addBlastLight(env, x, y, z, radius) {
+  const light = new THREE.PointLight(0xffa45a, 42 + radius * 10, radius * 6, 2);
+  light.position.set(x, y + 2.8, z);
+  env.group.add(light);
+  env.lights.push({ light, t: 0.24 });
+}
+
+function blastEnvironment(x, y, z, opts = {}) {
+  const env = activeEnv;
+  if (!env) return;
+  if (z === undefined) {
+    z = y;
+    y = groundHeight(x, z);
+  }
+  const radius = opts.radius ?? 8;
+  const damage = opts.damage ?? 80;
+  const crater = opts.crater ?? 1.15;
+  if (opts.visible === false) {
+    damageStructures(env, x, z, radius, damage, false);
+    return;
+  }
+  if (crater > 0 && z < WALL_Z - WALL_T * 0.35) deformTerrain(env, x, z, radius * 0.46, crater);
+  placeGroundScar(env, x, z, radius);
+  spawnDebris(env, x, z, radius, Math.ceil(radius * 2.6), false);
+  addBlastLight(env, x, y, z, radius);
+  damageBreakables(env, x, z, radius, damage);
+  damageStructures(env, x, z, radius, damage, true);
+}
+
 export function buildField(scene) {
   const group = new THREE.Group();
   const torches = [];
   const mists = [];
   const placementTargets = [];
-  const terrain = addTerrain(group, placementTargets);
-  const { wall, gate } = addWall(group, torches, placementTargets);
-  addDefenses(group);
-  addRocks(group);
+  const env = {
+    group,
+    breakables: [],
+    groundScars: [],
+    wallScars: [],
+    lights: [],
+    groundScarHead: 0,
+    wallScarHead: 0,
+    debrisHead: 0,
+  };
+  activeEnv = env;
+  const terrain = addTerrain(group, placementTargets, env);
+  const { wall, gate } = addWall(group, torches, placementTargets, env);
+  addDefenses(group, env);
+  addRocks(group, env);
+  addDestructionPools(group, env);
   addTreeline(group);
   addMist(group, mists);
   const snow = addSnow(group);
@@ -736,6 +995,20 @@ export function buildField(scene) {
       m.material.opacity = m.userData.base * (0.72 + Math.sin(time * 0.5 + m.userData.phase) * 0.18);
     }
 
+    for (let i = env.lights.length - 1; i >= 0; i--) {
+      const b = env.lights[i];
+      b.t -= dt;
+      b.light.intensity *= Math.pow(0.02, dt / 0.24);
+      if (b.t <= 0) {
+        env.group.remove(b.light);
+        b.light.dispose?.();
+        env.lights.splice(i, 1);
+      }
+    }
+
+    for (const m of env.groundScars) if (m.visible && m.material.opacity > 0.18) m.material.opacity -= dt * 0.012;
+    for (const m of env.wallScars) if (m.visible && m.material.opacity > 0.14) m.material.opacity -= dt * 0.018;
+
     const pos = snow.geometry.attributes.position;
     const arr = pos.array, vel = snow.userData.vel;
     for (let i = 0; i < vel.length; i++) {
@@ -752,5 +1025,12 @@ export function buildField(scene) {
     pos.needsUpdate = true;
   }
 
-  return { group, terrain, wall, gate, wallZ: WALL_Z, bounds: BOUNDS, placementTargets, heightAt, update };
+  return {
+    group, terrain, wall, gate,
+    wallZ: WALL_Z, bounds: BOUNDS, placementTargets,
+    heightAt,
+    blast: blastEnvironment,
+    damageEnvironment: blastEnvironment,
+    update,
+  };
 }

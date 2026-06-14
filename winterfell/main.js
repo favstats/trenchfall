@@ -27,12 +27,61 @@ const rig = makeCameraRig(camera, canvas, field.bounds);
 const picker = makePicker(camera, canvas);
 const force = new Force(scene, state);
 const horde = new Horde(scene, state, field);
-// first ranks already across the field (front already in range), tide builds from behind
-horde.spawnWave(Math.floor(horde.cap * 0.6), NORTH_Z + 20, WALL_Z - 22);
+// the dead muster at the back, by the godswood, and march south on the wall
+horde.spawnWave(Math.floor(horde.cap * 0.55), NORTH_Z + 10, NORTH_Z + 115);
 const combat = new Combat(scene, force, horde, state);
 let spawnAcc = 0;
+
+function pickMortarTarget() {
+  const A = horde.agents;
+  if (!A.length) return { x: 0, z: WALL_Z - 45 };
+  let best = A[0], bestScore = -1;
+  const samples = Math.min(90, A.length);
+  for (let s = 0; s < samples; s++) {
+    const a = A[(s * 47) % A.length];
+    if (a.dead) continue;
+    let score = 0;
+    for (let i = 0; i < A.length; i += 5) {
+      const b = A[i];
+      if (b.dead) continue;
+      const d = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+      if (d < 18 ** 2) score++;
+    }
+    if (score > bestScore) { best = a; bestScore = score; }
+  }
+  return { x: best.x, z: best.z };
+}
+
+function detonate(x, z, radius = 11, damage = 130, crater = 1.35) {
+  const y = field.heightAt(x, z);
+  field.blast(x, y, z, { radius, damage, crater });
+  for (let i = horde.agents.length - 1; i >= 0; i--) {
+    const a = horde.agents[i];
+    if (a.dead) continue;
+    const d = Math.hypot(a.x - x, a.z - z);
+    if (d > radius) continue;
+    a.hp -= damage * (1 - d / radius) + 25;
+    if (a.hp <= 0) { horde.kill(i); state.kills++; }
+  }
+  for (const m of force.soldiers) {
+    if (!m.alive) continue;
+    const d = Math.hypot(m.pos.x - x, m.pos.z - z);
+    if (d < radius * 0.62) {
+      m.hp -= 3;
+      if (m.hp <= 0) { m.kill(); state.menLost++; }
+    }
+  }
+}
+
+function fireMortarCallIn() {
+  if (state.charges.mortar <= 0) return;
+  state.charges.mortar--;
+  const p = pickMortarTarget();
+  setTimeout(() => detonate(p.x, p.z), 650);
+}
+
 const hud = createHUD(hudRoot, state, {
-  onMortar: () => console.log('[WF] mortar (M5)'),
+  onMortar: fireMortarCallIn,
   onReserve: () => console.log('[WF] reserve (M5)'),
 });
 
@@ -103,6 +152,9 @@ async function frame(now) {
     if (spawnAcc > 0.35 && horde.count < horde.cap) { horde.spawnWave(30); spawnAcc = 0; }
     horde.update(dt);
     combat.update(dt);
+    // ---- win / lose ----
+    if (state.menRemaining <= 0 || horde.wallCrest() >= 7) { state.phase = 'lost'; hud.showEnd(); }
+    else if (state.time >= state.waveDuration) { state.phase = 'won'; hud.showEnd(); }
   }
   if (field.update) field.update(dt, camera);
   rig.update(dt);
@@ -110,7 +162,9 @@ async function frame(now) {
   window.WF.stats = {
     cam: camera.position.toArray().map(n => +n.toFixed(1)),
     men: state.menRemaining, kills: state.kills,
-    horde: horde.count,
+    lost: state.menLost, risen: state.menRisen,
+    horde: horde.count, corpses: horde.corpseCount, crest: horde.wallCrest(),
+    phase: state.phase,
     selected: force.selected().map(s => s.label),
   };
   await R.render();
@@ -127,8 +181,12 @@ window.WF.test = {
   killSome: (n = 3) => force.soldiers.slice(0, n).forEach(m => m.kill()),
   horde: () => horde.count,
   spawn: (n = 200) => horde.spawnWave(n),
+  heightAt: (x = 0, z = WALL_Z - 42) => field.heightAt(x, z),
+  blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
 };
 
+if (params.get('end')) { state.phase = params.get('end'); state.kills = 842; state.menLost = 7; state.menRisen = 4; hud.showEnd(); }
+if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);

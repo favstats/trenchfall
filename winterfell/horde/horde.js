@@ -92,10 +92,13 @@ export class Horde {
     this._corpseHead = 0; this._corpseN = 0;
     scene.add(this.corpses);
 
-    // ----- stacking heightmap along the wall (bodies pile against it) -----
-    this.BUCKET = 3;
-    this.PB = Math.ceil((FIELD_HALF_X * 2) / this.BUCKET) + 2;
-    this.pile = new Float32Array(this.PB);
+    // ----- 2D heap heightmap: bodies pile wherever the dead crowd or fall -----
+    this.HCELL = 4;
+    this._zMin = NORTH_Z - 20; this._zMax = WALL_Z + 30;
+    this.HW = Math.ceil((FIELD_HALF_X * 2) / this.HCELL) + 2;
+    this.HD = Math.ceil((this._zMax - this._zMin) / this.HCELL) + 2;
+    this.heap = new Float32Array(this.HW * this.HD);
+    this._bury = [];
 
     // ----- far impostor crowd (the bulk of the tide) -----
     const imp = Math.min(this.cap * 3, 9000);
@@ -122,13 +125,31 @@ export class Horde {
   get count() { return this.agents.length; }
   get corpseCount() { return this._corpseN; }
 
-  _bucket(x) { return THREE.MathUtils.clamp(Math.floor((x + FIELD_HALF_X) / this.BUCKET), 0, this.PB - 1); }
-  pileAt(x) { return this.pile[this._bucket(x)]; }
-  _addPile(x, amt) {
-    const b = this._bucket(x);
-    this.pile[b] = Math.min(this.pile[b] + amt, WALL_H + 4);
-    if (b > 0) this.pile[b - 1] = Math.min(this.pile[b - 1] + amt * 0.45, WALL_H + 4);
-    if (b < this.PB - 1) this.pile[b + 1] = Math.min(this.pile[b + 1] + amt * 0.45, WALL_H + 4);
+  _heapIdx(x, z) {
+    const hx = THREE.MathUtils.clamp(Math.floor((x + FIELD_HALF_X) / this.HCELL), 0, this.HW - 1);
+    const hz = THREE.MathUtils.clamp(Math.floor((z - this._zMin) / this.HCELL), 0, this.HD - 1);
+    return hz * this.HW + hx;
+  }
+  heapAt(x, z) { return this.heap[this._heapIdx(x, z)]; }
+  _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 5); }
+
+  // how wide a stretch of the wall the heap has overtopped (breach measure)
+  wallCrest() {
+    let c = 0;
+    for (let x = -FIELD_HALF_X; x <= FIELD_HALF_X; x += this.HCELL) {
+      if (this.heapAt(x, NORTH_FACE - 1) >= WALL_H - 1.2) c++;
+    }
+    return c;
+  }
+
+  // reanimate a fallen body at a position (your dead turning against you)
+  spawnAt(x, z) {
+    if (this.agents.length >= this.cap) return;
+    const a = { x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.4 + Math.random() * 1.2, state: 'walk' };
+    const idx = this.agents.length; this.agents.push(a);
+    this._c.setHSL(0.02, 0.38, 0.13); // the risen wear a colder, bloodier hue
+    this.mesh.setColorAt(idx, this._c); this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.count = this.agents.length;
   }
 
   _addCorpse(x, z, y) {
@@ -145,12 +166,15 @@ export class Horde {
     this.corpses.instanceMatrix.needsUpdate = true;
   }
 
-  // a kill: leave a body, grow the heap if near the wall, then free the agent slot
+  // begin a stumbling death — the body falls (animated), heap grows, then it
+  // bakes into the static corpse pool once it has finished toppling
   kill(idx) {
     const a = this.agents[idx];
-    this._addCorpse(a.x, a.z, heightAt(a.x, a.z));
-    if (a.z > NORTH_FACE - 16) this._addPile(a.x, 0.07);
-    this.removeAt(idx);
+    if (a.dead) return;
+    a.dead = true; a.dieT = 0;
+    a.fallY0 = a.y != null ? a.y : heightAt(a.x, a.z);
+    a.fallRoll = (Math.random() - 0.5) * 1.5;
+    this._addHeap(a.x, a.z, 0.06); // the falling body adds to the heap, wherever it is
   }
 
   spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50) {
@@ -186,6 +210,7 @@ export class Horde {
     let best = -1, bd = maxD * maxD;
     for (let i = 0; i < this.agents.length; i++) {
       const a = this.agents[i];
+      if (a.dead) continue;
       const d = (a.x - x) ** 2 + (a.z - z) ** 2;
       if (d < bd) { bd = d; best = i; }
     }
@@ -193,31 +218,51 @@ export class Horde {
   }
 
   update(dt) {
-    const A = this.agents, n = A.length;
+    const A = this.agents;
+    const n = A.length;
     const o = this._o;
 
-    // spatial grid for separation
+    // spatial grid over the LIVING — drives separation AND per-cell stack level
     const CELL = 2.6;
     const grid = new Map();
     const key = (cx, cz) => cx * 73856093 ^ cz * 19349663;
     for (let i = 0; i < n; i++) {
       const a = A[i];
+      if (a.dead) continue;
       const k = key(Math.floor(a.x / CELL), Math.floor(a.z / CELL));
-      (grid.get(k) || grid.set(k, []).get(k)).push(i);
+      let cell = grid.get(k); if (!cell) { cell = []; grid.set(k, cell); }
+      a.cellLevel = cell.length;   // arrivals already in this cell -> stack height
+      cell.push(i);
     }
 
-    const used = new Int16Array(this.PB); // per-bucket stack counter (the living pile)
     for (let i = 0; i < n; i++) {
       const a = A[i];
+
+      // ---- dying: stumble and topple over, then bake into the corpse pool ----
+      if (a.dead) {
+        a.dieT += dt;
+        const t = Math.min(a.dieT / 0.7, 1);
+        const e = t * t * (3 - 2 * t);
+        const groundY = heightAt(a.x, a.z) + this.heapAt(a.x, a.z);
+        const y = (a.fallY0 - groundY) * (1 - e) + groundY + 0.12;
+        o.position.set(a.x, y, a.z);
+        o.rotation.set(-Math.PI / 2 * e, a.faceY || 0, a.fallRoll * e); // tip forward + roll
+        o.scale.setScalar(a.scl || 1.1);
+        o.updateMatrix();
+        this.mesh.setMatrixAt(i, o.matrix);
+        if (t >= 1) this._bury.push(a);
+        continue;
+      }
+
       // advance south to the wall's north face; funnel toward the gate near it
       let tx = a.x;
       if (a.z > WALL_Z - 30) tx = a.x * 0.985;
       const tz = NORTH_FACE - 0.6;
-      let dx = tx - a.x, dz = tz - a.z;
+      const dx = tx - a.x, dz = tz - a.z;
       const d = Math.hypot(dx, dz) || 1;
-      let mvx = (dx / d), mvz = (dz / d);
+      const mvx = dx / d, mvz = dz / d;
 
-      // separation
+      // separation (gentle — lets them pack tight enough to stack)
       let sx = 0, sz = 0;
       const cx = Math.floor(a.x / CELL), cz = Math.floor(a.z / CELL);
       for (let gx = -1; gx <= 1; gx++) for (let gz = -1; gz <= 1; gz++) {
@@ -233,29 +278,44 @@ export class Horde {
       }
       const arrived = a.z >= NORTH_FACE - 1.2;
       const spd = arrived ? 0 : a.spd;
-      a.x += (mvx * 1.0 + sx * 0.5) * spd * dt;
-      a.z += (mvz * 1.0 + sz * 0.5) * spd * dt;
+      a.x += (mvx + sx * 0.45) * spd * dt;
+      a.z += (mvz + sz * 0.45) * spd * dt;
       a.x = THREE.MathUtils.clamp(a.x, -FIELD_HALF_X, FIELD_HALF_X);
 
-      // shamble pose: bob + sway + face travel direction
       a.ph += dt * (4 + a.spd);
       const bob = Math.abs(Math.sin(a.ph)) * 0.12;
       const sway = Math.sin(a.ph * 0.5) * 0.08;
 
-      let y = heightAt(a.x, a.z) + bob;
-      if (arrived) {
-        // clamber up the corpse-heap and over those already pressed to the wall
-        const b = this._bucket(a.x);
-        const level = used[b]++;
-        y = heightAt(a.x, a.z) + this.pile[b] + Math.min(level, 18) * 0.55 + bob * 0.5;
-      }
+      // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
+      const level = Math.min(a.cellLevel, 22);
+      const base = heightAt(a.x, a.z) + this.heapAt(a.x, a.z);
+      const y = base + level * 0.5 + bob * 0.5;
+      a.y = y;
+      a.faceY = Math.atan2(-mvx, -mvz) + sway;
+      a.scl = 1.05 + (a.spd - 2.6) * 0.05;
+
+      // a packed crowd's weight slowly builds the heap (jams pile up over time)
+      if (level > 0) this._addHeap(a.x, a.z, 0.0006 * level);
+
       o.position.set(a.x, y, a.z);
-      o.rotation.set(arrived ? -0.5 : 0, Math.atan2(-mvx, -mvz) + sway, sway * 0.6);
-      o.scale.setScalar(1.05 + (a.spd - 2.6) * 0.05);
+      o.rotation.set(level > 2 ? -0.4 : 0, a.faceY, sway * 0.6); // those climbing lean in
+      o.scale.setScalar(a.scl);
       o.updateMatrix();
       this.mesh.setMatrixAt(i, o.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+
+    // bury bodies that finished falling into the static corpse pool
+    if (this._bury.length) {
+      for (const a of this._bury) {
+        const idx = A.indexOf(a);
+        if (idx >= 0) {
+          this._addCorpse(a.x, a.z, heightAt(a.x, a.z) + this.heapAt(a.x, a.z));
+          this.removeAt(idx);
+        }
+      }
+      this._bury.length = 0;
+    }
 
     // far impostor crowd: slow advance, recycle north (cheap, no per-frame billboard)
     const F = this._farData;

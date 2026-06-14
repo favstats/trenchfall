@@ -168,14 +168,25 @@ export class Combat {
     // ---- the dead claw at the wall ----
     for (let i = 0; i < horde.agents.length; i++) {
       const a = horde.agents[i];
+      if (a.dead) continue;
       if (a.z < WALL_Z - 2) continue;            // only those at the wall
       a.atk = (a.atk || 0) - dt;
       if (a.atk > 0) continue;
+      horde.field.damageEnvironment?.(a.x, horde.field.heightAt(a.x, a.z), a.z,
+        { radius: 1.6, damage: 1.1, crater: 0, visible: false });
       const m = this._nearestSoldier(a.x, a.z, MELEE_RANGE);
       if (!m) continue;
       a.atk = MELEE_CD;
       m.hp -= 1;
       if (m.hp <= 0) { m.kill(); state.menLost++; }
+    }
+
+    // ---- the fallen rise — your own dead turn against you ----
+    for (const m of force.soldiers) {
+      if (!m.alive && !m.risen && m.deadT >= 4) {
+        horde.spawnAt(m.pos.x, m.pos.z);
+        m.risen = true; state.menRisen++;
+      }
     }
 
     fx.update(dt);

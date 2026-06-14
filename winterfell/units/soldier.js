@@ -84,6 +84,7 @@ export class Soldier {
     this.phase = Math.random() * Math.PI * 2; // gait offset
     this.reload = 0;         // seconds until next shot (combat fills this)
     this.deadT = 0;          // time since death (for reanimation)
+    this.risen = false;      // has this body risen as undead yet
     this.squad = squad;
   }
 
