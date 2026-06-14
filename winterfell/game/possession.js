@@ -35,6 +35,7 @@ export class Possession {
     if (!soldier || !soldier.alive) return;
     this.active = true; this.avatar = soldier; soldier.possessed = true;
     this.yaw = soldier.heading; this.pitch = 0; this._cd = 0;
+    if (this.combat?.state) this.combat.state.possession = soldier.squad?.label || 'RIFLEMAN';
     this.rig.setEnabled(false);
     try { const p = this.dom.requestPointerLock && this.dom.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch {}
   }
@@ -42,6 +43,7 @@ export class Possession {
   exit() {
     if (this.avatar) this.avatar.possessed = false;
     this.active = false; this.avatar = null; this.firing = false; this.keys.clear();
+    if (this.combat?.state) this.combat.state.possession = null;
     this.rig.setEnabled(true);
     const doc = this.dom.ownerDocument;
     if (doc.pointerLockElement) doc.exitPointerLock();
