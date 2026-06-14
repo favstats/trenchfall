@@ -859,11 +859,11 @@ function placeBuildable(kind, x, z, opts = {}) {
     // no floor plane — the terrain is really excavated below; just dress the lip
     const lining = new THREE.Mesh(a.trench, a.earth);
     lining.rotation.x = -Math.PI / 2;
-    lining.position.y = -1.55;            // dark earth at the dug floor
+    lining.position.y = -2.55;            // dark earth at the deep dug floor
     g.add(lining);
     for (const zoff of [-2.85, 2.85]) {
       const berm = new THREE.Mesh(a.berm, zoff < 0 ? a.snow : a.earth);
-      berm.position.set(0, 0.42, zoff);   // spoil heaped at the trench lip
+      berm.position.set(0, 0.5, zoff);    // spoil heaped at the trench lip
       berm.rotation.z = (rnd() - 0.5) * 0.04;
       g.add(berm);
     }
@@ -1064,8 +1064,8 @@ function placeBuildable(kind, x, z, opts = {}) {
   env.group.add(g);
   env.buildables.push(item);
   // real excavation: carve the terrain so the trench is dug into the ground
-  if (kind === 'trench') { digCarve(x, z, 1.8, 5.4); spawnDebris(env, x, z, 2.4, 4, false); }
-  else if (kind === 'pit') { digCarve(x, z, 1.4, 4.2); spawnDebris(env, x, z, 2.4, 4, false); }
+  if (kind === 'trench') { digCarve(x, z, 2.8, 5.6); spawnDebris(env, x, z, 2.6, 5, false); }
+  else if (kind === 'pit') { digCarve(x, z, 2.2, 4.4); spawnDebris(env, x, z, 2.4, 4, false); }
   return item;
 }
 

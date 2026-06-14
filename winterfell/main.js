@@ -57,6 +57,42 @@ const combat = new Combat(scene, force, horde, state);
 const possession = new Possession(camera, rig, force, combat, canvas);
 let lastKillSupply = 0;
 
+// ---------------- placement-preview ghost ----------------
+const GHOST_SIZE = {
+  trench: [12, 1.4, 5.6], wire: [9.4, 1.2, 2], sandbag: [7, 1.2, 3],
+  nest: [5, 1.8, 5], tower: [4.2, 8, 4.2], pit: [6.4, 1, 6.4],
+  floodlight: [1.6, 5, 1.6], ammo: [5, 2.2, 4], bunker: [6.2, 2.4, 4.6], brazier: [2.2, 3.2, 2.2],
+};
+const ghost = new THREE.Group();
+const ghostRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.86, 1, 32),
+  new THREE.MeshBasicMaterial({ color: 0x5ad17a, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.y = 0.15;
+const ghostBox = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x5ad17a, transparent: true, opacity: 0.22, depthWrite: false, fog: false }));
+ghost.add(ghostRing, ghostBox);
+ghost.visible = false;
+scene.add(ghost);
+let lastMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+function updateGhost() {
+  if (!state.buildMode || possession.active) { ghost.visible = false; return; }
+  const p = picker.ground(lastMouse.x, lastMouse.y);
+  if (!p) { ghost.visible = false; return; }
+  const dims = GHOST_SIZE[state.buildMode] || [4, 2, 4];
+  const linear = LINEAR.has(state.buildMode);
+  // linear works lay shoulder-to-shoulder (always placeable); point works need clearance
+  const ok = linear ? true : (field.canPlaceBuildable ? field.canPlaceBuildable(state.buildMode, p.x, p.z) : true);
+  const col = ok ? 0x5ad17a : 0xff5a4a;
+  ghostRing.material.color.setHex(col); ghostBox.material.color.setHex(col);
+  const r = Math.max(dims[0], dims[2]) * 0.5 + 0.6;
+  ghostRing.scale.set(r, r, 1);
+  ghostBox.scale.set(dims[0], dims[1], dims[2]); ghostBox.position.y = dims[1] / 2;
+  ghost.position.set(p.x, field.heightAt(p.x, p.z), p.z);
+  ghost.visible = true;
+}
+
 function addSupply(n) {
   state.supply = Math.min(state.supplyMax, state.supply + n);
 }
@@ -211,6 +247,7 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
+  lastMouse.x = e.clientX; lastMouse.y = e.clientY;
   if (drawing) {
     const p = picker.ground(e.clientX, e.clientY);
     if (p && lastDraw && Math.hypot(p.x - lastDraw.x, p.z - lastDraw.z) >= DRAW_STEP) {
@@ -311,6 +348,7 @@ async function frame(now) {
   if (field.update) field.update(dt, camera);
   rig.update(dt);
   possession.update(dt);
+  updateGhost();
   state.possession = possession.active ? (possession.avatar?.squad?.label ?? 'DIRECT') : null;
   hud.update(force);
   window.WF.stats = {
@@ -368,6 +406,7 @@ window.WF.test = {
 };
 
 if (params.get('end')) { state.phase = params.get('end'); state.kills = 842; state.menLost = 7; state.menRisen = 4; hud.showEnd(); }
+if (params.get('build')) state.buildMode = params.get('build'); // QA: preview the ghost
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
