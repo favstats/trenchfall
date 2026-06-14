@@ -528,17 +528,23 @@ function addWall(group, torches, placementTargets, env) {
   // they read as battlements, not flat grey boxes
   const merlonTex = stampMasonry(); merlonTex.repeat.set(1.2, 0.8);
   const merlonMat = new THREE.MeshStandardMaterial({ map: merlonTex, bumpMap: merlonTex, bumpScale: 0.35, color: 0x828b96, roughness: 0.93 });
-  const merlonGeo = new THREE.BoxGeometry(2.5, 2.0, WALL_T + 0.5);
-  const merlonCapGeo = new THREE.BoxGeometry(2.7, 0.4, WALL_T + 0.7);
+  // tooth proportions: a touch taller than wide, kept INSIDE the wall thickness so
+  // they read as upright merlons, never as slabs lying across the parapet
+  const MERLON_W = 2.4, MERLON_H = 2.4, MERLON_D = WALL_T - 0.6;
+  const merlonGeo = new THREE.BoxGeometry(MERLON_W, MERLON_H, MERLON_D);
+  const merlonCapGeo = new THREE.BoxGeometry(MERLON_W + 0.12, 0.28, MERLON_D + 0.12);
   const merlons = new THREE.InstancedMesh(merlonGeo, merlonMat, 80);
   const merlonCaps = new THREE.InstancedMesh(merlonCapGeo, snowCap, 80);
   let mi = 0;
-  for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += 4.3) {
+  const merlonY = WALL_H + MERLON_H / 2;          // base flush on the parapet
+  const capY = WALL_H + MERLON_H + 0.12;          // snow cap flush on the tooth top
+  // tooth + open crenel, even rhythm
+  for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += MERLON_W + 1.9) {
     if (Math.abs(x) < GATE_W / 2 + 2) continue;
     o.rotation.set(0, 0, 0);
-    o.position.set(x, WALL_H + 1.05, WALL_Z - 0.1); o.updateMatrix();
+    o.position.set(x, merlonY, WALL_Z); o.updateMatrix();
     merlons.setMatrixAt(mi, o.matrix);
-    o.position.set(x, WALL_H + 2.25, WALL_Z - 0.1); o.updateMatrix();
+    o.position.set(x, capY, WALL_Z); o.updateMatrix();
     merlonCaps.setMatrixAt(mi, o.matrix);
     env.breakables.push({ kind: 'merlon', mesh: merlons, index: mi, x, z: WALL_Z, hp: 42, alive: true });
     mi++;
@@ -1586,6 +1592,33 @@ function digCarve(x, z, depth = 1.7, radius = 5.2) {
     }
   }
   refreshTerrain(env, x, z, radius + 2.5);
+}
+
+// Raise a solid earth+gore mound into the terrain where the slain pile up. Bodies
+// then lie ON this continuous surface instead of floating over bare ground, so the
+// Leichenberg reads as a real hill with no holes. Writes a rounded positive bump
+// into the dig grid (same field that heightAt samples) and bakes it locally.
+const MOUND_CAP = 7.2;       // tall enough to read as a hill, short of overtopping
+export function raiseMound(x, z, amt = 0.05, radius = 4.6) {
+  const env = activeEnv;
+  if (!env || !env.dig) return;
+  const cx = (x - DIG_X0) / DIG_CELL, cz = (z - DIG_Z0) / DIG_CELL;
+  const cr = Math.ceil(radius / DIG_CELL) + 1;
+  for (let gz = Math.floor(cz - cr); gz <= cz + cr; gz++) {
+    for (let gx = Math.floor(cx - cr); gx <= cx + cr; gx++) {
+      if (gx < 0 || gz < 0 || gx >= DIG_W || gz >= DIG_H) continue;
+      const wx = DIG_X0 + gx * DIG_CELL, wz = DIG_Z0 + gz * DIG_CELL;
+      const d = Math.hypot(wx - x, wz - z);
+      if (d > radius) continue;
+      const i = gz * DIG_W + gx;
+      const w = 0.5 + 0.5 * Math.cos((d / radius) * Math.PI); // smooth rounded cap
+      env.dig[i] = Math.min(env.dig[i] + amt * w, MOUND_CAP);
+    }
+  }
+  // throttle the mesh bake — clustered kills self-heal on the next nearby corpse,
+  // so we never pay a terrain refresh on every single death during a burst
+  env._moundTick = (env._moundTick || 0) + 1;
+  if (env._moundTick % 3 === 0) refreshTerrain(env, x, z, radius + 1.5);
 }
 
 // a visible explosion: expanding fireball + rising smoke + flash light + debris

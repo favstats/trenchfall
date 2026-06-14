@@ -224,9 +224,10 @@ function updateEconomy(dt) {
     // barracks produce on demand via the selection panel (updateProduction), not passively
   }
   addSupply(dt * supplyRate);
-  state.research = (state.research || 0) + dt * researchRate;
+  state.research = Math.max(0, (state.research || 0) + dt * researchRate);
   state.researchRate = researchRate;
   state.supplyRateNow = supplyRate;
+  state.noise = Math.max(0, (state.noise || 0) - dt * 1.55);
   if (state.kills > lastKillSupply) { addSupply((state.kills - lastKillSupply) * 0.22); lastKillSupply = state.kills; } // kills give supply, not research
   state.gateHp = field.gateHealth?.() ?? 1;
   state.works = field.works?.() ?? 0;
@@ -281,6 +282,10 @@ let spawnAcc = 0;
 let surgeAt = 28;
 let reinforceAt = 16, reliefN = 0;   // endless British relief — more & stronger over time
 state.might = 1;                      // global firepower doctrine, ramps with the night
+function addNoise(n = 0) {
+  state.noise = Math.max(0, Math.min(100, (state.noise || 0) + n));
+  return state.noise;
+}
 
 // ---------------- RTS building selection + barracks unit production ----------
 let selBuilding = null;
@@ -369,6 +374,7 @@ function detonate(x, z, radius = 11, damage = 130, crater = 1.35) {
   field.blast(x, y, z, { radius, damage, crater });
   field.explodeFx?.(x, y, z, radius / 10); // visible fireball + smoke + flash
   sfxBoom();
+  addNoise(radius * 1.7);
   for (let i = horde.agents.length - 1; i >= 0; i--) {
     const a = horde.agents[i];
     if (a.dead) continue;
@@ -525,18 +531,27 @@ async function frame(now) {
     state.time += dt;
     updateEconomy(dt);
     force.update(dt);
-    // ---- gradual threat curve: a few stragglers at first, easing up to the
-    // full cap over ~9 minutes so the night starts slow and builds ----
+    // ---- gradual threat curve: the long night escalates, but noise can pull
+    // extra dead into the kill zone before the scheduled surges arrive ----
     const ramp = Math.min(1, state.time / 540);
-    state.threat = ramp;
-    const targetLive = Math.floor(18 + ramp * ramp * (horde.cap - 18)); // ease-in
+    const noiseK = Math.min(1, (state.noise || 0) / 100);
+    state.threat = Math.max(ramp, noiseK * 0.72);
+    const targetLive = Math.floor(18 + ramp * ramp * (horde.cap - 18) + noiseK * horde.cap * 0.18);
     spawnAcc += dt;
-    if (spawnAcc > 0.45 && horde.count < targetLive) {
-      horde.spawnWave(Math.min(targetLive - horde.count, Math.ceil(3 + ramp * 38)), NORTH_Z - 16, NORTH_Z + 16);
+    if (spawnAcc > Math.max(0.18, 0.45 - noiseK * 0.18) && horde.count < targetLive) {
+      horde.spawnWave(
+        Math.min(targetLive - horde.count, Math.ceil(3 + ramp * 38 + noiseK * 26)),
+        NORTH_Z - 16, NORTH_Z + 16,
+        0.03 + noiseK * 0.025,
+      );
       spawnAcc = 0;
     }
     if (state.time >= surgeAt) {                            // surges only once it's built up
-      if (state.time > 75) horde.spawnWave(Math.floor(30 + ramp * 240), NORTH_Z - 16, NORTH_Z + 30);
+      if (state.time > 75 || noiseK > 0.68) horde.spawnWave(
+        Math.floor(30 + ramp * 240 + noiseK * 120),
+        NORTH_Z - 16, NORTH_Z + 30,
+        0.035 + noiseK * 0.025,
+      );
       surgeAt += 30;
     }
     // ---- RELIEF: more and stronger soldiers march up to hold the wall ----
@@ -582,6 +597,8 @@ async function frame(now) {
     selected: force.selected().map(s => s.label),
     selBuilding: state.selBuilding?.kind || null,
     supply: Math.floor(state.supply), gate: +state.gateHp.toFixed(2), works: state.works,
+    noise: Math.round(state.noise || 0), threat: +(state.threat || 0).toFixed(2),
+    engineersRepairing: state.engineersRepairing || 0,
     possession: state.possession,
   };
   await R.render();
@@ -604,6 +621,23 @@ window.WF.test = {
   heightAt: (x = 0, z = WALL_Z - 42) => field.heightAt(x, z),
   blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
   build: (kind = 'trench', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
+  noise: (n = 50) => addNoise(n),
+  damageWork: (kind = 'bunker', frac = 0.25) => {
+    const b = (field.allBuildables?.() || []).find(item => item.alive && item.kind === kind);
+    if (!b) return null;
+    b.hp = Math.max(1, b.maxHp * frac);
+    return { kind: b.kind, hp: b.hp, maxHp: b.maxHp, x: b.x, z: b.z };
+  },
+  workInfo: (kind = 'bunker') => {
+    const b = (field.allBuildables?.() || []).find(item => item.alive && item.kind === kind);
+    return b ? { kind: b.kind, hp: b.hp, maxHp: b.maxHp, x: b.x, z: b.z, alive: b.alive } : null;
+  },
+  engineerAt: (kind = 'bunker') => {
+    const b = (field.allBuildables?.() || []).find(item => item.alive && item.kind === kind);
+    if (!b) return false;
+    force.addSquad('TEST ENGINEERS', 'engineer', b.x, b.z, 4);
+    return true;
+  },
   selectBuilding: (kind = 'barracks') => {
     selBuilding = (field.buildingGroups?.() || []).map(g => g.userData.item).find(b => b?.alive && b.kind === kind) || null;
     if (selBuilding) force.clearSelection();
@@ -640,8 +674,14 @@ if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
 if (params.get('demo') === 'hill') {
-  for (let w = 0; w < 5; w++) horde.spawnWave(700, WALL_Z - 26, WALL_Z - 6, 0.05); // pile them into the kill-zone
-  rig.frame(0, WALL_Z - 22, 50); rig.setPitch(0.3);
+  // bury a dense gaussian cluster of slain so the corpse-hill (Leichenberg) forms:
+  // raiseMound lifts the terrain into a solid mound, bodies clad it (no holes)
+  for (let i = 0; i < 1800; i++) {
+    const g = () => (Math.random() + Math.random() + Math.random() - 1.5);
+    horde._addCorpse(g() * 18, WALL_Z - 16 + g() * 12);
+  }
+  horde.spawnWave(400, WALL_Z - 26, WALL_Z - 6, 0.05); // living swarming the heap
+  rig.frame(0, WALL_Z - 16, 78); rig.setPitch(0.62);
 }
 if (params.get('demo') === 'rts') {
   state.supply = 999;

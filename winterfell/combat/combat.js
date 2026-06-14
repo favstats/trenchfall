@@ -165,6 +165,7 @@ export class Combat {
         m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * fr * (0.85 + Math.random() * 0.3);
       }
       sfxShot();
+      state.noise = Math.min(100, (state.noise || 0) + (m.squad.type === 'mg' ? 0.055 : 0.022));
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
@@ -237,6 +238,7 @@ export class Combat {
       }
       this._to.set(a.x + (Math.random() - 0.5) * 1.6, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
       fx.shot(this._from, this._to);
+      state.noise = Math.min(100, (state.noise || 0) + (isTower ? 0.035 : 0.08));
       const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);
       a.hp -= (isTower ? 4 : 3) * (lit?.damageMul ?? 1);
       if (a.hp <= 0) { fx.burst(this._to); horde.kill(idx); state.kills++; }
@@ -281,10 +283,12 @@ export class Combat {
     const from = this._from.set(avatar.pos.x, avatar.pos.y + 2.4, avatar.pos.z);
     if (best < 0) {
       fx.shot(from, this._to.set(ox + fwx * range, avatar.pos.y + 2.2, oz + fwz * range));
+      state.noise = Math.min(100, (state.noise || 0) + 0.03);
       return;
     }
     const a = horde.agents[best];
     fx.shot(from, this._to.set(a.x, horde.field.heightAt(a.x, a.z) + 1.2, a.z));
+    state.noise = Math.min(100, (state.noise || 0) + 0.03);
     const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);
     a.hp -= 2 * (lit?.damageMul ?? 1) * (this.state.might || 1);
     if (a.hp <= 0) { fx.burst(this._to); horde.kill(best); state.kills++; }

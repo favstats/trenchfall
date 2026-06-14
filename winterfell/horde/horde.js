@@ -5,7 +5,7 @@
 // dropped in later without touching consumers.
 import * as THREE from '../engine/three.js';
 import { HORDE_CAP } from '../game/state.js';
-import { WALL_Z, NORTH_Z, FIELD_HALF_X, GATE_W, WALL_T, WALL_H, heightAt } from '../world/field.js';
+import { WALL_Z, NORTH_Z, FIELD_HALF_X, GATE_W, WALL_T, WALL_H, heightAt, raiseMound } from '../world/field.js';
 
 const NORTH_FACE = WALL_Z - WALL_T / 2;  // z of the wall's north face (where the dead pile)
 const FAR_CROWD_FRONT_Z = NORTH_Z + 8;
@@ -14,18 +14,19 @@ const FAR_CROWD_BACK_Z = NORTH_Z - 92;
 // hunched, reaching undead silhouette merged into a single geometry (origin at feet)
 function buildUndeadGeometry() {
   const parts = [];
-  const add = (w, h, d, x, y, z, rx = 0) => {
-    const g = new THREE.BoxGeometry(w, h, d);
+  const add = (g, x, y, z, rx = 0, ry = 0, rz = 0) => {
     if (rx) g.rotateX(rx);
+    if (ry) g.rotateY(ry);
+    if (rz) g.rotateZ(rz);
     g.translate(x, y, z);
     parts.push(g);
   };
-  add(0.3, 1.1, 0.34, -0.2, 0.55, 0);          // leg L
-  add(0.3, 1.1, 0.34, 0.2, 0.55, 0);           // leg R
-  add(0.78, 0.95, 0.46, 0, 1.5, -0.15, 0.4);   // hunched torso
-  add(0.42, 0.42, 0.42, 0, 2.0, -0.45);        // head (lolling forward)
-  add(0.22, 0.95, 0.27, -0.5, 1.55, -0.35, 1.3); // arm L reaching
-  add(0.22, 0.95, 0.27, 0.5, 1.55, -0.35, 1.3);  // arm R reaching
+  add(new THREE.CylinderGeometry(0.12, 0.17, 1.1, 6), -0.2, 0.55, 0);              // leg L
+  add(new THREE.CylinderGeometry(0.12, 0.17, 1.1, 6), 0.2, 0.55, 0.02);            // leg R
+  add(new THREE.CylinderGeometry(0.34, 0.46, 0.98, 7), 0, 1.48, -0.18, 0.42);      // hunched torso
+  add(new THREE.SphereGeometry(0.28, 8, 6), 0, 2.0, -0.48);                       // lolling head
+  add(new THREE.CylinderGeometry(0.09, 0.12, 0.96, 6), -0.48, 1.5, -0.38, 1.24, 0, -0.18);
+  add(new THREE.CylinderGeometry(0.09, 0.12, 0.96, 6), 0.48, 1.5, -0.38, 1.24, 0, 0.18);
 
   // manual merge (avoids pulling a second three via the addon util)
   let vTotal = 0, iTotal = 0;
@@ -50,17 +51,45 @@ function buildUndeadGeometry() {
 }
 
 function silhouetteTexture() {
-  const c = document.createElement('canvas'); c.width = 32; c.height = 48;
+  const c = document.createElement('canvas'); c.width = 48; c.height = 64;
   const g = c.getContext('2d');
-  g.clearRect(0, 0, 32, 48);
-  g.fillStyle = '#111923';
-  // crude hunched figure
-  g.beginPath(); g.ellipse(16, 12, 5, 6, 0, 0, 7); g.fill();    // head/shoulders
-  g.fillRect(10, 14, 12, 20);                                    // torso
-  g.fillRect(9, 30, 5, 16); g.fillRect(18, 30, 5, 16);          // legs
-  g.fillRect(4, 16, 5, 12); g.fillRect(23, 16, 5, 12);         // arms
+  g.clearRect(0, 0, 48, 64);
+  g.fillStyle = 'rgba(13,20,30,0.92)';
+  g.beginPath();
+  g.ellipse(24, 13, 5.5, 6.3, -0.2, 0, Math.PI * 2);
+  g.fill();
+  g.beginPath();
+  g.moveTo(17, 21);
+  g.quadraticCurveTo(23, 15, 31, 21);
+  g.lineTo(34, 43);
+  g.quadraticCurveTo(27, 46, 15, 42);
+  g.closePath();
+  g.fill();
+  for (const [x0, x1, foot] of [[20, 16, 14], [27, 31, 34]]) {
+    g.beginPath();
+    g.moveTo(x0, 40);
+    g.lineTo(x1, 61);
+    g.lineTo(foot, 62);
+    g.lineTo(x0 - 1, 43);
+    g.closePath();
+    g.fill();
+  }
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(24 + side * 7, 23);
+    g.lineTo(24 + side * 19, 38);
+    g.lineTo(24 + side * 16, 41);
+    g.lineTo(24 + side * 5, 28);
+    g.closePath();
+    g.fill();
+  }
+  g.globalAlpha = 0.45;
+  g.fillStyle = '#28384a';
+  g.fillRect(18, 22, 2, 14);
+  g.fillRect(28, 24, 2, 12);
   const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
   return t;
 }
 
@@ -114,10 +143,10 @@ export class Horde {
     // ----- far impostor crowd (the bulk of the tide) -----
     const imp = Math.min(this.cap * 3, 9000);
     const planeMat = new THREE.MeshBasicMaterial({
-      map: silhouetteTexture(), transparent: true, alphaTest: 0.5,
-      color: 0x263648, opacity: 0.42, fog: true, depthWrite: false,
+      map: silhouetteTexture(), transparent: true, alphaTest: 0.18,
+      color: 0x34445a, opacity: 0.32, fog: true, depthWrite: false,
     });
-    this.far = new THREE.InstancedMesh(new THREE.PlaneGeometry(2.4, 3.6), planeMat, imp);
+    this.far = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.55, 3.35), planeMat, imp);
     this.far.count = imp;
     this.far.frustumCulled = false;
     this.far.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -194,20 +223,23 @@ export class Horde {
   }
 
   _addCorpse(x, z) {
-    const y = heightAt(x, z) + this.cmoundAt(x, z); // bodies sit on the growing mound
+    // each death first raises the solid earth mound, then the body lies ON it — so
+    // the hill is a continuous surface (no see-through holes), bodies just clad it
+    raiseMound(x, z, 0.055);
+    const y = heightAt(x, z);
     const i = this._corpseHead;
     this._corpseHead = (this._corpseHead + 1) % this._corpseCap;
     this._corpseN = Math.min(this._corpseN + 1, this._corpseCap);
     const o = this._o;
-    o.position.set(x + (Math.random() - 0.5) * 1.6, y + 0.4, z + (Math.random() - 0.5) * 1.6);
+    // tight jitter + overscaled bodies so they overlap and cover the ground densely
+    o.position.set(x + (Math.random() - 0.5) * 0.9, y + 0.32, z + (Math.random() - 0.5) * 0.9);
     // jumbled, tangled bodies — lie at all angles, not flat tiles
     o.rotation.set(-Math.PI / 2 + (Math.random() - 0.5) * 1.6, Math.random() * 6.28, (Math.random() - 0.5) * 1.6);
-    o.scale.setScalar(0.9 + Math.random() * 0.28);
+    o.scale.setScalar(1.12 + Math.random() * 0.34);
     o.updateMatrix();
     this.corpses.setMatrixAt(i, o.matrix);
     this.corpses.count = this._corpseN;
     this.corpses.instanceMatrix.needsUpdate = true;
-    this._addCMound(x, z, 0.42); // each body grows the hill where the slaughter concentrates
   }
 
   // begin a stumbling death — the body falls (animated), heap grows, then it
@@ -361,7 +393,7 @@ export class Horde {
 
       // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
       const level = Math.min(a.cellLevel, 11);   // gentler pile, not a spiky tower
-      const base = heightAt(a.x, a.z) + Math.max(this.heapAt(a.x, a.z), this.cmoundAt(a.x, a.z)); // climb the corpse hill
+      const base = heightAt(a.x, a.z) + this.heapAt(a.x, a.z); // heightAt already includes the raised corpse hill
       const y = base + level * 0.5 + bob * 0.5;
       a.y = y;
       a.faceY = Math.atan2(-mvx, -mvz) + sway;

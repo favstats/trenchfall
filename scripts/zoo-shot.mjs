@@ -19,5 +19,12 @@ await page.screenshot({ path: '/tmp/k-zoo2.png' });
 await page.evaluate(() => { const r = KQA.rooms()[0]; KQA.tp(r.x + 2.4, r.z + .2, -.9, -.05); });
 await page.waitForTimeout(400);
 await page.screenshot({ path: '/tmp/k-zoo3.png' });
+await page.evaluate(() => {
+  KQA.friendZoo();
+  const r = KQA.rooms()[0];
+  KQA.tp(r.x - .9, r.z + 2.2, 0, -.04);
+});
+await page.waitForTimeout(600);
+await page.screenshot({ path: '/tmp/k-friend-zoo.png' });
 console.log('errors:', errs.filter(e => !/pointer/i.test(e)).join('\n') || 'none');
 await browser.close();

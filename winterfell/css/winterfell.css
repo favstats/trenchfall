@@ -61,6 +61,7 @@ body::after {
   font-family: 'Special Elite', monospace; font-size: 15px; color: #d8e9fa;
 }
 .econ-top .rate { font-family: 'Saira Condensed', sans-serif; font-size: 8.5px; color: #9fe0a8; opacity: .8; margin-left: 4px; }
+.econ-top .warn { color: #ff9d86; text-shadow: 0 0 10px rgba(255,114,95,.45); }
 .rsc-top .rate { font-family: 'Saira Condensed', sans-serif; font-size: 8.5px; color: #9fd0ff; opacity: .8; margin-left: 4px; }
 .gate-read { display: grid; gap: 2px; }
 .gate-track {
@@ -99,6 +100,7 @@ body::after {
 .sel-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; font-size: 11px; }
 .sel-row b { flex: 1; letter-spacing: .02em; }
 .sel-row.mg b { color: #ffd27a; }
+.sel-row.engineer b { color: #bfe6c8; }
 .sel-n { font-family: 'Special Elite', monospace; color: #cfe2f6; font-size: 11px; }
 .sel-n small { opacity: .5; }
 .sel-order { font-size: 8px; letter-spacing: .06em; padding: 1px 4px; border-radius: 3px;

@@ -18,6 +18,7 @@ export function createHUD(root, state, hooks = {}) {
     <div id="economy" class="panel">
       <div class="econ-top"><label>SUPPLY</label><span id="tSupply">0</span><span id="tSupplyRate" class="rate">+0/s</span></div>
       <div class="econ-top"><label>RESEARCH</label><span id="rscPts">0</span><span id="rscRate" class="rate">+0/s</span></div>
+      <div class="econ-top"><label>NOISE</label><span id="tNoise">0</span><span id="tThreat" class="rate">0%</span></div>
       <div class="gate-read"><label>GATE</label><div class="gate-track"><i id="gateBar"></i></div></div>
       <div class="works-read"><label>WORKS</label><span id="tWorks">0</span></div>
     </div>
@@ -50,6 +51,7 @@ export function createHUD(root, state, hooks = {}) {
     objSub: $('#objSub'), timer: $('#objTimer'),
     kills: $('#tKills'), men: $('#tMen'), risen: $('#tRisen'),
     supply: $('#tSupply'), supplyRate: $('#tSupplyRate'), rscPts: $('#rscPts'), rscRate: $('#rscRate'),
+    noise: $('#tNoise'), threat: $('#tThreat'),
     gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
@@ -152,6 +154,10 @@ export function createHUD(root, state, hooks = {}) {
     el.supplyRate.textContent = `+${(state.supplyRateNow ?? state.supplyRate ?? 0).toFixed(1)}/s`;
     el.rscPts.textContent = Math.floor(state.research ?? 0);
     el.rscRate.textContent = `+${(state.researchRate ?? 0).toFixed(1)}/s`;
+    el.noise.textContent = Math.round(state.noise ?? 0);
+    el.threat.textContent = `${Math.round((state.threat ?? 0) * 100)}%`;
+    el.noise.classList.toggle('warn', (state.noise ?? 0) > 68);
+    el.threat.classList.toggle('warn', (state.threat ?? 0) > 0.5);
     el.works.textContent = state.works ?? 0;
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
 
