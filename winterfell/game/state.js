@@ -16,13 +16,13 @@ export class GameState {
     this.waveDuration = 150;    // seconds to hold
     this.hordeBroken = 60;     // win early if living horde falls below this
 
-    // Stronghold-style command economy: trickle income plus a small bounty for
-    // killing the dead, spent on repairs, mustering, and field works.
-    this.supply = 95;
+    // Dig-in command economy: trickle supply plus bounty for kills, spent on
+    // trenches, wire, sandbags, and mustering fresh riflemen.
+    this.supply = 115;
     this.supplyMax = 260;
     this.supplyRate = 4.2;
-    this.costs = { barricade: 35, spikes: 26, repair: 45, recruit: 65 };
-    this.buildMode = null;     // null | 'barricade' | 'spikes'
+    this.costs = { trench: 42, wire: 28, sandbag: 32, recruit: 65 };
+    this.buildMode = null;     // null | 'trench' | 'wire' | 'sandbag'
     this.gateHp = 1;
     this.works = 0;
     this.possession = null;    // label of directly controlled soldier, if any
@@ -37,4 +37,4 @@ export class GameState {
 }
 
 // horde size cap per fidelity tier (live near/mid agents; far field is impostors)
-export const HORDE_CAP = { low: 900, medium: 2200, high: 4000 };
+export const HORDE_CAP = { low: 1600, medium: 4000, high: 6500 };

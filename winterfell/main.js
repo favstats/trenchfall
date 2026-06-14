@@ -28,6 +28,18 @@ const rig = makeCameraRig(camera, canvas, field.bounds);
 const picker = makePicker(camera, canvas);
 const force = new Force(scene, state);
 const horde = new Horde(scene, state, field);
+function seedFieldWorks() {
+  for (const [kind, x, z] of [
+    ['trench', -70, WALL_Z - 22],
+    ['trench', 70, WALL_Z - 22],
+    ['trench', -26, WALL_Z - 16],
+    ['sandbag', 24, WALL_Z - 16],
+    ['wire', -70, WALL_Z - 43],
+    ['wire', 70, WALL_Z - 43],
+    ['wire', 0, WALL_Z - 50],
+  ]) field.placeBuildable?.(kind, x, z);
+}
+seedFieldWorks();
 // the dead muster at the back, by the godswood, and march south on the wall
 horde.spawnWave(Math.floor(horde.cap * 0.55), NORTH_Z + 10, NORTH_Z + 115);
 const combat = new Combat(scene, force, horde, state);
@@ -77,6 +89,7 @@ function callReserve() {
 }
 
 function repairGate() {
+  if (state.costs.repair == null) return;
   if ((field.gateHealth?.() ?? 1) >= 0.995) return;
   if (!spendSupply('repair')) return;
   field.repairGate?.(105);
@@ -135,9 +148,9 @@ function fireMortarCallIn() {
 const hud = createHUD(hudRoot, state, {
   onMortar: fireMortarCallIn,
   onReserve: callReserve,
-  onBuildBarricade: () => setBuildMode('barricade'),
-  onBuildSpikes: () => setBuildMode('spikes'),
-  onRepair: repairGate,
+  onBuildTrench: () => setBuildMode('trench'),
+  onBuildWire: () => setBuildMode('wire'),
+  onBuildSandbag: () => setBuildMode('sandbag'),
 });
 
 // ---------------- input: selection + orders ----------------
@@ -199,9 +212,9 @@ window.addEventListener('keydown', e => {
   if (possession.active) return; // direct-control owns the keyboard
   if (k === 'v') fireMortarCallIn();
   else if (k === 'c') callReserve();
-  else if (k === 'b') setBuildMode('barricade');
-  else if (k === 'n') setBuildMode('spikes');
-  else if (k === 'r') repairGate();
+  else if (k === 't') setBuildMode('trench');
+  else if (k === 'n') setBuildMode('wire');
+  else if (k === 'b') setBuildMode('sandbag');
   if (k === 'h') force.orderSelected('HOLD');
   else if (k === 'x') force.orderSelected('FALL_BACK', { x: force.selected()[0]?.centroid().x ?? 0, z: field.wallZ + 9 });
   else if (k === 'z') {
@@ -236,7 +249,8 @@ async function frame(now) {
     horde.update(dt);
     combat.update(dt);
     // ---- win / lose ----
-    if (state.menRemaining <= 0 || horde.wallCrest() >= 7) { state.phase = 'lost'; hud.showEnd(); }
+    // lose when the line is wiped or enough dead pour over and overrun the keep
+    if (state.menRemaining <= 0 || horde.breachers() >= 16 || horde.wallCrest() >= 34) { state.phase = 'lost'; hud.showEnd(); }
     else if (state.time >= state.waveDuration) { state.phase = 'won'; hud.showEnd(); }
   }
   if (field.update) field.update(dt, camera);
@@ -273,14 +287,24 @@ window.WF.test = {
   reserve: () => callReserve(),
   heightAt: (x = 0, z = WALL_Z - 42) => field.heightAt(x, z),
   blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
-  build: (kind = 'barricade', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
+  build: (kind = 'trench', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
   repair: () => field.repairGate?.(105),
   supply: (n = 100) => addSupply(n),
+  crest: () => { for (let x = -50; x <= 50; x += 2) for (let z = WALL_Z - 6; z <= WALL_Z + 2; z += 2) horde.heap[horde._heapIdx(x, z)] = 13; },
+  breachers: () => horde.breachers(),
+  dump: () => ({
+    over: horde.agents.filter(a => a.over).length,
+    atWall: horde.agents.filter(a => !a.dead && a.z >= 26).length,
+    heapMaxAtWall: Math.max(0, ...[-40, -20, 0, 20, 40].map(x => horde.heapAt(x, WALL_Z - 2.3))),
+    sampleNearWall: horde.agents.filter(a => !a.dead && a.z >= 26 && Math.abs(a.x) < 40).slice(0, 4)
+      .map(a => ({ z: +a.z.toFixed(1), x: +a.x.toFixed(1), heap: +horde.heapAt(a.x, a.z).toFixed(1), over: !!a.over })),
+  }),
 };
 
 if (params.get('end')) { state.phase = params.get('end'); state.kills = 842; state.menLost = 7; state.menRisen = 4; hud.showEnd(); }
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
+if (params.get('demo') === 'breach') { horde.spawnWave(800, WALL_Z - 14, WALL_Z - 3); window.WF.test.crest(); rig.frame(0, 14, 66); }
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
 if (params.get('demo') === 'possess') {

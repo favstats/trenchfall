@@ -147,11 +147,12 @@ export class Combat {
       if (m.reload > 0) continue;
       const w = WEAPON[m.squad.type] || WEAPON.rifle;
       if (m.squad.holdFire) continue;
-      const idx = horde.nearestTo(m.pos.x, m.pos.z, w.range);
+      const cover = horde.field.coverAt?.(m.pos.x, m.pos.z);
+      const idx = horde.nearestTo(m.pos.x, m.pos.z, w.range * (cover?.rangeMul ?? 1));
       if (idx < 0) continue;
       const a = horde.agents[idx];
       m.faceTo(a.x, a.z);
-      m.reload = w.cd * (0.85 + Math.random() * 0.3);
+      m.reload = w.cd * (cover?.reloadMul ?? 1) * (0.85 + Math.random() * 0.3);
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
@@ -165,19 +166,23 @@ export class Combat {
       }
     }
 
-    // ---- the dead claw at the wall ----
+    // ---- the dead claw at the line ----
     for (let i = 0; i < horde.agents.length; i++) {
       const a = horde.agents[i];
       if (a.dead) continue;
-      if (a.z < WALL_Z - 2) continue;            // only those at the wall
+      const atWall = a.z >= WALL_Z - 2;
+      const m = this._nearestSoldier(a.x, a.z, MELEE_RANGE);
+      if (!atWall && !m) continue;
       a.atk = (a.atk || 0) - dt;
       if (a.atk > 0) continue;
-      horde.field.damageEnvironment?.(a.x, horde.field.heightAt(a.x, a.z), a.z,
-        { radius: 1.6, damage: 1.1, crater: 0, visible: false });
-      const m = this._nearestSoldier(a.x, a.z, MELEE_RANGE);
+      if (atWall) {
+        horde.field.damageEnvironment?.(a.x, horde.field.heightAt(a.x, a.z), a.z,
+          { radius: 1.6, damage: 1.1, crater: 0, visible: false });
+      }
       if (!m) continue;
       a.atk = MELEE_CD;
-      m.hp -= 1;
+      const cover = horde.field.coverAt?.(m.pos.x, m.pos.z);
+      m.hp -= cover?.meleeMul ?? 1;
       if (m.hp <= 0) { m.kill(); state.menLost++; }
     }
 

@@ -8,6 +8,8 @@ import { HORDE_CAP } from '../game/state.js';
 import { WALL_Z, NORTH_Z, FIELD_HALF_X, GATE_W, WALL_T, WALL_H, heightAt } from '../world/field.js';
 
 const NORTH_FACE = WALL_Z - WALL_T / 2;  // z of the wall's north face (where the dead pile)
+const FAR_CROWD_FRONT_Z = NORTH_Z + 8;
+const FAR_CROWD_BACK_Z = NORTH_Z - 92;
 
 // hunched, reaching undead silhouette merged into a single geometry (origin at feet)
 function buildUndeadGeometry() {
@@ -51,7 +53,7 @@ function silhouetteTexture() {
   const c = document.createElement('canvas'); c.width = 32; c.height = 48;
   const g = c.getContext('2d');
   g.clearRect(0, 0, 32, 48);
-  g.fillStyle = '#0c0f0c';
+  g.fillStyle = '#111923';
   // crude hunched figure
   g.beginPath(); g.ellipse(16, 12, 5, 6, 0, 0, 7); g.fill();    // head/shoulders
   g.fillRect(10, 14, 12, 20);                                    // torso
@@ -75,7 +77,13 @@ export class Horde {
     // ----- live (simulated) undead -----
     const geo = buildUndeadGeometry();
     this._geo = geo;
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xd6e0de,
+      roughness: 0.96,
+      metalness: 0,
+      emissive: 0x101821,
+      emissiveIntensity: 0.06,
+    });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
     this.mesh.castShadow = true;
     this.mesh.count = 0;
@@ -84,7 +92,7 @@ export class Horde {
 
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(this.cap * 2, 7000);
-    const corpseMat = new THREE.MeshStandardMaterial({ color: 0x14160f, roughness: 1, metalness: 0 });
+    const corpseMat = new THREE.MeshStandardMaterial({ color: 0x222a2b, roughness: 1, metalness: 0 });
     this.corpses = new THREE.InstancedMesh(geo, corpseMat, this._corpseCap);
     this.corpses.castShadow = true; this.corpses.receiveShadow = true;
     this.corpses.count = 0;
@@ -104,7 +112,7 @@ export class Horde {
     const imp = Math.min(this.cap * 3, 9000);
     const planeMat = new THREE.MeshBasicMaterial({
       map: silhouetteTexture(), transparent: true, alphaTest: 0.5,
-      color: 0x10140f, fog: true, depthWrite: false,
+      color: 0x263648, opacity: 0.42, fog: true, depthWrite: false,
     });
     this.far = new THREE.InstancedMesh(new THREE.PlaneGeometry(2.4, 3.6), planeMat, imp);
     this.far.count = imp;
@@ -113,9 +121,12 @@ export class Horde {
     const fo = new THREE.Object3D();
     for (let i = 0; i < imp; i++) {
       const x = (Math.random() * 2 - 1) * (FIELD_HALF_X + 40);
-      const z = NORTH_Z + 30 - Math.random() * 90; // band at/behind the treeline
-      this._farData.push({ x, z, spd: 1.2 + Math.random() * 1.0, ph: Math.random() * 6.28 });
-      fo.position.set(x, 1.8, z); fo.updateMatrix();
+      const z = FAR_CROWD_BACK_Z + Math.random() * (FAR_CROWD_FRONT_Z - FAR_CROWD_BACK_Z);
+      const s = 0.62 + Math.random() * 0.5;
+      this._farData.push({ x, z, spd: 0.35 + Math.random() * 0.45, ph: Math.random() * 6.28, s });
+      fo.position.set(x, 1.8, z);
+      fo.scale.setScalar(s);
+      fo.updateMatrix();
       this.far.setMatrixAt(i, fo.matrix);
     }
     this.far.instanceMatrix.needsUpdate = true;
@@ -133,11 +144,21 @@ export class Horde {
   heapAt(x, z) { return this.heap[this._heapIdx(x, z)]; }
   _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 5); }
 
-  // how wide a stretch of the wall the heap has overtopped (breach measure)
+  // how wide a stretch of the wall the heap has overtopped (pressure indicator)
   wallCrest() {
     let c = 0;
     for (let x = -FIELD_HALF_X; x <= FIELD_HALF_X; x += this.HCELL) {
       if (this.heapAt(x, NORTH_FACE - 1) >= WALL_H - 1.2) c++;
+    }
+    return c;
+  }
+
+  // dead that have poured over the wall and are loose in the courtyard
+  breachers() {
+    let c = 0;
+    for (let i = 0; i < this.agents.length; i++) {
+      const a = this.agents[i];
+      if (a.over && !a.dead && a.z > WALL_Z + 6) c++;
     }
     return c;
   }
@@ -147,7 +168,7 @@ export class Horde {
     if (this.agents.length >= this.cap) return;
     const a = { x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.4 + Math.random() * 1.2, state: 'walk' };
     const idx = this.agents.length; this.agents.push(a);
-    this._c.setHSL(0.02, 0.38, 0.13); // the risen wear a colder, bloodier hue
+    this._c.setHSL(0.57, 0.18, 0.25); // the risen wear a colder, bloodier hue
     this.mesh.setColorAt(idx, this._c); this.mesh.instanceColor.needsUpdate = true;
     this.mesh.count = this.agents.length;
   }
@@ -186,7 +207,7 @@ export class Horde {
       const a = { x, z, hp: 2, ph: Math.random() * 6.28, spd: 2.6 + Math.random() * 1.4, state: 'walk' };
       const idx = this.agents.length;
       this.agents.push(a);
-      this._c.setHSL(0.28, 0.12 + Math.random() * 0.12, 0.06 + Math.random() * 0.07);
+      this._c.setHSL(0.56 + Math.random() * 0.05, 0.10 + Math.random() * 0.12, 0.24 + Math.random() * 0.10);
       this.mesh.setColorAt(idx, this._c);
     }
     this.mesh.instanceColor.needsUpdate = true;
@@ -254,6 +275,25 @@ export class Horde {
         continue;
       }
 
+      // ---- WORLD WAR Z living pyramid: once the heap crests the wall here,
+      // the dead clamber over the top and pour down into the courtyard ----
+      if (!a.over && a.z >= NORTH_FACE - 1.4 && this.heapAt(a.x, a.z) >= WALL_H - 2.0) a.over = true;
+      if (a.over) {
+        const ddx = a.x * 0.992 - a.x, ddz = (WALL_Z + 46) - a.z;
+        const dd = Math.hypot(ddx, ddz) || 1;
+        a.x += (ddx / dd) * a.spd * 0.95 * dt;
+        a.z += (ddz / dd) * a.spd * 0.95 * dt;
+        a.ph += dt * 6;
+        const y = heightAt(a.x, a.z) + Math.abs(Math.sin(a.ph)) * 0.1; // ride the rampart down
+        a.y = y; a.faceY = Math.atan2(-ddx, -ddz);
+        o.position.set(a.x, y, a.z);
+        o.rotation.set(0.18, a.faceY, 0);
+        o.scale.setScalar(a.scl || 1.1);
+        o.updateMatrix();
+        this.mesh.setMatrixAt(i, o.matrix);
+        continue;
+      }
+
       // advance south to the wall's north face; funnel toward the gate near it
       let tx = a.x;
       if (a.z > WALL_Z - 30) tx = a.x * 0.985;
@@ -300,8 +340,8 @@ export class Horde {
       a.faceY = Math.atan2(-mvx, -mvz) + sway;
       a.scl = 1.05 + (a.spd - 2.6) * 0.05;
 
-      // a packed crowd's weight slowly builds the heap (jams pile up over time)
-      if (level > 0) this._addHeap(a.x, a.z, 0.0006 * level);
+      // a packed crowd's weight builds the heap — jams grow into pyramids
+      if (arrived) this._addHeap(a.x, a.z, 0.0009 + 0.0011 * level);
 
       o.position.set(a.x, y, a.z);
       o.rotation.set(level > 2 ? -0.4 : 0, a.faceY, sway * 0.6); // those climbing lean in
@@ -323,15 +363,19 @@ export class Horde {
       this._bury.length = 0;
     }
 
-    // far impostor crowd: slow advance, recycle north (cheap, no per-frame billboard)
+    // Far impostor crowd: keep it as a distant treeline mass only. If these
+    // cutouts reach the playable field they read like advancing black blocks.
     const F = this._farData;
     for (let i = 0; i < F.length; i++) {
       const f = F[i];
       f.z += f.spd * dt;
-      if (f.z > WALL_Z - 20) { f.z = NORTH_Z - 40 - Math.random() * 30; f.x = (Math.random() * 2 - 1) * (FIELD_HALF_X + 40); }
+      if (f.z > FAR_CROWD_FRONT_Z) {
+        f.z = FAR_CROWD_BACK_Z - Math.random() * 24;
+        f.x = (Math.random() * 2 - 1) * (FIELD_HALF_X + 40);
+      }
       o.position.set(f.x, 1.8 + Math.sin(f.ph + performance.now() * 0.001) * 0.05, f.z);
       o.rotation.set(0, 0, 0);
-      o.scale.set(1, 1, 1);
+      o.scale.setScalar(f.s);
       o.updateMatrix();
       this.far.setMatrixAt(i, o.matrix);
     }

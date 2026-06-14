@@ -715,9 +715,16 @@ function buildAssets(env) {
     }),
     iron: new THREE.MeshStandardMaterial({ color: 0x14191d, roughness: 0.62, metalness: 0.48 }),
     snow: new THREE.MeshStandardMaterial({ color: 0xdbe7f3, roughness: 1, metalness: 0 }),
+    earth: new THREE.MeshStandardMaterial({ color: 0x1b1712, roughness: 1, metalness: 0 }),
+    sand: new THREE.MeshStandardMaterial({ color: 0x746a55, roughness: 0.98, metalness: 0 }),
     log: new THREE.BoxGeometry(8.4, 0.52, 0.72),
     brace: new THREE.BoxGeometry(0.52, 3.2, 0.52),
     spike: new THREE.ConeGeometry(0.24, 3.4, 5),
+    trench: new THREE.PlaneGeometry(12.4, 5.8),
+    berm: new THREE.BoxGeometry(12.2, 0.5, 0.86),
+    bag: new THREE.BoxGeometry(1.22, 0.38, 0.64),
+    wire: new THREE.BoxGeometry(9.2, 0.055, 0.055),
+    post: new THREE.CylinderGeometry(0.08, 0.11, 1.25, 5),
     snowCap: new THREE.BoxGeometry(8.8, 0.18, 0.92),
   };
   return env.buildAssets;
@@ -731,11 +738,18 @@ function castBuildable(g) {
   });
 }
 
+function normalizeBuildKind(kind) {
+  if (kind === 'barricade') return 'sandbag';
+  if (kind === 'spikes') return 'wire';
+  return kind;
+}
+
 function canPlaceBuildable(env, kind, x, z) {
+  kind = normalizeBuildKind(kind);
   if (!env) return false;
   if (Math.abs(x) > FIELD_HALF_X - 8) return false;
   if (z < NORTH_Z + 18 || z > WALL_Z - 8) return false;
-  const clearance = kind === 'barricade' ? 10 : 7;
+  const clearance = kind === 'trench' ? 11 : kind === 'sandbag' ? 8 : 6;
   for (const b of env.buildables) {
     if (b.alive && Math.hypot(b.x - x, b.z - z) < clearance) return false;
   }
@@ -743,6 +757,7 @@ function canPlaceBuildable(env, kind, x, z) {
 }
 
 function placeBuildable(kind, x, z) {
+  kind = normalizeBuildKind(kind);
   const env = activeEnv;
   if (!canPlaceBuildable(env, kind, x, z)) return null;
   const a = buildAssets(env);
@@ -755,34 +770,56 @@ function placeBuildable(kind, x, z) {
     group: g,
     x, z,
     alive: true,
-    hp: kind === 'barricade' ? 150 : 78,
-    maxHp: kind === 'barricade' ? 150 : 78,
-    radius: kind === 'barricade' ? 7.4 : 6.0,
+    hp: kind === 'trench' ? 230 : kind === 'sandbag' ? 118 : 72,
+    maxHp: kind === 'trench' ? 230 : kind === 'sandbag' ? 118 : 72,
+    radius: kind === 'trench' ? 8.0 : kind === 'sandbag' ? 6.8 : 6.2,
   };
 
-  if (kind === 'barricade') {
-    for (let i = 0; i < 4; i++) {
-      const log = new THREE.Mesh(a.log, a.wood);
-      log.position.set(0, 0.48 + i * 0.58, (i % 2 ? -0.32 : 0.32));
-      log.rotation.z = (i % 2 ? 0.05 : -0.05);
-      g.add(log);
+  if (kind === 'trench') {
+    const cut = new THREE.Mesh(a.trench, a.earth);
+    cut.rotation.x = -Math.PI / 2;
+    cut.position.y = 0.025;
+    g.add(cut);
+    for (const zoff of [-2.55, 2.55]) {
+      const berm = new THREE.Mesh(a.berm, zoff < 0 ? a.snow : a.earth);
+      berm.position.set(0, 0.28, zoff);
+      berm.rotation.z = (rnd() - 0.5) * 0.04;
+      g.add(berm);
     }
-    for (const sx of [-3.9, 3.9]) {
-      const brace = new THREE.Mesh(a.brace, a.wood);
-      brace.position.set(sx, 1.2, 0);
-      brace.rotation.z = sx < 0 ? -0.45 : 0.45;
-      g.add(brace);
+    for (let i = 0; i < 11; i++) {
+      const bag = new THREE.Mesh(a.bag, a.sand);
+      bag.position.set((i - 5) * 1.05, 0.65 + (i % 2) * 0.14, -3.04);
+      bag.rotation.y = (rnd() - 0.5) * 0.25;
+      g.add(bag);
     }
-    const cap = new THREE.Mesh(a.snowCap, a.snow);
-    cap.position.y = 2.82;
-    g.add(cap);
-  } else {
+  } else if (kind === 'wire') {
+    for (let r = 0; r < 3; r++) {
+      const wire = new THREE.Mesh(a.wire, a.iron);
+      wire.position.set(0, 0.75 + r * 0.32, (r - 1) * 0.7);
+      wire.rotation.set((rnd() - 0.5) * 0.08, 0, (rnd() - 0.5) * 0.12);
+      g.add(wire);
+    }
+    for (const sx of [-4.4, 0, 4.4]) {
+      const post = new THREE.Mesh(a.post, a.wood);
+      post.position.set(sx, 0.58, -0.1);
+      post.rotation.z = (rnd() - 0.5) * 0.18;
+      g.add(post);
+    }
     for (let i = 0; i < 9; i++) {
       const spike = new THREE.Mesh(a.spike, i % 3 === 0 ? a.iron : a.wood);
       const ox = (i - 4) * 1.0;
-      spike.position.set(ox, 1.25, (rnd() - 0.5) * 1.3);
+      spike.position.set(ox, 0.82, (rnd() - 0.5) * 1.3);
       spike.rotation.set(0.58 + rnd() * 0.25, rnd() * Math.PI, (rnd() - 0.5) * 0.24);
       g.add(spike);
+    }
+  } else {
+    for (let row = 0; row < 3; row++) {
+      for (let i = 0; i < 8; i++) {
+        const bag = new THREE.Mesh(a.bag, a.sand);
+        bag.position.set((i - 3.5) * 1.02, 0.26 + row * 0.38, (row % 2) * 0.32);
+        bag.rotation.y = (rnd() - 0.5) * 0.32;
+        g.add(bag);
+      }
     }
   }
 
@@ -796,8 +833,8 @@ function destroyBuildable(env, item) {
   if (!item.alive) return;
   item.alive = false;
   item.group.visible = false;
-  spawnDebris(env, item.x, item.z, item.kind === 'barricade' ? 5.5 : 3.5, item.kind === 'barricade' ? 12 : 7, false);
-  placeGroundScar(env, item.x, item.z, item.kind === 'barricade' ? 4.2 : 3.0);
+  spawnDebris(env, item.x, item.z, item.kind === 'trench' ? 5.5 : 3.5, item.kind === 'trench' ? 12 : 7, false);
+  placeGroundScar(env, item.x, item.z, item.kind === 'trench' ? 4.2 : 3.0);
 }
 
 function buildPressure(x, z, dt) {
@@ -810,17 +847,38 @@ function buildPressure(x, z, dt) {
     const d = Math.hypot(item.x - x, item.z - z);
     if (d > item.radius) continue;
     const k = 1 - d / item.radius;
-    if (item.kind === 'spikes') {
-      speedMul = Math.min(speedMul, 0.44 + (1 - k) * 0.22);
-      damage += dt * (1.3 + k * 3.6);
-      item.hp -= dt * (1.0 + k * 2.4);
+    if (item.kind === 'wire') {
+      speedMul = Math.min(speedMul, 0.38 + (1 - k) * 0.22);
+      damage += dt * (1.6 + k * 4.4);
+      item.hp -= dt * (1.2 + k * 2.8);
+    } else if (item.kind === 'trench') {
+      speedMul = Math.min(speedMul, 0.22 + (1 - k) * 0.32);
+      damage += dt * (0.25 + k * 0.9);
+      item.hp -= dt * (0.7 + k * 2.4);
     } else {
-      speedMul = Math.min(speedMul, 0.12 + (1 - k) * 0.34);
-      item.hp -= dt * (7.0 + k * 18.0);
+      speedMul = Math.min(speedMul, 0.16 + (1 - k) * 0.36);
+      item.hp -= dt * (4.8 + k * 13.0);
     }
     if (item.hp <= 0) destroyBuildable(env, item);
   }
   return speedMul < 1 || damage > 0 ? { speedMul, damage } : null;
+}
+
+function coverAt(x, z) {
+  const env = activeEnv;
+  if (!env) return null;
+  let best = null;
+  for (const item of env.buildables) {
+    if (!item.alive || (item.kind !== 'trench' && item.kind !== 'sandbag')) continue;
+    const d = Math.hypot(item.x - x, item.z - z);
+    if (d > item.radius) continue;
+    const k = 1 - d / item.radius;
+    const c = item.kind === 'trench'
+      ? { kind: item.kind, k, reloadMul: 0.74, rangeMul: 1.12, meleeMul: 0.55 }
+      : { kind: item.kind, k, reloadMul: 0.86, rangeMul: 1.05, meleeMul: 0.72 };
+    if (!best || c.k > best.k) best = c;
+  }
+  return best;
 }
 
 function repairGate(amount = 90) {
@@ -1175,6 +1233,7 @@ export function buildField(scene) {
     placeBuildable,
     canPlaceBuildable: (kind, x, z) => canPlaceBuildable(env, kind, x, z),
     buildPressure,
+    coverAt,
     repairGate,
     gateHealth,
     works: () => env.buildables.filter(b => b.alive).length,
