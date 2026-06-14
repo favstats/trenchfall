@@ -6,28 +6,48 @@ import * as THREE from './three.js';
 export function makeCameraRig(camera, dom, bounds) {
   const focus = new THREE.Vector3(0, 6, -24); // looking out over the field
   let dist = 158, yaw = 0;
-  const pitch = 0.58; // radians from horizontal (~33°), cinematic but still tactical
+  let pitch = 0.58; // radians from horizontal — adjustable (tilt the perspective)
+  const PITCH_MIN = 0.14, PITCH_MAX = 1.32;
+  // perspective presets cycled with [P]: tactical → top-down → cinematic ground
+  const PRESETS = [
+    { pitch: 0.58, dist: 158 }, // tactical
+    { pitch: 1.22, dist: 150 }, // top-down command
+    { pitch: 0.26, dist: 116 }, // cinematic, near the line
+  ];
+  let preset = 0;
   const keys = new Set();
   let edge = { x: 0, z: 0 };
-  let dragRotate = false, lastX = 0;
+  let dragRotate = false, lastX = 0, lastY = 0;
   let enabled = true;
 
   const onKey = (e, down) => {
     const k = e.key.toLowerCase();
     if ('wasdqe'.includes(k)) { down ? keys.add(k) : keys.delete(k); }
+    if (down && k === 'p') cyclePerspective();
+    if (down && k === 't') pitch = THREE.MathUtils.clamp(pitch + 0.12, PITCH_MIN, PITCH_MAX);
+    if (down && k === 'g') pitch = THREE.MathUtils.clamp(pitch - 0.12, PITCH_MIN, PITCH_MAX);
   };
   dom.ownerDocument.addEventListener('keydown', e => onKey(e, true));
   dom.ownerDocument.addEventListener('keyup', e => onKey(e, false));
+
+  function cyclePerspective() {
+    preset = (preset + 1) % PRESETS.length;
+    pitch = PRESETS[preset].pitch;
+    dist = PRESETS[preset].dist;
+  }
 
   dom.addEventListener('wheel', e => {
     dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * 8, 52, 235);
     e.preventDefault();
   }, { passive: false });
 
-  dom.addEventListener('mousedown', e => { if (e.button === 1) { dragRotate = true; lastX = e.clientX; e.preventDefault(); } });
+  dom.addEventListener('mousedown', e => { if (e.button === 1) { dragRotate = true; lastX = e.clientX; lastY = e.clientY; e.preventDefault(); } });
   dom.ownerDocument.addEventListener('mouseup', e => { if (e.button === 1) dragRotate = false; });
   dom.addEventListener('mousemove', e => {
-    if (dragRotate) { yaw -= (e.clientX - lastX) * 0.005; lastX = e.clientX; }
+    if (dragRotate) {
+      yaw -= (e.clientX - lastX) * 0.005; lastX = e.clientX;
+      pitch = THREE.MathUtils.clamp(pitch + (e.clientY - lastY) * 0.004, PITCH_MIN, PITCH_MAX); lastY = e.clientY;
+    }
     // edge scroll
     const w = dom.clientWidth, h = dom.clientHeight, M = 24;
     edge.x = e.clientX < M ? -1 : e.clientX > w - M ? 1 : 0;
@@ -63,7 +83,10 @@ export function makeCameraRig(camera, dom, bounds) {
   return {
     update, focus,
     get yaw() { return yaw; },
+    get pitch() { return pitch; },
     setEnabled(v) { enabled = v; },
+    cyclePerspective,
+    setPitch(p) { pitch = THREE.MathUtils.clamp(p, PITCH_MIN, PITCH_MAX); },
     frame(x, z, d) { focus.set(x, 4, z); if (d) dist = d; },
   };
 }

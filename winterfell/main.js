@@ -6,6 +6,8 @@ import { makeCameraRig, makePicker } from './engine/input.js';
 import { GameState } from './game/state.js';
 import { Force } from './units/squads.js';
 import { Horde } from './horde/horde.js';
+import { WALL_Z, NORTH_Z } from './world/field.js';
+import { Combat } from './combat/combat.js';
 import { createHUD } from './ui/hud.js';
 
 const canvas = document.getElementById('gl');
@@ -25,7 +27,9 @@ const rig = makeCameraRig(camera, canvas, field.bounds);
 const picker = makePicker(camera, canvas);
 const force = new Force(scene, state);
 const horde = new Horde(scene, state, field);
-horde.spawnWave(Math.floor(horde.cap * 0.5)); // first ranks already on the field
+// first ranks already across the field (front already in range), tide builds from behind
+horde.spawnWave(Math.floor(horde.cap * 0.6), NORTH_Z + 20, WALL_Z - 22);
+const combat = new Combat(scene, force, horde, state);
 let spawnAcc = 0;
 const hud = createHUD(hudRoot, state, {
   onMortar: () => console.log('[WF] mortar (M5)'),
@@ -98,6 +102,7 @@ async function frame(now) {
     spawnAcc += dt;
     if (spawnAcc > 0.35 && horde.count < horde.cap) { horde.spawnWave(30); spawnAcc = 0; }
     horde.update(dt);
+    combat.update(dt);
   }
   if (field.update) field.update(dt, camera);
   rig.update(dt);
@@ -124,6 +129,7 @@ window.WF.test = {
   spawn: (n = 200) => horde.spawnWave(n),
 };
 
+if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
 if (params.get('demo') === 'climb') {

@@ -18,7 +18,7 @@ export function createHUD(root, state, hooks = {}) {
       <button class="callin" id="ciMortar" data-k="V">MORTAR<small>×1</small></button>
       <button class="callin" id="ciReserve" data-k="C">RESERVE<small>×1</small></button>
     </div>
-    <div id="hint">LMB select · drag to box-select · RMB move · A attack-move · H hold · F possess</div>
+    <div id="hint">LMB select · drag box-select · RMB move (Shift=attack) · H hold · Z hold-fire · MMB-drag / T·G tilt · P perspective</div>
     <div id="dragbox"></div>
     <div id="endscreen"><div class="end-card">
       <h1 id="endTitle">HELD</h1>

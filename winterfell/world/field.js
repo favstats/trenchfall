@@ -170,10 +170,13 @@ function makeKillTexture() {
       const i = (y * 512 + x) * 4;
       const n = fbm(x * 0.022, y * 0.035);
       const mud = clamp(1 - v * 1.45 + n * 0.7, 0, 1);
+      const ux = x / 511, uy = y / 511;
+      const edgeX = smooth(clamp(ux * 8, 0, 1)) * smooth(clamp((1 - ux) * 8, 0, 1));
+      const edgeY = smooth(clamp(uy * 5, 0, 1)) * smooth(clamp((1 - uy) * 5, 0, 1));
       d[i] = lerp(176, 78, mud);
       d[i + 1] = lerp(190, 86, mud);
       d[i + 2] = lerp(207, 96, mud);
-      d[i + 3] = clamp(mud * 230, 0, 220);
+      d[i + 3] = clamp(mud * 230 * edgeX * edgeY, 0, 220);
     }
   }
   g.putImageData(img, 0, 0);
@@ -342,12 +345,10 @@ function addWall(group, torches, placementTargets) {
   });
   const iron = new THREE.MeshStandardMaterial({ color: 0x111519, roughness: 0.55, metalness: 0.65 });
   const rampMat = new THREE.MeshStandardMaterial({
-    map: makeSnowTexture(),
     color: 0xc8d3df,
     roughness: 1,
     metalness: 0,
   });
-  rampMat.map.repeat.set(9, 2);
 
   const wall = new THREE.Group();
   const spanLen = FIELD_HALF_X - GATE_W / 2;
@@ -459,6 +460,21 @@ function addWall(group, torches, placementTargets) {
   const keepTop = new THREE.Mesh(new THREE.BoxGeometry(25, 2.4, 13), darkStone);
   keepTop.position.set(0, 25.7, keepZ);
   keep.add(keepTop);
+  const keepMerlonGeo = new THREE.BoxGeometry(1.25, 1.8, 1.25);
+  for (const z of [keepZ - 5.8, keepZ + 5.8]) {
+    for (let x = -10; x <= 10; x += 4) {
+      const km = new THREE.Mesh(keepMerlonGeo, keepMat);
+      km.position.set(x, 27.8, z);
+      keep.add(km);
+    }
+  }
+  for (const x of [-12.7, 12.7]) {
+    for (let z = keepZ - 4; z <= keepZ + 4; z += 4) {
+      const km = new THREE.Mesh(keepMerlonGeo, keepMat);
+      km.position.set(x, 27.8, z);
+      keep.add(km);
+    }
+  }
   for (const [x, z, h, r] of [[-23, WALL_Z + 0.5, 31, 4.4], [23, WALL_Z + 0.5, 31, 4.4], [-11, WALL_Z + 9, 23, 3.2], [11, WALL_Z + 9, 23, 3.2]]) {
     const kt = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.5, h, 10), keepMat);
     kt.position.set(x, h / 2, z);
@@ -491,13 +507,13 @@ function addTorches(wall, torches) {
     [0.45, 'rgba(255,76,26,.46)'],
     [1.00, 'rgba(0,0,0,0)'],
   ]);
-  const flameGeo = new THREE.PlaneGeometry(3.7, 5.2);
+  const flameGeo = new THREE.PlaneGeometry(4.6, 6.8);
   const bowlGeo = new THREE.CylinderGeometry(0.7, 0.48, 0.55, 8);
   const bowlMat = new THREE.MeshStandardMaterial({ color: 0x151311, roughness: 0.5, metalness: 0.75 });
   const xs = [-132, -96, -60, -24, 24, 60, 96, 132];
   for (const x of xs) {
     const torch = new THREE.Group();
-    torch.position.set(x, WALL_H + 2.7, WALL_Z + 2.55);
+    torch.position.set(x, WALL_H + 3.55, WALL_Z + 3.25);
     const bowl = new THREE.Mesh(bowlGeo, bowlMat);
     bowl.position.y = -0.55;
     torch.add(bowl);
@@ -512,7 +528,7 @@ function addTorches(wall, torches) {
     const flame = new THREE.Mesh(flameGeo, mat);
     flame.position.y = 1.2;
     torch.add(flame);
-    const light = new THREE.PointLight(0xff9d46, 8.5, 42, 1.9);
+    const light = new THREE.PointLight(0xff9d46, 10.5, 52, 1.85);
     light.position.set(0, 1.6, 1.2);
     torch.add(light);
     torch.userData.phase = rnd() * Math.PI * 2;
@@ -653,14 +669,18 @@ function addSnow(group) {
   const COUNT = 1550;
   const geo = new THREE.BufferGeometry();
   const p = new Float32Array(COUNT * 3);
+  const uv = new Float32Array(COUNT * 2);
   const v = new Float32Array(COUNT);
   for (let i = 0; i < COUNT; i++) {
     p[i * 3] = (rnd() * 2 - 1) * (FIELD_HALF_X + 80);
     p[i * 3 + 1] = 5 + rnd() * 128;
     p[i * 3 + 2] = NORTH_Z - 40 + rnd() * 300;
+    uv[i * 2] = 0.5;
+    uv[i * 2 + 1] = 0.5;
     v[i] = 2.4 + rnd() * 5.2;
   }
   geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   const flake = makeRadialTexture(64, [
     [0.00, 'rgba(255,255,255,.95)'],
     [0.26, 'rgba(225,240,255,.68)'],
