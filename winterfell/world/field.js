@@ -862,6 +862,26 @@ function castBuildable(g) {
   });
 }
 
+function markBuildDamage(item) {
+  if (!item?.group || !item.maxHp) return;
+  const hp = clamp(item.hp / item.maxHp, 0, 1);
+  const wounded = hp < 0.66;
+  const critical = hp < 0.32;
+  if (item._damageTier === (critical ? 2 : wounded ? 1 : 0)) return;
+  item._damageTier = critical ? 2 : wounded ? 1 : 0;
+  item.group.traverse?.(m => {
+    if (!m.isMesh || !m.material || m.material.isMeshBasicMaterial) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) {
+      if (!mat.color) continue;
+      if (!mat.userData._baseColor) mat.userData._baseColor = mat.color.clone();
+      mat.color.copy(mat.userData._baseColor);
+      if (critical) mat.color.lerp(new THREE.Color(0x241711), 0.58);
+      else if (wounded) mat.color.lerp(new THREE.Color(0x584137), 0.28);
+    }
+  });
+}
+
 function normalizeBuildKind(kind) {
   if (kind === 'barricade') return 'sandbag';
   if (kind === 'spikes') return 'wire';
@@ -1044,6 +1064,7 @@ function placeBuildable(kind, x, z, opts = {}) {
     lamp.position.set(0, 5.72, -2.25);
     lamp.rotation.x = Math.PI / 2;
     g.add(lamp);
+    item.muzzle = new THREE.Vector3(0, 5.78, -2.45);
   } else if (kind === 'bunker') {
     const core = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.28, 4.0), a.earth);
     core.position.y = 0.72;
@@ -1064,6 +1085,7 @@ function placeBuildable(kind, x, z, opts = {}) {
     const slit = new THREE.Mesh(new THREE.BoxGeometry(4.15, 0.26, 0.08), a.iron);
     slit.position.set(0, 1.26, -2.45);
     g.add(slit);
+    item.muzzle = new THREE.Vector3(0, 1.35, -2.85);
     addSandbags(g, a, 7, 2, -2.72);
     for (const [cx, cz] of [[-2.7, 1.9], [2.65, 1.75]]) {
       const crate = new THREE.Mesh(a.crate, a.wood);
@@ -1216,6 +1238,21 @@ function destroyBuildable(env, item) {
   placeGroundScar(env, item.x, item.z, item.kind === 'trench' ? 4.2 : 3.0);
 }
 
+function repairNearest(x, z, radius = 14, amount = 6) {
+  const env = activeEnv;
+  if (!env) return null;
+  let best = null, bd = radius * radius;
+  for (const item of env.buildables) {
+    if (!item.alive || item.hp >= item.maxHp) continue;
+    const d = (item.x - x) ** 2 + (item.z - z) ** 2;
+    if (d < bd) { bd = d; best = item; }
+  }
+  if (!best) return null;
+  best.hp = Math.min(best.maxHp, best.hp + amount);
+  markBuildDamage(best);
+  return best;
+}
+
 function buildPressure(x, z, dt) {
   const env = activeEnv;
   if (!env) return null;
@@ -1249,6 +1286,7 @@ function buildPressure(x, z, dt) {
       speedMul = Math.min(speedMul, item.kind === 'tower' ? 0.36 + (1 - k) * 0.35 : 0.16 + (1 - k) * 0.36);
       item.hp -= dt * (item.kind === 'ammo' ? 7.0 + k * 16.0 : 4.8 + k * 13.0);
     }
+    markBuildDamage(item);
     if (item.hp <= 0) destroyBuildable(env, item);
   }
   return speedMul < 1 || damage > 0 ? { speedMul, damage } : null;
@@ -1734,7 +1772,11 @@ export function buildField(scene) {
       const e = 1 - Math.pow(1 - k, 3);
       it.group.scale.y = 0.04 + 0.96 * e;
       it.group.scale.x = it.group.scale.z = 0.9 + 0.1 * e;
-      if (k >= 1) { it.group.scale.set(1, 1, 1); env.constructing.splice(i, 1); }
+      if (k >= 1) {
+        it.group.scale.set(1, 1, 1);
+        it.build = null;
+        env.constructing.splice(i, 1);
+      }
     }
     // animated building parts — sweeping radar dishes, fluttering banners
     for (const sp of env.spinners) {
@@ -1828,7 +1870,9 @@ export function buildField(scene) {
     buildPressure,
     coverAt,
     targetVulnerabilityAt,
+    repairNearest,
     emplacements: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'nest' || b.kind === 'tower' || b.kind === 'bunker')) : []),
+    allBuildables: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive) : []),
     baseBuildings: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'barracks' || b.kind === 'depot' || b.kind === 'lab')) : []),
     buildingGroups: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && b.group).map(b => b.group) : []),
     repairGate,

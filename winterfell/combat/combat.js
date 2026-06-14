@@ -144,6 +144,7 @@ export class Combat {
     // ---- soldiers fire ----
     for (const m of force.soldiers) {
       if (!m.alive || m.possessed) continue;  // possessed soldier is player-driven
+      if (m.squad.type === 'engineer') continue;
       m.reload -= dt;
       if (m.reload > 0) continue;
       m.reloading = false;
@@ -228,8 +229,12 @@ export class Combat {
       }
       e._reloading = false;
       e._cd = isTower ? 0.42 : 0.07;            // the nest is a sustained brrrt
-      const muzY = horde.field.heightAt(e.x, e.z) + (isTower ? 6.2 : 1.5);
-      this._from.set(e.x, muzY, e.z);
+      if (e.muzzle && e.group) {
+        this._from.copy(e.muzzle);
+        e.group.localToWorld(this._from);
+      } else {
+        this._from.set(e.x, horde.field.heightAt(e.x, e.z) + (isTower ? 6.2 : 1.5), e.z);
+      }
       this._to.set(a.x + (Math.random() - 0.5) * 1.6, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
       fx.shot(this._from, this._to);
       const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);

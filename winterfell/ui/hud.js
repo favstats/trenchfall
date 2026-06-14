@@ -62,7 +62,7 @@ export function createHUD(root, state, hooks = {}) {
   const ICON = {
     barracks: '⌂', depot: '▤', lab: '⌬', trench: '▭', wire: '╳', sandbag: '◷', nest: '⊙',
     tower: '♜', bunker: '⬢', pit: '✸', floodlight: '☀', ammo: '◰', brazier: '♨',
-    mortar: '☄', reserve: '⚑', rifles: '†', mg: '⁂',
+    mortar: '☄', reserve: '⚑', rifles: '†', mg: '⁂', engineer: '⚒',
   };
   const CATALOG = {
     base: [['BARRACKS', 'barracks'], ['DEPOT', 'depot'], ['LAB', 'lab']],
@@ -74,7 +74,7 @@ export function createHUD(root, state, hooks = {}) {
     trench: 'Drag to dig. Cover + slows the dead.', wire: 'Drag to lay. Badly slows & bleeds.', sandbag: 'Drag to lay. Light cover.',
     nest: 'Crewed MG, sustained bursts.', tower: 'Long-range precision fire.', bunker: 'Heavy cover + crewed MG.',
     pit: 'Heavy damage to the dead.', floodlight: 'Lit enemies take more damage.', ammo: 'Boosts nearby fire.', brazier: 'Fire that burns the dead.',
-    mortar: 'Barrage the densest mass.', reserve: 'Muster a fresh squad.',
+    mortar: 'Barrage the densest mass.', reserve: 'Muster a fresh squad.', engineer: 'Repairs nearby damaged works and base buildings.',
   };
   let tab = 'base';
 
@@ -101,23 +101,28 @@ export function createHUD(root, state, hooks = {}) {
   function renderCommand() {
     const sb = state.selBuilding;
     if (sb) {
+      const hpPct = Math.round(((sb.hp ?? 1) / Math.max(1, sb.maxHp ?? 1)) * 100);
+      const status = sb.build ? `BUILD ${Math.round(sb.build.pct * 100)}%` : `HP ${hpPct}%`;
       el.cmdTabs.style.display = 'none';
       el.cmdTitle.textContent = sb.kind.toUpperCase();
       if (sb.kind === 'barracks') {
-        el.cmdSub.textContent = sb.prod ? `TRAINING ${sb.prod.key.toUpperCase()}` : (sb.queue ? `${sb.queue} QUEUED` : 'RMB = rally' + (sb.hasRally ? ' ✓' : ''));
+        el.cmdSub.textContent = sb.build
+          ? status
+          : `${sb.prod ? `TRAINING ${sb.prod.key.toUpperCase()}` : (sb.queue ? `${sb.queue} QUEUED` : 'RMB = rally' + (sb.hasRally ? ' ✓' : ''))} · ${status}`;
         el.cmdGrid.innerHTML =
           btn('prod:rifles', 'RIFLES', ICON.rifles, 40, { spent: !can(40), tip: 'Train a rifle squad' }) +
           btn('prod:mg', 'MG TEAM', ICON.mg, 60, { spent: !can(60), tip: 'Train a machine-gun team' }) +
+          btn('prod:engineer', 'ENGINEERS', ICON.engineer, 55, { spent: !can(55), tip: TIP.engineer }) +
           (sb.prod ? `<div class="cmd-prog"><i style="width:${Math.round(sb.prod.pct * 100)}%"></i></div>` : '');
       } else if (sb.kind === 'lab') {
-        el.cmdSub.textContent = `${Math.floor(state.research ?? 0)} RP`;
+        el.cmdSub.textContent = `${Math.floor(state.research ?? 0)} RP · ${status}`;
         el.cmdGrid.innerHTML = (state.techs || []).map((t, i) => {
           const c = state.techCost ? state.techCost(t) : t.base;
           return btn('rsc:' + i, t.key, '✦', c, { spent: (state.research ?? 0) < c, tip: `Research ${t.key} (L${t.lvl})` })
             .replace('cmd-cost">' + c, `cmd-cost">L${t.lvl} · ${c}`);
         }).join('');
       } else {
-        el.cmdSub.textContent = '';
+        el.cmdSub.textContent = status;
         el.cmdGrid.innerHTML = `<div class="cmd-info">${TIP[sb.kind] || ''}</div>`;
       }
     } else {

@@ -108,6 +108,7 @@ export class Horde {
     this.HW = Math.ceil((FIELD_HALF_X * 2) / this.HCELL) + 2;
     this.HD = Math.ceil((this._zMax - this._zMin) / this.HCELL) + 2;
     this.heap = new Float32Array(this.HW * this.HD);
+    this.cm = new Float32Array(this.HW * this.HD); // corpse-mound height (the Leichenberg)
     this._bury = [];
 
     // ----- far impostor crowd (the bulk of the tide) -----
@@ -146,6 +147,14 @@ export class Horde {
   }
   heapAt(x, z) { return this.heap[this._heapIdx(x, z)]; }
   _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 2); }
+  cmoundAt(x, z) { return this.cm[this._heapIdx(x, z)]; }
+  _addCMound(x, z, amt) {
+    const C = this.HCELL;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const w = 1 - Math.hypot(dx, dz) * 0.42;
+      if (w > 0) { const i = this._heapIdx(x + dx * C, z + dz * C); this.cm[i] = Math.min(this.cm[i] + amt * w, 11); }
+    }
+  }
   // raise a rounded mound so the slain pile into real heaps (UEBS-style)
   _mound(x, z, amt) {
     const r = 2, C = this.HCELL;
@@ -184,18 +193,21 @@ export class Horde {
     this.mesh.count = this.agents.length;
   }
 
-  _addCorpse(x, z, y) {
+  _addCorpse(x, z) {
+    const y = heightAt(x, z) + this.cmoundAt(x, z); // bodies sit on the growing mound
     const i = this._corpseHead;
     this._corpseHead = (this._corpseHead + 1) % this._corpseCap;
     this._corpseN = Math.min(this._corpseN + 1, this._corpseCap);
     const o = this._o;
-    o.position.set(x, y + 0.12, z);
-    o.rotation.set(-Math.PI / 2 + (Math.random() - 0.5) * 0.5, Math.random() * 6.28, (Math.random() - 0.5) * 0.6);
-    o.scale.setScalar(1);
+    o.position.set(x + (Math.random() - 0.5) * 1.6, y + 0.4, z + (Math.random() - 0.5) * 1.6);
+    // jumbled, tangled bodies — lie at all angles, not flat tiles
+    o.rotation.set(-Math.PI / 2 + (Math.random() - 0.5) * 1.6, Math.random() * 6.28, (Math.random() - 0.5) * 1.6);
+    o.scale.setScalar(0.9 + Math.random() * 0.28);
     o.updateMatrix();
     this.corpses.setMatrixAt(i, o.matrix);
     this.corpses.count = this._corpseN;
     this.corpses.instanceMatrix.needsUpdate = true;
+    this._addCMound(x, z, 0.42); // each body grows the hill where the slaughter concentrates
   }
 
   // begin a stumbling death — the body falls (animated), heap grows, then it
@@ -349,7 +361,7 @@ export class Horde {
 
       // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
       const level = Math.min(a.cellLevel, 11);   // gentler pile, not a spiky tower
-      const base = heightAt(a.x, a.z) + this.heapAt(a.x, a.z);
+      const base = heightAt(a.x, a.z) + Math.max(this.heapAt(a.x, a.z), this.cmoundAt(a.x, a.z)); // climb the corpse hill
       const y = base + level * 0.5 + bob * 0.5;
       a.y = y;
       a.faceY = Math.atan2(-mvx, -mvz) + sway;
@@ -371,7 +383,7 @@ export class Horde {
       for (const a of this._bury) {
         const idx = A.indexOf(a);
         if (idx >= 0) {
-          this._addCorpse(a.x, a.z, heightAt(a.x, a.z) + this.heapAt(a.x, a.z));
+          this._addCorpse(a.x, a.z);
           this.removeAt(idx);
         }
       }

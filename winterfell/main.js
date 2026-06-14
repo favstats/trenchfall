@@ -83,6 +83,50 @@ ghost.visible = false;
 scene.add(ghost);
 let lastMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
+// ---------------- selected-building feedback ----------------
+const selFx = new THREE.Group();
+const selRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.92, 1, 48),
+  new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, fog: false }),
+);
+selRing.rotation.x = -Math.PI / 2;
+const hpBillboard = new THREE.Group();
+const hpBack = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.4, 0.28),
+  new THREE.MeshBasicMaterial({ color: 0x060a0f, transparent: true, opacity: 0.82, depthWrite: false, fog: false }),
+);
+const hpFill = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.2, 0.18),
+  new THREE.MeshBasicMaterial({ color: 0x9fe0a8, transparent: true, opacity: 0.96, depthWrite: false, fog: false }),
+);
+hpFill.position.z = 0.01;
+hpBillboard.add(hpBack, hpFill);
+selFx.add(selRing, hpBillboard);
+scene.add(selFx);
+selFx.visible = false;
+
+const rallyFx = new THREE.Group();
+const rallyPole = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.055, 0.07, 3.4, 6),
+  new THREE.MeshBasicMaterial({ color: 0xe6eef8, fog: false }),
+);
+rallyPole.position.y = 1.7;
+const rallyFlag = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.8, 1.0),
+  new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.86, side: THREE.DoubleSide, depthWrite: false, fog: false }),
+);
+rallyFlag.position.set(0.86, 2.75, 0);
+rallyFx.add(rallyPole, rallyFlag);
+const rallyLineGeo = new THREE.BufferGeometry();
+rallyLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+const rallyLine = new THREE.Line(
+  rallyLineGeo,
+  new THREE.LineBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.72, depthWrite: false, depthTest: false, fog: false }),
+);
+scene.add(rallyFx, rallyLine);
+rallyFx.visible = rallyLine.visible = false;
+rallyLine.frustumCulled = false;
+
 function updateGhost() {
   if (!state.buildMode || possession.active) { ghost.visible = false; return; }
   const p = picker.ground(lastMouse.x, lastMouse.y);
@@ -98,6 +142,40 @@ function updateGhost() {
   ghostBox.scale.set(dims[0], dims[1], dims[2]); ghostBox.position.y = dims[1] / 2;
   ghost.position.set(p.x, field.heightAt(p.x, p.z), p.z);
   ghost.visible = true;
+}
+
+function updateSelectionFeedback() {
+  if (!selBuilding || !selBuilding.alive) {
+    selFx.visible = false;
+    rallyFx.visible = rallyLine.visible = false;
+    return;
+  }
+
+  const ground = field.heightAt(selBuilding.x, selBuilding.z);
+  const r = Math.max(2.8, (selBuilding.radius ?? 7) * 0.62);
+  selRing.scale.set(r, r, 1);
+  selRing.position.set(selBuilding.x, ground + 0.16, selBuilding.z);
+  hpBillboard.position.set(selBuilding.x, ground + Math.max(3.2, r * 0.42 + 2.2), selBuilding.z);
+  hpBillboard.quaternion.copy(camera.quaternion);
+  const hp = Math.max(0, Math.min(1, (selBuilding.hp ?? 1) / (selBuilding.maxHp ?? 1)));
+  hpFill.scale.x = hp;
+  hpFill.position.x = -(1 - hp) * 1.6;
+  hpFill.material.color.setHex(hp > 0.55 ? 0x9fe0a8 : hp > 0.25 ? 0xffd27a : 0xff725f);
+  selFx.visible = true;
+
+  if (selBuilding.rally) {
+    const ry = field.heightAt(selBuilding.rally.x, selBuilding.rally.z);
+    rallyFx.position.set(selBuilding.rally.x, ry + 0.12, selBuilding.rally.z);
+    rallyFlag.rotation.y = Math.sin(state.time * 3.2) * 0.18;
+    const pos = rallyLine.geometry.attributes.position;
+    pos.setXYZ(0, selBuilding.x, ground + 1.1, selBuilding.z);
+    pos.setXYZ(1, selBuilding.rally.x, ry + 1.1, selBuilding.rally.z);
+    pos.needsUpdate = true;
+    rallyLine.geometry.computeBoundingSphere();
+    rallyFx.visible = rallyLine.visible = true;
+  } else {
+    rallyFx.visible = rallyLine.visible = false;
+  }
 }
 
 function addSupply(n) {
@@ -184,6 +262,7 @@ const spend = (n) => { if (state.supply < n) return false; state.supply -= n; re
 const UNIT_PROD = {
   rifles: { cost: 40, dur: 6, type: 'rifle', n: 6, label: 'RIFLES' },
   mg: { cost: 60, dur: 9, type: 'mg', n: 3, label: 'MG TEAM' },
+  engineer: { cost: 55, dur: 7, type: 'engineer', n: 4, label: 'ENGINEERS' },
 };
 function queueUnit(key) {
   if (!selBuilding || selBuilding.kind !== 'barracks' || !UNIT_PROD[key]) return;
@@ -204,6 +283,21 @@ function updateProduction(dt) {
       }
     }
   }
+}
+
+function updateEngineers(dt) {
+  let active = 0;
+  for (const m of force.soldiers) {
+    if (!m.alive || m.squad.type !== 'engineer') continue;
+    m.repairing = false;
+    const fixed = field.repairNearest?.(m.pos.x, m.pos.z, 13, dt * 9.5);
+    if (!fixed) continue;
+    active++;
+    m.faceTo(fixed.x, fixed.z);
+    m.repairing = true;
+    m.state = 'idle';
+  }
+  state.engineersRepairing = active;
 }
 
 // ---------------- research (spend points from kills on permanent upgrades) ----
@@ -431,9 +525,12 @@ async function frame(now) {
     horde.update(dt, camera);
     combat.update(dt);
     updateProduction(dt);
+    updateEngineers(dt);
     // expose selected-building info for the RTS panel
     state.selBuilding = selBuilding && selBuilding.alive ? {
       kind: selBuilding.kind, x: selBuilding.x,
+      hp: selBuilding.hp, maxHp: selBuilding.maxHp,
+      build: selBuilding.build ? { pct: Math.max(0, Math.min(selBuilding.build.t / selBuilding.build.dur, 1)) } : null,
       prod: selBuilding.prod ? { key: selBuilding.prod.key, pct: selBuilding.prod.t / selBuilding.prod.dur } : null,
       queue: (selBuilding.queue || []).length, hasRally: !!selBuilding.rally,
     } : null;
@@ -447,6 +544,7 @@ async function frame(now) {
   rig.update(dt);
   possession.update(dt);
   updateGhost();
+  updateSelectionFeedback();
   state.possession = possession.active ? (possession.avatar?.squad?.label ?? 'DIRECT') : null;
   hud.update(force);
   window.WF.stats = {
@@ -456,6 +554,7 @@ async function frame(now) {
     horde: horde.count, corpses: horde.corpseCount, crest: horde.wallCrest(),
     phase: state.phase,
     selected: force.selected().map(s => s.label),
+    selBuilding: state.selBuilding?.kind || null,
     supply: Math.floor(state.supply), gate: +state.gateHp.toFixed(2), works: state.works,
     possession: state.possession,
   };
@@ -479,6 +578,12 @@ window.WF.test = {
   heightAt: (x = 0, z = WALL_Z - 42) => field.heightAt(x, z),
   blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
   build: (kind = 'trench', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
+  selectBuilding: (kind = 'barracks') => {
+    selBuilding = (field.buildingGroups?.() || []).map(g => g.userData.item).find(b => b?.alive && b.kind === kind) || null;
+    if (selBuilding) force.clearSelection();
+    return !!selBuilding;
+  },
+  setRally: (x = 0, z = WALL_Z - 20) => { if (!selBuilding) return false; selBuilding.rally = { x, z }; return true; },
   repair: () => field.repairGate?.(105),
   supply: (n = 100) => addSupply(n),
   crest: () => { for (let x = -50; x <= 50; x += 2) for (let z = WALL_Z - 6; z <= WALL_Z + 2; z += 2) horde.heap[horde._heapIdx(x, z)] = 13; },
@@ -508,6 +613,10 @@ if (params.get('build')) state.buildMode = params.get('build'); // QA: preview t
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
+if (params.get('demo') === 'hill') {
+  for (let w = 0; w < 5; w++) horde.spawnWave(700, WALL_Z - 26, WALL_Z - 6, 0.05); // pile them into the kill-zone
+  rig.frame(0, WALL_Z - 22, 50); rig.setPitch(0.3);
+}
 if (params.get('demo') === 'rts') {
   state.supply = 999;
   const b = field.placeBuildable('barracks', -10, WALL_Z + 24);

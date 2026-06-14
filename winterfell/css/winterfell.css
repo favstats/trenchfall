@@ -154,7 +154,7 @@ body::after {
 #crosshair::after { left: 1px; top: 11px; width: 22px; height: 2px; }
 #crosshair.show { display: block; }
 
-#hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+#hint { position: fixed; bottom: 148px; left: 50%; transform: translateX(-50%);
   width: min(920px, calc(100vw - 330px)); text-align: center;
   font-size: 11.5px; letter-spacing: .06em; opacity: .5; }
 
@@ -167,13 +167,13 @@ body::after {
   #tally span { font-size: 20px; }
   #tally label { font-size: 8.5px; }
   #economy { left: 12px; top: 12px; width: 176px; }
-  #callins {
-    left: 12px; right: 12px; bottom: 40px;
+  #command {
+    left: 12px; right: 12px; bottom: 8px; transform: none;
     width: auto;
-    grid-template-columns: repeat(4, minmax(62px, 1fr));
   }
-  .callin { min-height: 46px; padding: 6px 6px; font-size: 12px; }
-  #selPanel { bottom: 224px; max-width: calc(100vw - 24px); }
+  #cmdGrid { grid-template-columns: repeat(4, 1fr); }
+  .cmd-btn { min-height: 46px; }
+  #selPanel { bottom: 214px; max-width: calc(100vw - 24px); }
   #hint { display: none; }
 }
 

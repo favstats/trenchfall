@@ -38,20 +38,31 @@ export class Soldier {
     const g = new THREE.Group();
     g.scale.setScalar(SCALE);
     g.position.set(x, 0, z);
+    const uniformMat = squad.type === 'engineer'
+      ? new THREE.MeshStandardMaterial({ color: 0x675a3f, roughness: 0.86 })
+      : mat.uniform;
+    const kitMat = squad.type === 'engineer'
+      ? new THREE.MeshStandardMaterial({ color: 0x463c2c, roughness: 0.82 })
+      : mat.kit;
 
-    const hips = new THREE.Mesh(geo.hips, mat.kit); hips.position.y = 1.05;
-    const torso = new THREE.Mesh(geo.torso, mat.uniform); torso.position.y = 1.85;
+    const hips = new THREE.Mesh(geo.hips, kitMat); hips.position.y = 1.05;
+    const torso = new THREE.Mesh(geo.torso, uniformMat); torso.position.y = 1.85;
     const head = new THREE.Mesh(geo.head, mat.skin); head.position.y = 2.55;
     const helm = new THREE.Mesh(geo.helmet, mat.helmet); helm.position.y = 2.78;
 
-    const legL = new THREE.Mesh(geo.leg, mat.uniform); legL.position.set(-0.25, 1.05, 0);
-    const legR = new THREE.Mesh(geo.leg, mat.uniform); legR.position.set(0.25, 1.05, 0);
-    const armL = new THREE.Mesh(geo.arm, mat.uniform); armL.position.set(-0.62, 2.25, 0.1);
-    const armR = new THREE.Mesh(geo.arm, mat.uniform); armR.position.set(0.62, 2.25, 0.1);
+    const legL = new THREE.Mesh(geo.leg, uniformMat); legL.position.set(-0.25, 1.05, 0);
+    const legR = new THREE.Mesh(geo.leg, uniformMat); legR.position.set(0.25, 1.05, 0);
+    const armL = new THREE.Mesh(geo.arm, uniformMat); armL.position.set(-0.62, 2.25, 0.1);
+    const armR = new THREE.Mesh(geo.arm, uniformMat); armR.position.set(0.62, 2.25, 0.1);
 
     // rifle, held forward (group faces -z = toward the enemy by default)
     const rifle = new THREE.Mesh(geo.rifle, mat.gun);
     rifle.position.set(0.35, 2.0, -0.7);
+    if (squad.type === 'engineer') {
+      rifle.scale.z = 0.55;
+      rifle.position.set(0.42, 1.74, -0.3);
+      rifle.rotation.x = 1.1;
+    }
 
     for (const m of [hips, torso, head, helm, legL, legR, armL, armR, rifle]) {
       m.castShadow = true;
@@ -157,8 +168,15 @@ export class Soldier {
       p.legL.rotation.x *= 0.8; p.legR.rotation.x *= 0.8;
       p.armL.rotation.x *= 0.8; p.armR.rotation.x *= 0.8;
     }
+    if (this.repairing) this.phase += dt * 7;
     // reload pose — drop the muzzle while working the action / changing mags
-    p.rifle.rotation.x = (this.reloading && this.reload > 0.05) ? 0.7 : 0;
+    if (this.repairing) {
+      p.armL.rotation.x = 0.8 + Math.sin(this.phase * 3) * 0.18;
+      p.armR.rotation.x = 0.95 + Math.sin(this.phase * 3 + 0.7) * 0.18;
+      p.rifle.rotation.x = 1.1 + Math.sin(this.phase * 3) * 0.26;
+    } else {
+      p.rifle.rotation.x = (this.reloading && this.reload > 0.05) ? 0.7 : (this.squad.type === 'engineer' ? 1.1 : 0);
+    }
   }
 
   dispose() { this.scene.remove(this.g); }
