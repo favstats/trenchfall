@@ -14,11 +14,11 @@ export function createHUD(root, state, hooks = {}) {
       <div><span id="tRisen">0</span><label>ROSE AGAINST YOU</label></div>
     </div>
     <div id="economy" class="panel">
-      <div class="econ-top"><label>SUPPLY</label><span id="tSupply">0</span></div>
-      <div class="gate-read"><label>LINE</label><div class="gate-track"><i id="gateBar"></i></div></div>
+      <div class="econ-top"><label>SUPPLY</label><span id="tSupply">0</span><span id="tSupplyRate" class="rate">+0/s</span></div>
+      <div class="gate-read"><label>GATE</label><div class="gate-track"><i id="gateBar"></i></div></div>
       <div class="works-read"><label>WORKS</label><span id="tWorks">0</span></div>
     </div>
-    <div id="research" class="panel"><div class="rsc-top"><label>RESEARCH</label><span id="rscPts">0</span></div><div id="rscTechs"></div></div>
+    <div id="research" class="panel"><div class="rsc-top"><label>RESEARCH</label><span id="rscPts">0</span><span id="rscRate" class="rate">+0/s</span></div><div id="rscTechs"></div></div>
     <div id="selPanel" class="panel"><div class="sel-empty">no unit selected</div></div>
     <div id="callins">
       <button class="callin" id="ciMortar" data-k="V">MORTAR<small>×1</small></button>
@@ -39,7 +39,7 @@ export function createHUD(root, state, hooks = {}) {
     </div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
-    <div id="hint">LMB select/build · RMB move · T trench · N wire · B bags · G nest · Y tower · M pit · L light · O ammo · Q bunker · E brazier</div>
+    <div id="hint">ECONOMY: kills &amp; DEPOTS → supply · LABS → research (spend 1-4) · build works (front) &amp; base (courtyard: K barracks · J depot · U lab) · hover a button for its job</div>
     <div id="dragbox"></div>
     <div id="endscreen"><div class="end-card">
       <h1 id="endTitle">HELD</h1>
@@ -55,6 +55,7 @@ export function createHUD(root, state, hooks = {}) {
     kills: $('#tKills'), men: $('#tMen'), risen: $('#tRisen'),
     supply: $('#tSupply'), gateBar: $('#gateBar'), works: $('#tWorks'),
     rscPts: $('#rscPts'), rscTechs: $('#rscTechs'),
+    supplyRate: $('#tSupplyRate'), rscRate: $('#rscRate'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     mortar: $('#ciMortar'), reserve: $('#ciReserve'),
     trench: $('#ciTrench'), wire: $('#ciWire'), sandbag: $('#ciSandbag'),
@@ -82,6 +83,26 @@ export function createHUD(root, state, hooks = {}) {
   el.barracks.onclick = () => hooks.onBuild && hooks.onBuild('barracks');
   el.depot.onclick = () => hooks.onBuild && hooks.onBuild('depot');
   el.lab.onclick = () => hooks.onBuild && hooks.onBuild('lab');
+
+  // tooltips so the economy & each structure's role are self-explanatory
+  const TIPS = {
+    mortar: 'Mortar barrage on the densest mass of dead',
+    reserve: 'Muster a fresh rifle squad',
+    trench: 'TRENCH — drag to dig; cover for your line, slows the dead',
+    wire: 'BARBED WIRE — drag to lay; badly slows & bleeds the dead',
+    sandbag: 'SANDBAGS — drag to lay; light cover',
+    nest: 'MG NEST — crewed, auto-fires sustained bursts',
+    tower: 'WATCHTOWER — long-range precision fire',
+    pit: 'SPIKE PIT — heavy damage to the dead crossing it',
+    floodlight: 'FLOODLIGHT — lit enemies take more damage',
+    ammo: 'AMMO DUMP — boosts nearby fire',
+    bunker: 'BUNKER — heavy cover + crewed MG',
+    brazier: 'BRAZIER — fire that burns the dead',
+    barracks: 'BARRACKS (base) — musters free squads over time',
+    depot: 'DEPOT (base) — increases supply income (+/s)',
+    lab: 'LAB (base) — generates RESEARCH points',
+  };
+  for (const k in TIPS) if (el[k]) el[k].title = TIPS[k] + (state.costs[k] ? ` · ${state.costs[k]} supply` : '');
   el.endAgain.onclick = () => location.reload();
 
   function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; }
@@ -92,9 +113,11 @@ export function createHUD(root, state, hooks = {}) {
     el.risen.textContent = state.menRisen;
     el.timer.textContent = fmt(state.time); // endless — counts how long you've held
     el.supply.textContent = Math.floor(state.supply ?? 0);
+    if (el.supplyRate) el.supplyRate.textContent = `+${(state.supplyRateNow ?? state.supplyRate ?? 0).toFixed(1)}/s`;
     el.works.textContent = state.works ?? 0;
     if (state.techs && el.rscTechs) {
       el.rscPts.textContent = Math.floor(state.research ?? 0);
+      if (el.rscRate) el.rscRate.textContent = `+${(state.researchRate ?? 0).toFixed(1)}/s`;
       el.rscTechs.innerHTML = state.techs.map((t, i) => {
         const cost = state.techCost ? state.techCost(t) : t.base;
         const can = (state.research ?? 0) >= cost;

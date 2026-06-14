@@ -60,6 +60,8 @@ body::after {
 .econ-top span, .works-read span {
   font-family: 'Special Elite', monospace; font-size: 15px; color: #d8e9fa;
 }
+.econ-top .rate { font-family: 'Saira Condensed', sans-serif; font-size: 8.5px; color: #9fe0a8; opacity: .8; margin-left: 4px; }
+.rsc-top .rate { font-family: 'Saira Condensed', sans-serif; font-size: 8.5px; color: #9fd0ff; opacity: .8; margin-left: 4px; }
 .gate-read { display: grid; gap: 2px; }
 .gate-track {
   height: 5px; background: rgba(255,255,255,.1); border: 1px solid rgba(160,190,220,.18);

@@ -125,6 +125,7 @@ function updateEconomy(dt) {
   addSupply(dt * supplyRate);
   state.research = (state.research || 0) + dt * researchRate;
   state.researchRate = researchRate;
+  state.supplyRateNow = supplyRate;
   if (state.kills > lastKillSupply) { addSupply((state.kills - lastKillSupply) * 0.22); lastKillSupply = state.kills; } // kills give supply, not research
   state.gateHp = field.gateHealth?.() ?? 1;
   state.works = field.works?.() ?? 0;
