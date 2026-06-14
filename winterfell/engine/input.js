@@ -4,7 +4,7 @@ import * as THREE from './three.js';
 // Angled RTS camera: orbits a focus point on the ground. WASD / edge-scroll pan,
 // wheel zoom, Q/E or middle-drag rotate. Clamped to the battlefield bounds.
 export function makeCameraRig(camera, dom, bounds) {
-  const focus = new THREE.Vector3(0, 6, -24); // looking out over the field
+  const focus = new THREE.Vector3(0, 3.2, -24); // orbit centre ~unit height (good close-ups)
   let dist = 158, yaw = 0;
   let pitch = 0.58; // radians from horizontal — adjustable (tilt the perspective)
   const PITCH_MIN = 0.14, PITCH_MAX = 1.32;
@@ -75,8 +75,8 @@ export function makeCameraRig(camera, dom, bounds) {
     const horiz = dist * Math.cos(pitch), height = dist * Math.sin(pitch);
     camera.position.set(
       focus.x + Math.sin(yaw) * horiz,
-      height,
-      focus.z + Math.cos(yaw) * horiz,
+      focus.y + height,           // orbit ABOVE the focus — was absolute, so zooming in
+      focus.z + Math.cos(yaw) * horiz, // dropped the camera under the focus and tilted up
     );
     camera.lookAt(focus);
   }
@@ -88,7 +88,7 @@ export function makeCameraRig(camera, dom, bounds) {
     setEnabled(v) { enabled = v; },
     cyclePerspective,
     setPitch(p) { pitch = THREE.MathUtils.clamp(p, PITCH_MIN, PITCH_MAX); },
-    frame(x, z, d) { focus.set(x, 4, z); if (d) dist = d; },
+    frame(x, z, d) { focus.set(x, 3.2, z); if (d) dist = d; },
   };
 }
 
