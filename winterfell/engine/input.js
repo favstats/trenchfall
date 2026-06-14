@@ -23,9 +23,7 @@ export function makeCameraRig(camera, dom, bounds) {
   const onKey = (e, down) => {
     const k = e.key.toLowerCase();
     if ('wasdqe'.includes(k)) { down ? keys.add(k) : keys.delete(k); }
-    if (down && k === 'p') cyclePerspective();
-    if (down && k === 't') pitch = THREE.MathUtils.clamp(pitch + 0.12, PITCH_MIN, PITCH_MAX);
-    if (down && k === 'g') pitch = THREE.MathUtils.clamp(pitch - 0.12, PITCH_MIN, PITCH_MAX);
+    if (down && k === 'p') cyclePerspective(); // tilt via P presets or middle-drag (no T/G — those build)
   };
   dom.ownerDocument.addEventListener('keydown', e => onKey(e, true));
   dom.ownerDocument.addEventListener('keyup', e => onKey(e, false));
@@ -58,16 +56,18 @@ export function makeCameraRig(camera, dom, bounds) {
   function update(dt) {
     if (!enabled) return;
     const panSpeed = dist * 0.9 * dt;
-    let mx = 0, mz = 0;
-    if (keys.has('w')) mz -= 1; if (keys.has('s')) mz += 1;
-    if (keys.has('a')) mx -= 1; if (keys.has('d')) mx += 1;
+    let mf = 0, mr = 0;                       // forward (W/S) and right (A/D)
+    if (keys.has('w')) mf += 1; if (keys.has('s')) mf -= 1;
+    if (keys.has('d')) mr += 1; if (keys.has('a')) mr -= 1;
     if (keys.has('q')) yaw += dt * 1.2;
     if (keys.has('e')) yaw -= dt * 1.2;
-    mx += edge.x; mz += edge.z;
-    // pan relative to yaw (so "up" is always away from camera)
-    const cos = Math.cos(yaw), sin = Math.sin(yaw);
-    focus.x += (mx * cos - mz * sin) * panSpeed;
-    focus.z += (mx * sin + mz * cos) * panSpeed;
+    mf += -edge.z; mr += edge.x;
+    // pan on the ground in the direction the camera is actually looking — correct
+    // at ANY yaw or pitch (forward = into the screen, right = screen-right)
+    const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
+    const rgx = Math.cos(yaw), rgz = -Math.sin(yaw);
+    focus.x += (fwx * mf + rgx * mr) * panSpeed;
+    focus.z += (fwz * mf + rgz * mr) * panSpeed;
     focus.x = THREE.MathUtils.clamp(focus.x, bounds.minX, bounds.maxX);
     focus.z = THREE.MathUtils.clamp(focus.z, bounds.minZ, bounds.maxZ);
 

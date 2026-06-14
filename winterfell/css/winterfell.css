@@ -36,60 +36,60 @@ body::after {
 }
 
 .panel {
-  position: fixed; background: rgba(10,16,24,.72); border: 1px solid rgba(120,150,180,.22);
-  backdrop-filter: blur(6px); border-radius: 7px; padding: 10px 13px;
+  position: fixed; background: rgba(10,16,24,.66); border: 1px solid rgba(120,150,180,.2);
+  backdrop-filter: blur(5px); border-radius: 5px; padding: 5px 8px;
 }
 
-/* objective banner, top-center */
-#objective { top: 16px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 230px; }
-.obj-title { font-family: 'Saira Stencil One', sans-serif; font-size: 22px; letter-spacing: .04em; color: #e7eefa; }
-.obj-sub { font-size: 12px; opacity: .65; letter-spacing: .08em; text-transform: uppercase; margin-top: 1px; }
-.obj-timer { font-family: 'Special Elite', monospace; font-size: 28px; color: #9fd0ff; margin-top: 3px; }
+/* objective banner, top-center — compact */
+#objective { top: 8px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 132px; }
+.obj-title { font-family: 'Saira Stencil One', sans-serif; font-size: 13px; letter-spacing: .03em; color: #e7eefa; }
+.obj-sub { display: none; } /* drop the flavour line to save space */
+.obj-timer { font-family: 'Special Elite', monospace; font-size: 16px; color: #9fd0ff; margin-top: 1px; }
 
 /* tallies, top-right */
-#tally { top: 16px; right: 16px; display: flex; gap: 18px; }
+#tally { top: 8px; right: 8px; display: flex; gap: 11px; }
 #tally div { text-align: center; }
-#tally span { display: block; font-family: 'Special Elite', monospace; font-size: 24px; color: #cfe2f6; }
-#tally label { font-size: 9.5px; letter-spacing: .1em; opacity: .55; }
+#tally span { display: block; font-family: 'Special Elite', monospace; font-size: 15px; color: #cfe2f6; }
+#tally label { font-size: 7.5px; letter-spacing: .08em; opacity: .5; }
 #tally div:nth-child(3) span { color: #ff7a6b; }
 
 /* command economy */
-#economy { top: 16px; left: 16px; width: 178px; display: grid; gap: 7px; }
-#economy label { font-size: 9.5px; letter-spacing: .12em; opacity: .55; }
+#economy { top: 8px; left: 8px; width: 124px; display: grid; gap: 3px; }
+#economy label { font-size: 8px; letter-spacing: .1em; opacity: .5; }
 .econ-top, .works-read { display: flex; align-items: baseline; justify-content: space-between; }
 .econ-top span, .works-read span {
-  font-family: 'Special Elite', monospace; font-size: 23px; color: #d8e9fa;
+  font-family: 'Special Elite', monospace; font-size: 15px; color: #d8e9fa;
 }
-.gate-read { display: grid; gap: 4px; }
+.gate-read { display: grid; gap: 2px; }
 .gate-track {
-  height: 7px; background: rgba(255,255,255,.1); border: 1px solid rgba(160,190,220,.18);
+  height: 5px; background: rgba(255,255,255,.1); border: 1px solid rgba(160,190,220,.18);
   border-radius: 999px; overflow: hidden;
 }
 .gate-track i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff725f, #ffd27a, #9fe0a8); }
 
 /* selection readout, bottom-left */
-#selPanel { left: 16px; bottom: 44px; min-width: 240px; max-width: 320px; }
-.sel-empty { opacity: .4; font-size: 13px; font-style: italic; }
-.sel-row { display: flex; align-items: center; gap: 9px; padding: 3px 0; font-size: 14px; }
-.sel-row b { flex: 1; letter-spacing: .03em; }
+#selPanel { left: 8px; bottom: 30px; min-width: 150px; max-width: 210px; }
+.sel-empty { opacity: .4; font-size: 10px; font-style: italic; }
+.sel-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; font-size: 11px; }
+.sel-row b { flex: 1; letter-spacing: .02em; }
 .sel-row.mg b { color: #ffd27a; }
-.sel-n { font-family: 'Special Elite', monospace; color: #cfe2f6; }
+.sel-n { font-family: 'Special Elite', monospace; color: #cfe2f6; font-size: 11px; }
 .sel-n small { opacity: .5; }
-.sel-order { font-size: 10px; letter-spacing: .08em; padding: 2px 6px; border-radius: 4px;
+.sel-order { font-size: 8px; letter-spacing: .06em; padding: 1px 4px; border-radius: 3px;
   background: rgba(90,209,255,.16); color: #9fd0ff; }
 .sel-order.hold { background: rgba(255,120,90,.18); color: #ff9d86; }
 
-/* call-ins, bottom-right */
+/* call-ins, bottom-right — small chips */
 #callins {
-  position: fixed; right: 16px; bottom: 44px; display: grid;
-  grid-template-columns: repeat(6, minmax(68px, 1fr)); gap: 7px; pointer-events: auto;
-  width: clamp(520px, 54vw, 760px);
+  position: fixed; right: 8px; bottom: 8px; display: grid;
+  grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 4px; pointer-events: auto;
+  width: clamp(330px, 40vw, 480px);
 }
-.callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .06em;
-  color: #e7eefa; background: rgba(20,30,42,.85); border: 1px solid rgba(140,170,200,.3);
-  border-radius: 7px; padding: 8px 8px; min-height: 52px; cursor: pointer; transition: .15s; }
+.callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: .04em;
+  color: #e7eefa; background: rgba(20,30,42,.8); border: 1px solid rgba(140,170,200,.28);
+  border-radius: 5px; padding: 4px 4px; min-height: 32px; cursor: pointer; transition: .12s; }
 .callin:hover { background: rgba(40,60,84,.95); border-color: #6fb0e0; }
-.callin small { display: block; font-size: 10px; opacity: .6; margin-top: 2px; }
+.callin small { display: block; font-size: 8px; opacity: .55; margin-top: 1px; }
 .callin.spent { opacity: .35; pointer-events: none; }
 .callin.active { border-color: #ffd27a; background: rgba(90,70,35,.82); color: #ffe0a0; }
 

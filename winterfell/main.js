@@ -52,7 +52,9 @@ function seedFieldWorks() {
 }
 seedFieldWorks();
 // the dead muster at the back, by the godswood, and march south on the wall
-horde.spawnWave(Math.floor(horde.cap * 0.55), NORTH_Z + 10, NORTH_Z + 115);
+// the dead first appear as distant specks at the godswood, far to the north,
+// then march the long way in — a calm before the tide reaches the wall
+horde.spawnWave(Math.floor(horde.cap * 0.16), NORTH_Z - 16, NORTH_Z + 10);
 const combat = new Combat(scene, force, horde, state);
 const possession = new Possession(camera, rig, force, combat, canvas);
 let lastKillSupply = 0;
@@ -329,13 +331,15 @@ async function frame(now) {
     force.update(dt);
     // keep the tide topped up — the dead never stop coming
     spawnAcc += dt;
-    const pressure = 1 + state.time / state.waveDuration;
-    if (spawnAcc > Math.max(0.16, 0.42 - pressure * 0.08) && horde.count < horde.cap) {
-      horde.spawnWave(Math.floor(22 + pressure * 18));
+    const pressure = 1 + state.time / 150;
+    // grace period: reinforcements only start streaming in after the first wave
+    // has had time to approach, so the night opens quiet
+    if (state.time > 12 && spawnAcc > Math.max(0.16, 0.42 - pressure * 0.08) && horde.count < horde.cap) {
+      horde.spawnWave(Math.floor(22 + pressure * 18), NORTH_Z - 16, NORTH_Z + 18);
       spawnAcc = 0;
     }
     if (state.time >= surgeAt) {
-      horde.spawnWave(Math.floor(160 + pressure * 90), NORTH_Z - 8, NORTH_Z + 70);
+      horde.spawnWave(Math.floor(160 + pressure * 90), NORTH_Z - 16, NORTH_Z + 30);
       surgeAt += 26;
     }
     horde.update(dt);
