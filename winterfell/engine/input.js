@@ -35,7 +35,8 @@ export function makeCameraRig(camera, dom, bounds) {
   }
 
   dom.addEventListener('wheel', e => {
-    dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * 8, 52, 235);
+    // proportional step eases down for fine close-up control; min 6 = right down on the line
+    dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * Math.max(3, dist * 0.09), 6, 235);
     e.preventDefault();
   }, { passive: false });
 
