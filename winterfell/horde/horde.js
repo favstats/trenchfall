@@ -11,70 +11,77 @@ const NORTH_FACE = WALL_Z - WALL_T / 2;  // z of the wall's north face (where th
 const FAR_CROWD_FRONT_Z = NORTH_Z + 8;
 const FAR_CROWD_BACK_Z = NORTH_Z - 92;
 
-// hunched, reaching undead silhouette merged into a single geometry (origin at feet)
-function buildUndeadGeometry() {
-  const parts = [];
-  const colors = [];
-  const add = (g, x, y, z, rx = 0, ry = 0, rz = 0, color = 0x9fb5b5) => {
-    if (rx) g.rotateX(rx);
-    if (ry) g.rotateY(ry);
-    if (rz) g.rotateZ(rz);
-    g.translate(x, y, z);
-    parts.push(g);
-    colors.push(new THREE.Color(color));
-  };
+// ---- procedural-noise helpers, ported from trenchfall src/main.js (self-contained) ----
+const TAU = Math.PI * 2;
+const HSALT = 0;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+function hash(ix, iz) { let n = ix * 374761393 + iz * 668265263 + HSALT | 0; n = (n ^ (n >> 13)) * 1274126177; return ((n ^ (n >> 16)) >>> 0) / 4294967295; }
+function smoothNoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  return lerp(lerp(hash(ix, iz), hash(ix + 1, iz), sx), lerp(hash(ix, iz + 1), hash(ix + 1, iz + 1), sx), sz);
+}
+function fbm2(x, y, oct = 4) {
+  let v = 0, a = .5, fx = x, fy = y;
+  for (let o = 0; o < oct; o++) { v += a * smoothNoise(fx, fy); fx = fx * 2.07 + 13.1; fy = fy * 2.07 + 7.7; a *= .5; }
+  return v;
+}
 
-  const flesh = 0x9fb8b6, frost = 0xc7d9d8, bone = 0xb9b2a1, cloth = 0x17212b, rot = 0x391512;
-  add(new THREE.CylinderGeometry(0.15, 0.2, 0.72, 7), -0.22, 0.82, 0.02, 0.1, 0, -0.08, flesh); // thigh L
-  add(new THREE.CylinderGeometry(0.13, 0.17, 0.76, 7), -0.23, 0.32, -0.07, -0.12, 0, 0.1, flesh); // shin L
-  add(new THREE.CylinderGeometry(0.15, 0.2, 0.72, 7), 0.23, 0.82, 0.02, -0.04, 0, 0.09, flesh);
-  add(new THREE.CylinderGeometry(0.13, 0.17, 0.76, 7), 0.25, 0.32, 0.03, 0.1, 0, -0.08, flesh);
-  add(new THREE.BoxGeometry(0.38, 0.1, 0.24), -0.23, 0.03, -0.23, 0, -0.18, 0, cloth);
-  add(new THREE.BoxGeometry(0.38, 0.1, 0.24), 0.25, 0.03, -0.18, 0, 0.12, 0, cloth);
-
-  add(new THREE.BoxGeometry(0.72, 0.28, 0.48), 0, 1.12, -0.02, 0.08, 0, 0, cloth); // torn waist
-  add(new THREE.CylinderGeometry(0.3, 0.48, 1.0, 8).scale(1, 1, 0.76), 0, 1.56, -0.18, 0.42, 0, 0, flesh);
-  add(new THREE.CylinderGeometry(0.055, 0.07, 0.92, 6), 0, 1.59, 0.16, 0.38, 0, 0, bone); // spine ridge
-  for (let r = 0; r < 4; r++) {
-    add(new THREE.BoxGeometry(0.72 - r * 0.08, 0.035, 0.045), 0, 1.78 - r * 0.13, -0.54 + r * 0.02, 0.42, 0, 0, bone);
+// the flesh has shrunk onto the bone: no clean tubes anywhere
+function witherGeo(geo, amt) {
+  const p = geo.attributes.position, nr = geo.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    const k = (hash(Math.round(p.getX(i) * 913 + p.getY(i) * 389), Math.round(p.getZ(i) * 571)) - .5) * amt;
+    p.setXYZ(i, p.getX(i) + nr.getX(i) * k, p.getY(i) + nr.getY(i) * k, p.getZ(i) + nr.getZ(i) * k);
   }
-  add(new THREE.CylinderGeometry(0.045, 0.055, 0.96, 6), 0, 1.96, -0.22, 0, 0, Math.PI / 2, bone); // collarbone
+  geo.computeVertexNormals();
+  return geo;
+}
 
-  add(new THREE.SphereGeometry(0.29, 10, 7).scale(0.84, 1.08, 0.78), 0, 2.08, -0.48, -0.08, 0, 0, frost);
-  add(new THREE.BoxGeometry(0.3, 0.13, 0.18), 0, 1.84, -0.6, -0.08, 0, 0, bone); // hanging jaw
-  add(new THREE.SphereGeometry(0.035, 6, 4), -0.085, 2.1, -0.71, 0, 0, 0, 0x8fe5ff);
-  add(new THREE.SphereGeometry(0.035, 6, 4), 0.085, 2.1, -0.71, 0, 0, 0, 0x8fe5ff);
-
-  add(new THREE.CylinderGeometry(0.11, 0.15, 0.68, 7), -0.5, 1.7, -0.3, 1.05, 0, 0.44, flesh);
-  add(new THREE.CylinderGeometry(0.085, 0.12, 0.72, 7), -0.62, 1.3, -0.68, 1.42, 0, 0.18, flesh);
-  add(new THREE.CylinderGeometry(0.11, 0.15, 0.68, 7), 0.5, 1.7, -0.3, 1.05, 0, -0.44, flesh);
-  add(new THREE.CylinderGeometry(0.085, 0.12, 0.72, 7), 0.62, 1.3, -0.68, 1.42, 0, -0.18, flesh);
-  for (const side of [-1, 1]) for (let f = 0; f < 3; f++) {
-    add(new THREE.ConeGeometry(0.025, 0.22, 5), side * (0.58 + f * 0.055), 0.96, -0.96 - f * 0.02, Math.PI / 2, 0, side * 0.18, bone);
-  }
-
-  for (const [x, z, a, len] of [[-0.25, -0.52, -0.16, 0.66], [0.04, -0.56, 0.04, 0.72], [0.28, -0.46, 0.18, 0.58]]) {
-    add(new THREE.PlaneGeometry(0.18, len), x, 1.2, z, 0.22, 0, a, cloth);
-  }
-  add(new THREE.BoxGeometry(0.16, 0.11, 0.05), -0.3, 1.47, -0.58, 0.42, 0, 0, rot);
-  add(new THREE.BoxGeometry(0.13, 0.1, 0.05), 0.34, 1.62, -0.56, 0.42, 0, 0, rot);
-
-  // manual merge (avoids pulling a second three via the addon util)
+// merge raw geometries with no color baking (for sub-assemblies like the skull/hand)
+function mergeRaw(geos) {
   let vTotal = 0, iTotal = 0;
-  for (const g of parts) { vTotal += g.attributes.position.count; iTotal += g.index.count; }
+  for (const g of geos) { vTotal += g.attributes.position.count; iTotal += g.index ? g.index.count : g.attributes.position.count; }
+  const pos = new Float32Array(vTotal * 3), nor = new Float32Array(vTotal * 3), uv = new Float32Array(vTotal * 2);
+  const idx = new Uint16Array(iTotal);
+  let vo = 0, io = 0;
+  for (const g of geos) {
+    const p = g.attributes.position.array, n = g.attributes.normal.array, u = g.attributes.uv?.array;
+    pos.set(p, vo * 3); nor.set(n, vo * 3); if (u) uv.set(u, vo * 2);
+    const cnt = g.attributes.position.count;
+    if (g.index) { const ix = g.index.array; for (let k = 0; k < ix.length; k++) idx[io + k] = ix[k] + vo; io += ix.length; }
+    else { for (let k = 0; k < cnt; k++) idx[io + k] = k + vo; io += cnt; }
+    vo += cnt;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
+}
+
+// merge {geo,tint,shade} parts, baking per-vertex color = shade(pos)*tint (cloth vs
+// flesh distinction lives in the tint, so one material/texture serves the whole body)
+function mergeParts(parts) {
+  let vTotal = 0, iTotal = 0;
+  for (const part of parts) { vTotal += part.geo.attributes.position.count; iTotal += part.geo.index ? part.geo.index.count : part.geo.attributes.position.count; }
   const pos = new Float32Array(vTotal * 3), nor = new Float32Array(vTotal * 3), uv = new Float32Array(vTotal * 2), col = new Float32Array(vTotal * 3);
   const idx = new Uint16Array(iTotal);
   let vo = 0, io = 0;
-  for (let gi = 0; gi < parts.length; gi++) {
-    const g = parts[gi];
-    const p = g.attributes.position.array, n = g.attributes.normal.array, ix = g.index.array;
-    const u = g.attributes.uv?.array;
-    pos.set(p, vo * 3); nor.set(n, vo * 3);
-    if (u) uv.set(u, vo * 2);
-    const c = colors[gi];
-    for (let v = 0; v < g.attributes.position.count; v++) col.set([c.r, c.g, c.b], (vo + v) * 3);
-    for (let k = 0; k < ix.length; k++) idx[io + k] = ix[k] + vo;
-    vo += g.attributes.position.count; io += ix.length;
+  for (const part of parts) {
+    const g = part.geo, px = g.attributes.position;
+    const p = px.array, n = g.attributes.normal.array, u = g.attributes.uv?.array;
+    pos.set(p, vo * 3); nor.set(n, vo * 3); if (u) uv.set(u, vo * 2);
+    const tint = part.tint, shade = part.shade;
+    for (let v = 0; v < px.count; v++) {
+      const s = shade(px.getX(v), px.getY(v), px.getZ(v));
+      col[(vo + v) * 3] = s * tint.r; col[(vo + v) * 3 + 1] = s * tint.g; col[(vo + v) * 3 + 2] = s * tint.b;
+    }
+    if (g.index) { const ix = g.index.array; for (let k = 0; k < ix.length; k++) idx[io + k] = ix[k] + vo; io += ix.length; }
+    else { for (let k = 0; k < px.count; k++) idx[io + k] = k + vo; io += px.count; }
+    vo += px.count;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -85,47 +92,129 @@ function buildUndeadGeometry() {
   return geo;
 }
 
+// trenchfall's necrotic shambler baked into ONE static merged geometry: lathed gaunt
+// torso (hunched), lolling skull, two arms reaching forward, mid-stride legs, agape jaw.
+// origin at the feet, faces -z (toward the wall), ~2 units tall to match the old scale.
+function buildUndeadGeometry() {
+  const parts = [];   // each: { geo, tint:Color, shade:fn }
+  const flesh = new THREE.Color(0xb6c4c2);    // cold dead skin (instance tint multiplies this)
+  const coat = new THREE.Color(0x515c66);     // rotted field coat — baked darker into the body
+  const push = (geo, tint, shade) => { parts.push({ geo, tint, shade: shade || (() => 1) }); };
+  const blob = (r, sx, sy, sz) => { const g = new THREE.SphereGeometry(r, 10, 7); g.scale(sx, sy, sz); return g; };
+  const limb = (rTop, rBot, len) => { const g = new THREE.CylinderGeometry(rTop, rBot, len, 7); g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2); return g; };
+
+  // ---- torso: a lathed gaunt profile, hunched forward over the legs ----
+  {
+    const pts = [[.075, 1.56], [.15, 1.5], [.255, 1.44], [.265, 1.35], [.235, 1.2], [.2, 1.03], [.215, .9], [.225, .82], [.195, .7], [.1, .62], [.01, .6]]
+      .map(p => new THREE.Vector2(p[0], p[1]));
+    const torso = new THREE.LatheGeometry(pts, 12);
+    torso.scale(1.04, 1, .68);          // oval chest, not a column
+    torso.rotateX(0.16);                 // hunch the trunk forward
+    torso.translate(0, 0.04, -0.05);
+    witherGeo(torso, .02);
+    push(torso, coat, (x, y) => clamp(.6 + (y - .6) * .42, .55, 1)); // hem dragged through mud
+  }
+  { const d = blob(.07, 1, 1.05, .9); d.translate(-.26, 1.33, .12); push(d, coat, () => .85); } // deltoid L
+  { const d = blob(.07, 1, 1.05, .9); d.translate(.26, 1.33, .12); push(d, coat, () => .85); }  // deltoid R
+
+  // ---- skull: gaunt cranium, brow, cheekbones, nose, neck; lolling forward ----
+  {
+    const h = [];
+    h.push(blob(.17, .94, 1.2, 1.04));                              // cranium
+    { const b = blob(.05, 1.9, .45, .7); b.translate(0, .05, .07); h.push(b); }    // brow ridge
+    { const c = blob(.035, 1.1, .6, .8); c.translate(-.1, -.06, .07); h.push(c); } // cheek L
+    { const c = blob(.035, 1.1, .6, .8); c.translate(.1, -.06, .07); h.push(c); }  // cheek R
+    { const nz = blob(.022, .7, 1.2, .9); nz.translate(0, -.03, .16); h.push(nz); }// nose
+    { const nk = new THREE.CylinderGeometry(.07, .095, .22, 8); nk.translate(0, -.18, -.02); h.push(nk); }
+    const skull = mergeRaw(h);
+    skull.scale(.92, .92, .92);
+    skull.rotateX(0.4);                  // lolls forward off the bent neck
+    skull.translate(0, 1.62, -0.02);
+    witherGeo(skull, .015);
+    push(skull, flesh, (x, y) => clamp(.95 + (y - 1.5) * .3, .8, 1.04)); // dark at jaw, pale at crown
+  }
+  // ---- agape jaw ----
+  {
+    const j = new THREE.SphereGeometry(.085, 9, 6); j.scale(1, .55, 1.2); j.rotateX(.85);
+    j.scale(.92, .92, .92); j.translate(0, 1.49, .13);
+    push(j, flesh, () => .72);
+  }
+
+  // ---- arms: reaching/grasping forward, with a crude claw hand ----
+  for (const side of [-1, 1]) {
+    const up = limb(.06, .052, .3);     // shoulder->elbow, swung down & forward
+    up.rotateX(-1.15); up.rotateZ(side * .2);
+    up.translate(side * .26, 1.36, .06);
+    witherGeo(up, .016);
+    push(up, flesh, (x, y, z) => clamp(.9 - z * .25, .55, 1));
+
+    const lo = limb(.05, .04, .28);     // elbow->wrist
+    lo.rotateX(-1.5);
+    lo.translate(side * .28, 1.04, .42);
+    witherGeo(lo, .013);
+    push(lo, flesh, (x, y, z) => clamp(.92 - z * .4, .55, 1));
+
+    const hand = [];                     // flat mitt + splayed fingers + thumb
+    { const m = new THREE.SphereGeometry(.05, 8, 6); m.scale(1, .55, 1.45); hand.push(m); }
+    for (let f = -1; f < 2; f++) { const fg = new THREE.CylinderGeometry(.014, .009, .15, 5); fg.rotateX(Math.PI / 2 - .35); fg.translate(f * .034, -.04, .12); hand.push(fg); }
+    { const th = new THREE.CylinderGeometry(.013, .01, .09, 5); th.rotateX(Math.PI / 2 - .7); th.rotateY(side * .7); th.translate(side * .05, -.02, .04); hand.push(th); }
+    const claw = mergeRaw(hand);
+    claw.rotateX(-1.5);
+    claw.translate(side * .28, .82, .72);
+    push(claw, flesh, () => .72);        // grave dirt on the hands
+  }
+
+  // ---- legs: mid-stride stance, one forward one trailing ----
+  for (const [side, stride] of [[-1, .18], [1, -.18]]) {
+    const thigh = new THREE.CylinderGeometry(.082, .064, .44, 7);
+    thigh.rotateX(stride * 1.1);
+    thigh.translate(side * .14, .82, stride * .9);
+    witherGeo(thigh, .018);
+    push(thigh, coat, (x, y) => clamp(1 + (y - .8) * .4, .6, 1.05));
+
+    const shin = new THREE.CylinderGeometry(.054, .046, .42, 7);
+    shin.rotateX(-stride * .6);
+    shin.translate(side * .14 + stride * .06, .38, stride * 1.7);
+    witherGeo(shin, .018);
+    push(shin, flesh, (x, y) => clamp(.8 + y * .9, .42, .9)); // mud to the knee
+
+    const foot = new THREE.SphereGeometry(.07, 8, 6); foot.scale(.9, .5, 1.65);
+    foot.translate(side * .14 + stride * .06, .05, stride * 1.7 + .1);
+    push(foot, flesh, () => .5);
+  }
+
+  const geo = mergeParts(parts);
+  geo.scale(1.06, 1.06, 1.06);          // ~1.85 -> ~2.0 tall, matching the old silhouette's scale
+  return geo;
+}
+
+// mottled necrotic skin, ported from trenchfall's fleshTex — the geometry stays smooth,
+// the skin carries the rot: vein web, bruising, gangrene, raw meat, weeping lesions
 function undeadSkinTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 512;
-  const g = c.getContext('2d');
-  let seed = 331;
-  const rr = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  const base = g.createLinearGradient(0, 0, 512, 512);
-  base.addColorStop(0, '#9eb8b7');
-  base.addColorStop(0.45, '#687d80');
-  base.addColorStop(1, '#1c2930');
-  g.fillStyle = base; g.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 2600; i++) {
-    const v = 95 + rr() * 80, a = 0.05 + rr() * 0.14;
-    g.fillStyle = `rgba(${v},${v + 12},${v + 15},${a})`;
-    g.fillRect((rr() * 512) | 0, (rr() * 512) | 0, 1 + (rr() * 2) | 0, 1 + (rr() * 2) | 0);
+  const g = c.getContext('2d'), img = g.createImageData(512, 512);
+  for (let y = 0; y < 512; y++) for (let x = 0; x < 512; x++) {
+    const i = (y * 512 + x) * 4;
+    const X = x * .5, Y = y * .5;                          // feature scale at double res
+    let v = 205 + fbm2(X * .045, Y * .045, 4) * 70 - 35;
+    const vein = Math.abs(fbm2(X * .025 + 60, Y * .025 + 19, 3) - .5);
+    v -= Math.pow(Math.max(0, 1 - vein * 7), 2) * 55;      // dark vein web
+    v += (hash(x * 7, y * 5) - .5) * 16;                   // pore-fine grain
+    v -= Math.max(0, Math.sin(Y * 1.1 + fbm2(X * .03, Y * .012, 2) * 7) - .62) * 26; // sinew striations
+    let r = v, gn = v * .96, b = v * .9;
+    const br = fbm2(X * .02 + 140, Y * .02 + 77, 3);
+    if (br > .6) { const k = Math.min(1, (br - .6) * 2.6); r -= k * 40; gn -= k * 14; b += k * 6; }  // livid bruising
+    if (br < .4) { const k = Math.min(1, (.4 - br) * 2.6); r -= k * 30; gn += k * 2; b -= k * 22; }  // gangrene
+    const raw = fbm2(X * .06 + 31, Y * .06 + 200, 3);
+    if (raw > .7) { const k = Math.min(1, (raw - .7) * 3.4); r += k * 26; gn -= k * 34; b -= k * 38; } // raw meat
+    if (hash(x * 11, y * 17) < .014) { r *= .34; gn *= .18; b *= .16; }  // weeping lesions
+    img.data[i] = r; img.data[i + 1] = gn; img.data[i + 2] = b; img.data[i + 3] = 255;
   }
-  for (let i = 0; i < 42; i++) {
-    const x = rr() * 512, y = rr() * 512, len = 38 + rr() * 95;
-    g.strokeStyle = `rgba(${35 + rr() * 25},${75 + rr() * 45},${90 + rr() * 55},${0.22 + rr() * 0.24})`;
-    g.lineWidth = 1 + rr() * 2.2;
-    g.beginPath();
-    g.moveTo(x, y);
-    for (let s = 0; s < 4; s++) g.quadraticCurveTo(x + (rr() - 0.5) * len, y + (rr() - 0.5) * len, x + (rr() - 0.5) * len, y + (rr() - 0.5) * len);
-    g.stroke();
-  }
-  for (let i = 0; i < 28; i++) {
-    const x = rr() * 512, y = rr() * 512, r = 9 + rr() * 32;
-    const grad = g.createRadialGradient(x, y, 1, x, y, r);
-    grad.addColorStop(0, 'rgba(83,12,14,.55)');
-    grad.addColorStop(1, 'rgba(83,12,14,0)');
-    g.fillStyle = grad; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-  }
-  for (let i = 0; i < 34; i++) {
-    g.strokeStyle = `rgba(220,238,255,${0.25 + rr() * 0.35})`;
-    g.lineWidth = 1 + rr() * 1.6;
-    const y = rr() * 512;
-    g.beginPath(); g.moveTo(rr() * 512, y); g.lineTo(rr() * 512, y + (rr() - 0.5) * 36); g.stroke();
-  }
+  g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 
@@ -195,12 +284,12 @@ export class Horde {
     this._geo = geo;
     const undeadTex = undeadSkinTexture();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xdce9e8,
+      color: 0xf4f6f5,              // near-white: baked vertex colors + instance tints carry the hue
       map: undeadTex,
       bumpMap: undeadTex,
-      bumpScale: 0.055,
+      bumpScale: 0.45,
       vertexColors: true,
-      roughness: 0.96,
+      roughness: 1.05,
       metalness: 0,
       emissive: 0x122333,
       emissiveIntensity: 0.1,
@@ -216,10 +305,10 @@ export class Horde {
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(this.cap * 2, 7000);
     const corpseMat = new THREE.MeshStandardMaterial({
-      color: 0x667073,
+      color: 0x8a9296,             // greyer/colder than the living, baked colors still read
       map: undeadTex,
       bumpMap: undeadTex,
-      bumpScale: 0.04,
+      bumpScale: 0.35,
       vertexColors: true,
       roughness: 1,
       metalness: 0,
@@ -504,10 +593,11 @@ export class Horde {
       const bob = Math.abs(Math.sin(a.ph)) * (a.runner ? 0.22 : 0.12);
       const sway = Math.sin(a.ph * (a.runner ? 0.72 : 0.5)) * (a.runner ? 0.18 : 0.08);
 
-      // GENERAL stacking: rest on the heap and clamber over whoever shares the cell
-      const level = Math.min(a.cellLevel, 11);   // gentler pile, not a spiky tower
+      // GENERAL stacking: front ranks stand ON the ground; only dense cells climb a
+      // little over piled bodies — modest lift, low cap, so nobody hovers in a column
+      const level = Math.min(a.cellLevel, 5);
       const base = heightAt(a.x, a.z) + this.heapAt(a.x, a.z); // heightAt already includes the raised corpse hill
-      const y = base + level * 0.5 + bob * 0.5;
+      const y = base + level * 0.26 + bob * 0.5;
       a.y = y;
       a.faceY = Math.atan2(-mvx, -mvz) + sway;
       a.scl = a.giant ? 2.8 : a.runner ? 1.0 + (a.spd - 6.2) * 0.035 : 1.05 + (a.spd - 2.6) * 0.05; // giants tower over the tide
