@@ -142,7 +142,15 @@ export class Horde {
     return hz * this.HW + hx;
   }
   heapAt(x, z) { return this.heap[this._heapIdx(x, z)]; }
-  _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 5); }
+  _addHeap(x, z, amt) { const i = this._heapIdx(x, z); this.heap[i] = Math.min(this.heap[i] + amt, WALL_H + 6); }
+  // raise a rounded mound so the slain pile into real heaps (UEBS-style)
+  _mound(x, z, amt) {
+    const r = 2, C = this.HCELL;
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      const w = 1 - Math.hypot(dx, dz) / (r + 0.6);
+      if (w > 0) this._addHeap(x + dx * C, z + dz * C, amt * w);
+    }
+  }
 
   // how wide a stretch of the wall the heap has overtopped (pressure indicator)
   wallCrest() {
@@ -195,7 +203,7 @@ export class Horde {
     a.dead = true; a.dieT = 0;
     a.fallY0 = a.y != null ? a.y : heightAt(a.x, a.z);
     a.fallRoll = (Math.random() - 0.5) * 1.5;
-    this._addHeap(a.x, a.z, 0.06); // the falling body adds to the heap, wherever it is
+    this._mound(a.x, a.z, 0.14); // every body builds the heap into a real mound
   }
 
   spawnWave(n, zMin = NORTH_Z + 10, zMax = NORTH_Z + 50) {

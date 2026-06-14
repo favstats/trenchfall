@@ -148,11 +148,13 @@ export class Combat {
       const w = WEAPON[m.squad.type] || WEAPON.rifle;
       if (m.squad.holdFire) continue;
       const cover = horde.field.coverAt?.(m.pos.x, m.pos.z);
+      const heap = horde.heapAt?.(m.pos.x, m.pos.z) || 0;
+      const heapReload = heap > 1.5 ? 0.84 : 1; // a wall of the dead is cover too
       const idx = horde.nearestTo(m.pos.x, m.pos.z, w.range * (cover?.rangeMul ?? 1));
       if (idx < 0) continue;
       const a = horde.agents[idx];
       m.faceTo(a.x, a.z);
-      m.reload = w.cd * (cover?.reloadMul ?? 1) * (0.85 + Math.random() * 0.3);
+      m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * (0.85 + Math.random() * 0.3);
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
@@ -183,7 +185,10 @@ export class Combat {
       if (!m) continue;
       a.atk = MELEE_CD;
       const cover = horde.field.coverAt?.(m.pos.x, m.pos.z);
-      m.hp -= cover?.meleeMul ?? 1;
+      let dmg = cover?.meleeMul ?? 1;
+      const heap = horde.heapAt?.(m.pos.x, m.pos.z) || 0;
+      if (heap > 1.5) dmg *= Math.max(0.4, 1 - heap * 0.12); // bodies shield the line
+      m.hp -= dmg;
       if (m.hp <= 0) { m.kill(); state.menLost++; }
     }
 

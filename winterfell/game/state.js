@@ -49,4 +49,4 @@ export class GameState {
 }
 
 // horde size cap per fidelity tier (live near/mid agents; far field is impostors)
-export const HORDE_CAP = { low: 1600, medium: 4000, high: 6500 };
+export const HORDE_CAP = { low: 2400, medium: 5500, high: 9000 };

@@ -27,17 +27,22 @@ const deforms = [];
 let activeEnv = null;
 
 // ----- dig grid: real excavation that carves the terrain mesh + sinks units -----
-const DIG_CELL = 2;
+const DIG_CELL = 1.5;
 const DIG_X0 = -FIELD_HALF_X, DIG_Z0 = NORTH_Z;
 const DIG_W = Math.ceil((FIELD_HALF_X * 2) / DIG_CELL) + 2;
 const DIG_H = Math.ceil((WALL_Z + 8 - NORTH_Z) / DIG_CELL) + 2;
 
+// bilinear sample of the dig grid — smooth so excavated walls shade cleanly
 function digOffsetAt(x, z) {
   const e = activeEnv;
   if (!e || !e.dig) return 0;
-  const hx = Math.round((x - DIG_X0) / DIG_CELL), hz = Math.round((z - DIG_Z0) / DIG_CELL);
-  if (hx < 0 || hz < 0 || hx >= DIG_W || hz >= DIG_H) return 0;
-  return e.dig[hz * DIG_W + hx];
+  const fx = (x - DIG_X0) / DIG_CELL, fz = (z - DIG_Z0) / DIG_CELL;
+  const x0 = Math.floor(fx), z0 = Math.floor(fz);
+  if (x0 < 0 || z0 < 0 || x0 >= DIG_W - 1 || z0 >= DIG_H - 1) return 0;
+  const tx = fx - x0, tz = fz - z0, g = e.dig, w = DIG_W;
+  const a = g[z0 * w + x0], b = g[z0 * w + x0 + 1];
+  const c = g[(z0 + 1) * w + x0], d = g[(z0 + 1) * w + x0 + 1];
+  return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
 }
 
 function seeded(seed) {
@@ -334,7 +339,7 @@ function makeRamp(x0, x1, mat) {
 }
 
 function addTerrain(group, placementTargets, env) {
-  const geo = new THREE.PlaneGeometry(900, 900, 176, 176);
+  const geo = new THREE.PlaneGeometry(900, 900, 384, 384);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = -pos.getY(i);
@@ -361,6 +366,7 @@ function addTerrain(group, placementTargets, env) {
   placementTargets.push(terrain);
   env.terrain = terrain;
   env.terrainGeo = geo;
+  env.terrainSeg = 384;
 
   const kill = new THREE.Mesh(
     new THREE.PlaneGeometry(FIELD_HALF_X * 2, 92, 1, 1),
@@ -1283,18 +1289,39 @@ function hideInstance(item) {
   item.alive = false;
 }
 
-function refreshTerrain(env, x, z, radius, full = false, skipNormals = false) {
+function refreshTerrain(env, x, z, radius, full = false) {
   if (!env.terrainGeo) return;
-  const pos = env.terrainGeo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const vx = pos.getX(i), vz = -pos.getY(i);
-    if (!full && Math.hypot(vx - x, vz - z) > radius) continue;
-    if (vz > WALL_Z - WALL_T * 0.5 && vz < Z_BOT + 4 && Math.abs(vx) > GATE_W / 2) continue;
-    pos.setZ(i, groundHeight(vx, vz));
+  const geo = env.terrainGeo;
+  const pos = geo.attributes.position, nor = geo.attributes.normal;
+  const SEG = env.terrainSeg || 176, step = 900 / SEG, cols = SEG + 1;
+  const inWall = (vx, vz) => vz > WALL_Z - WALL_T * 0.5 && vz < Z_BOT + 4 && Math.abs(vx) > GATE_W / 2;
+
+  if (full) { // whole-mesh path (used by craters): cheap enough occasionally
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vz = -pos.getY(i);
+      if (inWall(vx, vz)) continue;
+      pos.setZ(i, groundHeight(vx, vz));
+    }
+    pos.needsUpdate = true; geo.computeVertexNormals(); return;
   }
-  pos.needsUpdate = true;
-  if (skipNormals) env.terrainDirty = true;   // batch normals to one recompute/frame
-  else env.terrainGeo.computeVertexNormals();
+
+  // local window — cost is independent of total terrain resolution
+  const c0 = Math.max(0, Math.floor((x - radius + 450) / step));
+  const c1 = Math.min(SEG, Math.ceil((x + radius + 450) / step));
+  const r0 = Math.max(0, Math.floor((z - radius + 450) / step));
+  const r1 = Math.min(SEG, Math.ceil((z + radius + 450) / step));
+  const e = step;
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    const i = r * cols + c, vx = pos.getX(i), vz = -pos.getY(i);
+    if (inWall(vx, vz)) continue;
+    pos.setZ(i, groundHeight(vx, vz));
+    // heightfield normal from the gradient of groundHeight (local, no global recompute)
+    const gx = (groundHeight(vx + e, vz) - groundHeight(vx - e, vz)) / (2 * e);
+    const gz = (groundHeight(vx, vz + e) - groundHeight(vx, vz - e)) / (2 * e);
+    const inv = 1 / Math.hypot(gx, 1, gz);
+    nor.setXYZ(i, -gx * inv, inv, gz * inv);
+  }
+  pos.needsUpdate = true; nor.needsUpdate = true;
 }
 
 // carve a real trench bowl into the dig grid + terrain mesh (units sink in)
@@ -1309,16 +1336,17 @@ function digCarve(x, z, depth = 1.7, radius = 5.2) {
       const wx = DIG_X0 + gx * DIG_CELL, wz = DIG_Z0 + gz * DIG_CELL;
       const d = Math.hypot(wx - x, wz - z);
       const i = gz * DIG_W + gx;
-      if (d < radius) {                       // channel floor
-        const dig = -depth * Math.cos((d / radius) * Math.PI / 2);
+      const innerR = radius * 0.5;
+      if (d < radius) {                       // flat floor + steep walls (crisp ditch)
+        const dig = d <= innerR ? -depth : -depth * (1 - (d - innerR) / (radius - innerR));
         if (dig < env.dig[i]) env.dig[i] = dig;
-      } else if (d < radius + 2.4) {          // small spoil berm at the lip
-        const berm = depth * 0.16 * (1 - (d - radius) / 2.4);
+      } else if (d < radius + 1.8) {          // spoil berm heaped at the lip
+        const berm = depth * 0.22 * (1 - (d - radius) / 1.8);
         if (env.dig[i] >= 0 && berm > env.dig[i]) env.dig[i] = berm;
       }
     }
   }
-  refreshTerrain(env, x, z, radius + 3, false, true);
+  refreshTerrain(env, x, z, radius + 2.5);
 }
 
 function deformTerrain(env, x, z, radius, depth) {
