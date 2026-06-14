@@ -132,9 +132,14 @@ body::after {
 .cmd-ico { font-size: 17px; line-height: 1; color: #cfe2f6; }
 .cmd-lbl { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 8.5px; letter-spacing: .04em; }
 .cmd-cost { font-family: 'Special Elite', monospace; font-size: 8.5px; color: #9fe0a8; }
-.cmd-btn.spent { opacity: .38; pointer-events: none; }
-.cmd-btn.active { border-color: #ffd27a; background: rgba(92,72,34,.9); }
+.cmd-btn.spent { opacity: .5; }
+.cmd-btn.spent .cmd-cost { color: #e89180; }
+.cmd-btn.spent:hover { transform: none; border-color: rgba(140,170,200,.3); background: rgba(24,34,48,.92); cursor: not-allowed; }
+.cmd-btn.active { border-color: #ffd27a; background: rgba(92,72,34,.9); box-shadow: 0 0 0 1px #ffd27a, 0 0 12px rgba(255,210,122,.35); }
 .cmd-btn.active .cmd-ico { color: #ffe0a0; }
+.cmd-key { position: absolute; top: 2px; right: 3px; font-family: 'Special Elite', monospace; font-size: 7px;
+  line-height: 1; color: #9fb6d0; background: rgba(0,0,0,.42); border: 1px solid rgba(140,170,200,.28);
+  border-radius: 3px; padding: 1px 2.5px; }
 .cmd-prog { grid-column: 1 / -1; height: 6px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; }
 .cmd-prog i { display: block; height: 100%; background: linear-gradient(90deg, #9fd0ff, #9fe0a8); }
 .cmd-info { grid-column: 1 / -1; font-size: 10px; opacity: .7; padding: 4px 2px; letter-spacing: .04em; }
@@ -162,6 +167,14 @@ body::after {
 
 #dragbox { position: fixed; display: none; border: 1.5px solid #5ad1ff;
   background: rgba(90,209,255,.12); pointer-events: none; z-index: 5; }
+
+#placeBanner { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); display: none;
+  font-family: 'Saira Condensed', sans-serif; font-weight: 700; letter-spacing: .07em; font-size: 12px;
+  color: #07121d; background: #ffd27a; padding: 5px 14px; border-radius: 5px; pointer-events: none; z-index: 6;
+  box-shadow: 0 3px 16px rgba(0,0,0,.45); white-space: nowrap; }
+#placeBanner.show { display: block; }
+#placeBanner b { font-family: 'Saira Stencil One', sans-serif; }
+#placeBanner .esc { opacity: .7; font-weight: 400; }
 
 @media (max-width: 980px) {
   #objective { top: 126px; min-width: 210px; }

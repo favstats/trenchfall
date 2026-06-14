@@ -35,6 +35,7 @@ export function createHUD(root, state, hooks = {}) {
       <div id="cmdProg" class="cmd-prog" style="display:none"><i></i></div>
     </div>
 
+    <div id="placeBanner"></div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
     <div id="hint">LMB select · drag box · RMB move/rally · click a building to command it · Esc cancel</div>
@@ -56,7 +57,7 @@ export function createHUD(root, state, hooks = {}) {
     gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
-    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'),
+    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'), placeBanner: $('#placeBanner'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
@@ -73,6 +74,15 @@ export function createHUD(root, state, hooks = {}) {
     defense: [['TRENCH', 'trench'], ['WIRE', 'wire'], ['SANDBAGS', 'sandbag'], ['MG NEST', 'nest'], ['TOWER', 'tower'], ['BUNKER', 'bunker'], ['SPIKE PIT', 'pit']],
     support: [['FLOODLIGHT', 'floodlight'], ['AMMO', 'ammo'], ['BRAZIER', 'brazier']],
   };
+  // mirrors the keydown bindings in main.js — shown as corner badges, RTS-style
+  const HOTKEY = {
+    barracks: 'K', depot: 'J', lab: 'U', trench: 'T', wire: 'N', sandbag: 'B', nest: 'G',
+    tower: 'Y', bunker: 'Q', pit: 'M', floodlight: 'L', ammo: 'O', brazier: 'E', mortar: 'V', reserve: 'C',
+  };
+  const DRAGGABLE = new Set(['trench', 'wire', 'sandbag']); // laid by dragging a line
+  const COURTYARD = new Set(['barracks', 'depot', 'lab']);  // placed behind the wall
+  const LABELS = {};
+  for (const list of Object.values(CATALOG)) for (const [label, kind] of list) LABELS[kind] = label;
   const TIP = {
     barracks: 'Trains squads. Build in the courtyard.', depot: 'Boosts supply income.', lab: 'Generates research.',
     trench: 'Drag to dig. Cover + slows the dead.', wire: 'Drag to lay. Badly slows & bleeds.', sandbag: 'Drag to lay. Light cover.',
@@ -100,7 +110,7 @@ export function createHUD(root, state, hooks = {}) {
   const can = c => (state.supply ?? 0) >= c;
   const btn = (act, label, icon, cost, opts = {}) =>
     `<button class="cmd-btn ${opts.spent ? 'spent' : ''} ${opts.active ? 'active' : ''}" data-act="${act}" title="${opts.tip || ''}">
-       <span class="cmd-ico">${icon || ''}</span><span class="cmd-lbl">${label}</span>${cost != null ? `<span class="cmd-cost">${cost}</span>` : ''}</button>`;
+       ${opts.key ? `<span class="cmd-key">${opts.key}</span>` : ''}<span class="cmd-ico">${icon || ''}</span><span class="cmd-lbl">${label}</span>${cost != null ? `<span class="cmd-cost">${cost}</span>` : ''}</button>`;
 
   // The grid buttons must be DOM-STABLE: rewriting innerHTML every frame destroys
   // the button mid-interaction so the browser can't form a click (down+up on the
@@ -155,12 +165,12 @@ export function createHUD(root, state, hooks = {}) {
       for (const t of el.cmdTabs.children) t.classList.toggle('on', t.dataset.tab === tab);
       let html = CATALOG[tab].map(([label, kind]) => {
         const c = state.costs[kind] ?? 0;
-        return btn('build:' + kind, label, ICON[kind], c, { spent: !can(c), active: state.buildMode === kind, tip: TIP[kind] });
+        return btn('build:' + kind, label, ICON[kind], c, { spent: !can(c), active: state.buildMode === kind, tip: TIP[kind], key: HOTKEY[kind] });
       }).join('');
       if (tab === 'support') {
-        html += btn('call:mortar', 'MORTAR', ICON.mortar, '×' + (state.charges.mortar ?? 0), { spent: (state.charges.mortar ?? 0) <= 0, tip: TIP.mortar });
+        html += btn('call:mortar', 'MORTAR', ICON.mortar, '×' + (state.charges.mortar ?? 0), { spent: (state.charges.mortar ?? 0) <= 0, tip: TIP.mortar, key: HOTKEY.mortar });
         const rc = state.costs?.recruit ?? 0;
-        html += btn('call:reserve', 'RESERVE', ICON.reserve, rc, { spent: !can(rc), tip: TIP.reserve });
+        html += btn('call:reserve', 'RESERVE', ICON.reserve, rc, { spent: !can(rc), tip: TIP.reserve, key: HOTKEY.reserve });
       }
       setGrid(html);
       progBar(-1);
@@ -184,6 +194,16 @@ export function createHUD(root, state, hooks = {}) {
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
 
     renderCommand();
+
+    // placement banner — armed build mode is obvious + tells you how to place it
+    const bm = state.buildMode;
+    if (bm && !state.possession) {
+      const verb = DRAGGABLE.has(bm) ? 'drag along the ground to lay'
+        : COURTYARD.has(bm) ? 'click in the courtyard to build'
+        : 'click the ground to build';
+      el.placeBanner.innerHTML = `▸ <b>${(LABELS[bm] || bm).toUpperCase()}</b> — ${verb} <span class="esc">· Esc to cancel</span>`;
+      el.placeBanner.classList.add('show');
+    } else el.placeBanner.classList.remove('show');
 
     if (state.possession) {
       el.possession.textContent = `DIRECT · ${state.possession}   ${state.reloading ? 'RELOADING…' : 'AMMO ' + (state.ammo ?? '')}`;
