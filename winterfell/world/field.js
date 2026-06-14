@@ -545,23 +545,25 @@ function addWall(group, torches, placementTargets, env) {
   // they read as battlements, not flat grey boxes
   const merlonTex = stampMasonry(); merlonTex.repeat.set(1.2, 0.8);
   const merlonMat = new THREE.MeshStandardMaterial({ map: merlonTex, bumpMap: merlonTex, bumpScale: 0.35, color: 0x828b96, roughness: 0.93 });
-  // tooth proportions: a touch taller than wide, kept INSIDE the wall thickness so
-  // they read as upright merlons, never as slabs lying across the parapet
-  const MERLON_W = 2.4, MERLON_H = 2.4, MERLON_D = WALL_T - 0.6;
+  // proper battlement teeth: WIDE along the wall, SHALLOW across it (so they read as
+  // crenellations standing along the parapet, not coffins laid across it), and set on
+  // the OUTER (enemy-facing, north) lip so a defender shelters behind them
+  const MERLON_W = 3.2, MERLON_H = 1.9, MERLON_D = 1.7;
+  const MERLON_Z = WALL_Z - WALL_T * 0.5 + MERLON_D * 0.5; // flush to the north face
   const merlonGeo = new THREE.BoxGeometry(MERLON_W, MERLON_H, MERLON_D);
-  const merlonCapGeo = new THREE.BoxGeometry(MERLON_W + 0.12, 0.28, MERLON_D + 0.12);
+  const merlonCapGeo = new THREE.BoxGeometry(MERLON_W + 0.1, 0.24, MERLON_D + 0.1);
   const merlons = new THREE.InstancedMesh(merlonGeo, merlonMat, 80);
   const merlonCaps = new THREE.InstancedMesh(merlonCapGeo, snowCap, 80);
   let mi = 0;
   const merlonY = WALL_H + MERLON_H / 2;          // base flush on the parapet
-  const capY = WALL_H + MERLON_H + 0.12;          // snow cap flush on the tooth top
-  // tooth + open crenel, even rhythm
-  for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += MERLON_W + 1.9) {
+  const capY = WALL_H + MERLON_H + 0.1;           // snow cap flush on the tooth top
+  // merlon + open crenel of roughly equal width — even battlement rhythm
+  for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += MERLON_W + 2.6) {
     if (Math.abs(x) < GATE_W / 2 + 2) continue;
     o.rotation.set(0, 0, 0);
-    o.position.set(x, merlonY, WALL_Z); o.updateMatrix();
+    o.position.set(x, merlonY, MERLON_Z); o.updateMatrix();
     merlons.setMatrixAt(mi, o.matrix);
-    o.position.set(x, capY, WALL_Z); o.updateMatrix();
+    o.position.set(x, capY, MERLON_Z); o.updateMatrix();
     merlonCaps.setMatrixAt(mi, o.matrix);
     env.breakables.push({ kind: 'merlon', mesh: merlons, index: mi, x, z: WALL_Z, hp: 42, alive: true });
     mi++;
