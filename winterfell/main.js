@@ -30,18 +30,24 @@ const force = new Force(scene, state);
 const horde = new Horde(scene, state, field);
 function seedFieldWorks() {
   for (const [kind, x, z] of [
-    ['trench', -70, WALL_Z - 22],
-    ['trench', 70, WALL_Z - 22],
-    ['trench', -26, WALL_Z - 16],
-    ['sandbag', -50, WALL_Z - 16],
-    ['wire', -70, WALL_Z - 43],
-    ['wire', 70, WALL_Z - 43],
-    ['wire', 0, WALL_Z - 50],
-    ['nest', 24, WALL_Z - 16],
-    ['ammo', 0, WALL_Z - 12],
-    ['floodlight', 0, WALL_Z - 36],
-    ['bunker', 54, WALL_Z - 18],
-    ['brazier', -18, WALL_Z - 36],
+    // a dug-in line already crewed and firing when the night begins
+    ['nest', -42, WALL_Z - 13],
+    ['nest', 42, WALL_Z - 13],
+    ['nest', 0, WALL_Z - 22],
+    ['tower', -82, WALL_Z - 11],
+    ['tower', 82, WALL_Z - 11],
+    ['trench', -64, WALL_Z - 20],
+    ['trench', 64, WALL_Z - 20],
+    ['trench', -18, WALL_Z - 15],
+    ['trench', 20, WALL_Z - 15],
+    ['ammo', 0, WALL_Z - 11],
+    ['floodlight', -28, WALL_Z - 40],
+    ['floodlight', 28, WALL_Z - 40],
+    ['bunker', 0, WALL_Z - 33],
+    ['wire', -55, WALL_Z - 50],
+    ['wire', 55, WALL_Z - 50],
+    ['brazier', -18, WALL_Z - 44],
+    ['brazier', 18, WALL_Z - 44],
   ]) field.placeBuildable?.(kind, x, z);
 }
 seedFieldWorks();

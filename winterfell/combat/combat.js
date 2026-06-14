@@ -195,6 +195,36 @@ export class Combat {
       }
     }
 
+    // ---- emplaced MG nests & watchtowers wreak havoc on the tide ----
+    const emps = horde.field.emplacements?.() || [];
+    for (const e of emps) {
+      e._cd = (e._cd || 0) - dt;
+      if (e._cd > 0) continue;
+      const isTower = e.kind === 'tower';
+      const idx = horde.nearestTo(e.x, e.z, isTower ? 185 : 155);
+      if (idx < 0) { e._cd = 0.4; continue; }
+      const a = horde.agents[idx];
+      e._cd = isTower ? 0.42 : 0.07;            // the nest is a sustained brrrt
+      const muzY = horde.field.heightAt(e.x, e.z) + (isTower ? 6.2 : 1.5);
+      this._from.set(e.x, muzY, e.z);
+      this._to.set(a.x + (Math.random() - 0.5) * 1.6, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
+      fx.shot(this._from, this._to);
+      const lit = horde.field.targetVulnerabilityAt?.(a.x, a.z);
+      a.hp -= (isTower ? 4 : 3) * (lit?.damageMul ?? 1);
+      if (a.hp <= 0) { fx.burst(this._to); horde.kill(idx); state.kills++; }
+      if (!isTower) { // the burst sprays — neighbours in the beaten zone get chewed up
+        for (let s = 0; s < 2; s++) {
+          const j = horde.nearestTo(a.x + (Math.random() - 0.5) * 7, a.z - 1, 9);
+          if (j < 0 || j === idx) continue;
+          const b = horde.agents[j];
+          this._to.set(b.x, horde.field.heightAt(b.x, b.z) + 1.2, b.z);
+          fx.shot(this._from, this._to);
+          b.hp -= 3;
+          if (b.hp <= 0) { fx.burst(this._to); horde.kill(j); state.kills++; }
+        }
+      }
+    }
+
     fx.update(dt);
   }
 

@@ -26,6 +26,20 @@ const MAX_DEFORMS = 96;
 const deforms = [];
 let activeEnv = null;
 
+// ----- dig grid: real excavation that carves the terrain mesh + sinks units -----
+const DIG_CELL = 2;
+const DIG_X0 = -FIELD_HALF_X, DIG_Z0 = NORTH_Z;
+const DIG_W = Math.ceil((FIELD_HALF_X * 2) / DIG_CELL) + 2;
+const DIG_H = Math.ceil((WALL_Z + 8 - NORTH_Z) / DIG_CELL) + 2;
+
+function digOffsetAt(x, z) {
+  const e = activeEnv;
+  if (!e || !e.dig) return 0;
+  const hx = Math.round((x - DIG_X0) / DIG_CELL), hz = Math.round((z - DIG_Z0) / DIG_CELL);
+  if (hx < 0 || hz < 0 || hx >= DIG_W || hz >= DIG_H) return 0;
+  return e.dig[hz * DIG_W + hx];
+}
+
 function seeded(seed) {
   let s = seed >>> 0;
   return () => {
@@ -91,7 +105,7 @@ function deformOffsetAt(x, z) {
 }
 
 function groundHeight(x, z) {
-  return terrainHeight(x, z) + deformOffsetAt(x, z);
+  return terrainHeight(x, z) + deformOffsetAt(x, z) + digOffsetAt(x, z);
 }
 
 export function heightAt(x, z) {
@@ -836,13 +850,14 @@ function placeBuildable(kind, x, z, opts = {}) {
   };
 
   if (kind === 'trench') {
-    const cut = new THREE.Mesh(a.trench, a.earth);
-    cut.rotation.x = -Math.PI / 2;
-    cut.position.y = 0.025;
-    g.add(cut);
-    for (const zoff of [-2.55, 2.55]) {
+    // no floor plane — the terrain is really excavated below; just dress the lip
+    const lining = new THREE.Mesh(a.trench, a.earth);
+    lining.rotation.x = -Math.PI / 2;
+    lining.position.y = -1.55;            // dark earth at the dug floor
+    g.add(lining);
+    for (const zoff of [-2.85, 2.85]) {
       const berm = new THREE.Mesh(a.berm, zoff < 0 ? a.snow : a.earth);
-      berm.position.set(0, 0.28, zoff);
+      berm.position.set(0, 0.42, zoff);   // spoil heaped at the trench lip
       berm.rotation.z = (rnd() - 0.5) * 0.04;
       g.add(berm);
     }
@@ -898,6 +913,15 @@ function placeBuildable(kind, x, z, opts = {}) {
       crate.rotation.y = (rnd() - 0.5) * 0.35;
       g.add(crate);
     }
+    // a gunner hunched over the weapon — the nest is crewed and firing
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x4b5340, roughness: 0.85 });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.82, 0.66), gunMat);
+    torso.position.set(0, 0.98, 0.5); torso.rotation.x = -0.55; g.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), a.iron);
+    head.position.set(0, 1.46, 0.18); g.add(head);
+    const loader = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.6), gunMat);
+    loader.position.set(1.0, 0.7, 1.0); loader.rotation.y = -0.5; g.add(loader);
+    item.muzzle = new THREE.Vector3(0, 1.2, -1.9); // local muzzle tip
   } else if (kind === 'tower') {
     for (const sx of [-1.8, 1.8]) for (const sz of [-1.8, 1.8]) {
       const leg = new THREE.Mesh(a.plank, a.wood);
@@ -1033,8 +1057,9 @@ function placeBuildable(kind, x, z, opts = {}) {
   castBuildable(g);
   env.group.add(g);
   env.buildables.push(item);
-  // a spray of dug earth so drawing a line really reads as digging
-  if (kind === 'trench' || kind === 'pit') spawnDebris(env, x, z, 2.4, 4, false);
+  // real excavation: carve the terrain so the trench is dug into the ground
+  if (kind === 'trench') { digCarve(x, z, 1.8, 5.4); spawnDebris(env, x, z, 2.4, 4, false); }
+  else if (kind === 'pit') { digCarve(x, z, 1.4, 4.2); spawnDebris(env, x, z, 2.4, 4, false); }
   return item;
 }
 
@@ -1258,7 +1283,7 @@ function hideInstance(item) {
   item.alive = false;
 }
 
-function refreshTerrain(env, x, z, radius, full = false) {
+function refreshTerrain(env, x, z, radius, full = false, skipNormals = false) {
   if (!env.terrainGeo) return;
   const pos = env.terrainGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
@@ -1268,7 +1293,32 @@ function refreshTerrain(env, x, z, radius, full = false) {
     pos.setZ(i, groundHeight(vx, vz));
   }
   pos.needsUpdate = true;
-  env.terrainGeo.computeVertexNormals();
+  if (skipNormals) env.terrainDirty = true;   // batch normals to one recompute/frame
+  else env.terrainGeo.computeVertexNormals();
+}
+
+// carve a real trench bowl into the dig grid + terrain mesh (units sink in)
+function digCarve(x, z, depth = 1.7, radius = 5.2) {
+  const env = activeEnv;
+  if (!env || !env.dig) return;
+  const cx = (x - DIG_X0) / DIG_CELL, cz = (z - DIG_Z0) / DIG_CELL;
+  const cr = Math.ceil(radius / DIG_CELL) + 1;
+  for (let gz = Math.floor(cz - cr); gz <= cz + cr; gz++) {
+    for (let gx = Math.floor(cx - cr); gx <= cx + cr; gx++) {
+      if (gx < 0 || gz < 0 || gx >= DIG_W || gz >= DIG_H) continue;
+      const wx = DIG_X0 + gx * DIG_CELL, wz = DIG_Z0 + gz * DIG_CELL;
+      const d = Math.hypot(wx - x, wz - z);
+      const i = gz * DIG_W + gx;
+      if (d < radius) {                       // channel floor
+        const dig = -depth * Math.cos((d / radius) * Math.PI / 2);
+        if (dig < env.dig[i]) env.dig[i] = dig;
+      } else if (d < radius + 2.4) {          // small spoil berm at the lip
+        const berm = depth * 0.16 * (1 - (d - radius) / 2.4);
+        if (env.dig[i] >= 0 && berm > env.dig[i]) env.dig[i] = berm;
+      }
+    }
+  }
+  refreshTerrain(env, x, z, radius + 3, false, true);
 }
 
 function deformTerrain(env, x, z, radius, depth) {
@@ -1402,6 +1452,8 @@ export function buildField(scene) {
     debrisHead: 0,
     buildId: 0,
     buildables: [],
+    dig: new Float32Array(DIG_W * DIG_H),
+    terrainDirty: false,
   };
   activeEnv = env;
   const terrain = addTerrain(group, placementTargets, env);
@@ -1418,6 +1470,7 @@ export function buildField(scene) {
   let time = 0;
   function update(dt) {
     time += dt;
+    if (env.terrainDirty) { env.terrainGeo.computeVertexNormals(); env.terrainDirty = false; }
     for (const item of torches) {
       const f = 0.78 + Math.sin(time * 9.5 + item.torch.userData.phase) * 0.15 + Math.sin(time * 23 + item.torch.userData.phase) * 0.07;
       item.light.intensity = item.base * f;
@@ -1474,6 +1527,7 @@ export function buildField(scene) {
     buildPressure,
     coverAt,
     targetVulnerabilityAt,
+    emplacements: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'nest' || b.kind === 'tower' || b.kind === 'bunker')) : []),
     repairGate,
     gateHealth,
     works: () => env.buildables.filter(b => b.alive).length,
