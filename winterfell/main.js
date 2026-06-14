@@ -13,6 +13,7 @@ import { createHUD } from './ui/hud.js';
 import { initAudio, sfxBoom, sfxBuild } from './engine/audio.js';
 import { setSeason, pickSeason } from './game/season.js';
 import { createWeather } from './world/weather.js';
+import { createMinimap } from './ui/minimap.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -377,6 +378,9 @@ function detonate(x, z, radius = 11, damage = 130, crater = 1.35) {
   field.explodeFx?.(x, y, z, radius / 10); // visible fireball + smoke + flash
   sfxBoom();
   addNoise(radius * 1.7);
+  // camera kick scaled by blast size + nearness to the focus
+  const near = 1 - Math.min(1, Math.hypot(camera.position.x - x, camera.position.z - z) / 240);
+  addShake(0.5 + radius * 0.06 * (0.4 + near));
   for (let i = horde.agents.length - 1; i >= 0; i--) {
     const a = horde.agents[i];
     if (a.dead) continue;
@@ -419,6 +423,12 @@ const hud = createHUD(hudRoot, state, {
   onProduce: (key) => queueUnit(key),
   onResearch: (i) => doResearch(i),
 });
+
+const minimap = createMinimap(hudRoot, { field, force, horde, rig, camera });
+
+// ---------------- camera shake (game feel) ----------------
+let shake = 0;
+function addShake(n) { shake = Math.min(2.2, shake + n); }
 
 // ---------------- input: selection + orders ----------------
 let down = null;       // {x,y} on left press
@@ -591,8 +601,16 @@ async function frame(now) {
   possession.update(dt);
   updateGhost();
   updateSelectionFeedback();
+  // camera shake — applied last so it offsets whatever rig/possession set this frame
+  if (shake > 0.002) {
+    camera.position.x += (Math.random() * 2 - 1) * shake;
+    camera.position.y += (Math.random() * 2 - 1) * shake * 0.55;
+    camera.position.z += (Math.random() * 2 - 1) * shake;
+    shake *= Math.exp(-7 * dt);
+  }
   state.possession = possession.active ? (possession.avatar?.squad?.label ?? 'DIRECT') : null;
   hud.update(force);
+  minimap.update(dt);
   window.WF.stats = {
     cam: camera.position.toArray().map(n => +n.toFixed(1)),
     men: state.menRemaining, kills: state.kills,
