@@ -10,6 +10,7 @@ import { Horde } from './horde/horde.js';
 import { WALL_Z, NORTH_Z } from './world/field.js';
 import { Combat } from './combat/combat.js';
 import { createHUD } from './ui/hud.js';
+import { initAudio, sfxBoom, sfxBuild } from './engine/audio.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -21,6 +22,7 @@ const forced = params.get('fidelity');
 const forceWebGL = params.get('gl') === '1';
 const R = await createRenderer(canvas, forced || undefined, forceWebGL);
 const { scene, camera } = R;
+initAudio(); // Howler SFX (unlocks on first click/key)
 
 const state = new GameState(R.fidelity);
 const field = buildField(scene);
@@ -128,6 +130,7 @@ function placeSelectedWork(x, z) {
   if (!field.canPlaceBuildable?.(kind, x, z)) return true;
   if (!spendSupply(kind)) return true;
   field.placeBuildable(kind, x, z);
+  sfxBuild();
   return true; // stay in build mode — place several, Esc to exit
 }
 
@@ -209,6 +212,7 @@ function detonate(x, z, radius = 11, damage = 130, crater = 1.35) {
   const y = field.heightAt(x, z);
   field.blast(x, y, z, { radius, damage, crater });
   field.explodeFx?.(x, y, z, radius / 10); // visible fireball + smoke + flash
+  sfxBoom();
   for (let i = horde.agents.length - 1; i >= 0; i--) {
     const a = horde.agents[i];
     if (a.dead) continue;

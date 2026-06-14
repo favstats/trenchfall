@@ -164,6 +164,30 @@ function makeSnowTexture() {
   });
 }
 
+// proper ashlar masonry — courses of mortared stone blocks, so the castle reads as stone
+function makeMasonryTexture(size = 512, cols = 7, rows = 9) {
+  return makeCanvasTexture(size, (g) => {
+    g.fillStyle = '#33383f'; g.fillRect(0, 0, size, size); // mortar
+    const rh = size / rows, cw = size / cols;
+    for (let r = 0; r < rows; r++) {
+      const y = r * rh, off = (r % 2) * 0.5;
+      for (let c = -1; c <= cols; c++) {
+        const x = (c + off) * cw, pad = 2.5 + rnd() * 2;
+        const v = 96 + (rnd() - 0.5) * 40;            // per-block tone
+        g.fillStyle = `rgb(${(v * 0.9) | 0},${(v * 0.97) | 0},${(v * 1.05) | 0})`;
+        g.fillRect(x + pad, y + pad, cw - pad * 2, rh - pad * 2);
+        const grd = g.createLinearGradient(0, y + pad, 0, y + rh - pad); // bevel
+        grd.addColorStop(0, 'rgba(255,255,255,.10)'); grd.addColorStop(1, 'rgba(0,0,0,.22)');
+        g.fillStyle = grd; g.fillRect(x + pad, y + pad, cw - pad * 2, rh - pad * 2);
+        for (let s = 0; s < 5; s++) { // weathering speckle
+          g.fillStyle = `rgba(0,0,0,${rnd() * 0.14})`;
+          g.fillRect(x + pad + rnd() * (cw - pad * 2), y + pad + rnd() * (rh - pad * 2), 1.6, 1.6);
+        }
+      }
+    }
+  });
+}
+
 function makeGrainTexture(base, accent, contrast = 0.24) {
   return makeCanvasTexture(512, (g, size) => {
     g.fillStyle = base;
@@ -387,16 +411,16 @@ function addTerrain(group, placementTargets, env) {
 }
 
 function addWall(group, torches, placementTargets, env) {
-  const stoneTex = makeGrainTexture('#59616b', 'rgba(210,225,240,.24)', 0.22);
-  stoneTex.repeat.set(3.5, 1.2);
-  const stoneBump = makeGrainTexture('#808080', 'rgba(255,255,255,.18)', 0.18);
-  stoneBump.repeat.set(6, 2);
+  const stoneTex = makeMasonryTexture(512, 7, 9);
+  stoneTex.repeat.set(14, 4);
+  const stoneBump = makeMasonryTexture(512, 7, 9);
+  stoneBump.repeat.set(14, 4);
   const stone = new THREE.MeshStandardMaterial({
     map: stoneTex,
     bumpMap: stoneBump,
-    bumpScale: 0.12,
-    color: 0x7b8490,
-    roughness: 0.93,
+    bumpScale: 0.5,
+    color: 0x8a929c,
+    roughness: 0.92,
     metalness: 0,
   });
   const darkStone = new THREE.MeshStandardMaterial({
@@ -1235,21 +1259,24 @@ function gateHealth() {
 // Helm's Deep flanks — sheer cliffs hem the gorge so the wall butts into rock
 // at both ends (the dead can only come down the throat between them)
 function addCliffs(group) {
-  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x262b31, roughness: 1, metalness: 0 });
-  const snowMat = new THREE.MeshStandardMaterial({ color: 0xdfe7f1, roughness: 1 });
-  const z0 = NORTH_Z - 40, z1 = WALL_Z + 70, n = 16;
+  // snow-capped mountain peaks ridge the flanks (cones read as mountains, not boxes)
+  const rock = new THREE.MeshStandardMaterial({ color: 0x232931, roughness: 1, metalness: 0, flatShading: true });
+  const snow = new THREE.MeshStandardMaterial({ color: 0xe9f0f8, roughness: 1, flatShading: true });
+  const z0 = NORTH_Z - 30, z1 = WALL_Z + 60;
   for (const side of [-1, 1]) {
-    for (let i = 0; i < n; i++) {
-      const z = z0 + (i + rnd() * 0.4) * ((z1 - z0) / n);
-      const h = 36 + rnd() * 28;
-      const w = 26 + rnd() * 20, d = 30 + rnd() * 20;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cliffMat);
-      m.position.set(side * (FIELD_HALF_X + 12 + rnd() * 8), h / 2 - 4, z);
-      m.rotation.y = (rnd() - 0.5) * 0.5;
-      m.castShadow = true; m.receiveShadow = true;
-      group.add(m);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 1.6, d * 0.9), snowMat);
-      cap.position.set(m.position.x, h - 4.4, z); cap.rotation.y = m.rotation.y;
+    for (let i = 0; i < 8; i++) {
+      const z = z0 + (i + (rnd() - 0.5) * 0.6) * ((z1 - z0) / 7);
+      const h = 64 + rnd() * 56;
+      const r = 36 + rnd() * 24;
+      const x = side * (FIELD_HALF_X + 20 + rnd() * 34);
+      const peak = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6 + ((rnd() * 3) | 0)), rock);
+      peak.position.set(x, h / 2 - 12, z);    // base sunk below the field
+      peak.rotation.y = rnd() * Math.PI;
+      peak.castShadow = true; peak.receiveShadow = true;
+      group.add(peak);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.46, h * 0.34, 6), snow);
+      cap.position.set(x, h / 2 - 12 + h * 0.36, z);
+      cap.rotation.y = peak.rotation.y;
       group.add(cap);
     }
   }

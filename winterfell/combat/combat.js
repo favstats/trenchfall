@@ -4,6 +4,7 @@
 // pooled FX (tracers, muzzle flash, blood) so the visuals stay local to combat.
 import * as THREE from '../engine/three.js';
 import { WALL_Z, GATE_W } from '../world/field.js';
+import { sfxShot, sfxThud, sfxReload } from '../engine/audio.js';
 
 const WEAPON = {
   rifle: { range: 130, cd: 0.72, dmg: 2, spread: 0.04, mag: 12, reload: 2.4 },
@@ -158,10 +159,11 @@ export class Combat {
       if (m.mag === undefined) m.mag = w.mag;
       const fr = state.fireRate || 1; // CADENCE research speeds the whole line up
       if (--m.mag <= 0) {                       // empty — work the bolt / change the belt
-        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1) * fr; m.reloading = true;
+        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1) * fr; m.reloading = true; sfxReload();
       } else {
         m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * fr * (0.85 + Math.random() * 0.3);
       }
+      sfxShot();
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);
       this._to.set(a.x + (Math.random() - 0.5) * 2, horde.field.heightAt(a.x, a.z) + 1.2, a.z);
