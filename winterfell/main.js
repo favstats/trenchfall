@@ -162,6 +162,8 @@ function repairGate() {
 }
 let spawnAcc = 0;
 let surgeAt = 28;
+let reinforceAt = 16, reliefN = 0;   // endless British relief — more & stronger over time
+state.might = 1;                      // global firepower doctrine, ramps with the night
 
 function pickMortarTarget() {
   const A = horde.agents;
@@ -341,6 +343,15 @@ async function frame(now) {
     if (state.time >= surgeAt) {
       horde.spawnWave(Math.floor(160 + pressure * 90), NORTH_Z - 16, NORTH_Z + 30);
       surgeAt += 26;
+    }
+    // ---- RELIEF: more and stronger soldiers march up to hold the wall ----
+    state.might = 1 + state.time / 130;                  // firepower ramps all night
+    if (state.time >= reinforceAt && force.soldiers.length < 150) {
+      const tier = 1 + Math.floor(state.time / 38);      // doctrine tier climbs
+      const type = (reliefN % 4 === 3) ? 'mg' : 'rifle';
+      const sq = force.addSquad(`RELIEF ${++reliefN}`, type, (Math.random() * 2 - 1) * 104, WALL_Z, type === 'mg' ? 3 : 6);
+      for (const m of sq.members) m.hp = 3 + tier;       // each wave of relief is hardier
+      reinforceAt += Math.max(6, 17 - tier);             // and they come faster and faster
     }
     horde.update(dt);
     combat.update(dt);
