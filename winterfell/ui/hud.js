@@ -50,9 +50,16 @@ export function createHUD(root, state, hooks = {}) {
     el.risen.textContent = state.menRisen;
     el.timer.textContent = fmt(state.timeLeft);
     el.mortar.classList.toggle('spent', state.charges.mortar <= 0);
-    el.reserve.classList.toggle('spent', state.charges.reserve <= 0);
-    el.mortar.querySelector('small').textContent = '×' + state.charges.mortar;
-    el.reserve.querySelector('small').textContent = '×' + state.charges.reserve;
+    el.mortar.querySelector('small').textContent = '×' + (state.charges.mortar ?? 0);
+    if ('reserve' in state.charges) {
+      el.reserve.classList.toggle('spent', state.charges.reserve <= 0);
+      el.reserve.querySelector('small').textContent = '×' + state.charges.reserve;
+    } else {
+      // supply economy: reserve = recruit
+      const cost = state.costs?.recruit ?? 0;
+      el.reserve.classList.toggle('spent', (state.supply ?? 0) < cost);
+      el.reserve.querySelector('small').textContent = cost ? `${cost}` : '';
+    }
 
     const sel = force.selected();
     if (!sel.length) { el.sel.innerHTML = '<div class="sel-empty">no unit selected</div>'; return; }

@@ -552,7 +552,7 @@ function addWall(group, torches, placementTargets, env) {
   addTorches(wall, torches);
   cast(wall);
   group.add(wall);
-  env.gate = { parts: gateBreakables, hp: 360, broken: false };
+  env.gate = { parts: gateBreakables, hp: 360, maxHp: 360, broken: false };
 
   return { wall, gate };
 }
@@ -702,6 +702,144 @@ function addDestructionPools(group, env) {
   for (let i = 0; i < env.debrisMesh.count; i++) env.debrisMesh.setMatrixAt(i, o.matrix);
   env.debrisMesh.instanceMatrix.needsUpdate = true;
   group.add(env.debrisMesh);
+}
+
+function buildAssets(env) {
+  if (env.buildAssets) return env.buildAssets;
+  env.buildAssets = {
+    wood: new THREE.MeshStandardMaterial({
+      color: 0x3a2a1f,
+      roughness: 0.9,
+      metalness: 0,
+      map: makeGrainTexture('#2b1f17', 'rgba(245,205,150,.12)', 0.14),
+    }),
+    iron: new THREE.MeshStandardMaterial({ color: 0x14191d, roughness: 0.62, metalness: 0.48 }),
+    snow: new THREE.MeshStandardMaterial({ color: 0xdbe7f3, roughness: 1, metalness: 0 }),
+    log: new THREE.BoxGeometry(8.4, 0.52, 0.72),
+    brace: new THREE.BoxGeometry(0.52, 3.2, 0.52),
+    spike: new THREE.ConeGeometry(0.24, 3.4, 5),
+    snowCap: new THREE.BoxGeometry(8.8, 0.18, 0.92),
+  };
+  return env.buildAssets;
+}
+
+function castBuildable(g) {
+  g.traverse?.(m => {
+    if (!m.isMesh) return;
+    m.castShadow = true;
+    m.receiveShadow = true;
+  });
+}
+
+function canPlaceBuildable(env, kind, x, z) {
+  if (!env) return false;
+  if (Math.abs(x) > FIELD_HALF_X - 8) return false;
+  if (z < NORTH_Z + 18 || z > WALL_Z - 8) return false;
+  const clearance = kind === 'barricade' ? 10 : 7;
+  for (const b of env.buildables) {
+    if (b.alive && Math.hypot(b.x - x, b.z - z) < clearance) return false;
+  }
+  return true;
+}
+
+function placeBuildable(kind, x, z) {
+  const env = activeEnv;
+  if (!canPlaceBuildable(env, kind, x, z)) return null;
+  const a = buildAssets(env);
+  const g = new THREE.Group();
+  g.position.set(x, groundHeight(x, z) + 0.08, z);
+  g.rotation.y = (rnd() - 0.5) * 0.5;
+  const item = {
+    id: ++env.buildId,
+    kind,
+    group: g,
+    x, z,
+    alive: true,
+    hp: kind === 'barricade' ? 150 : 78,
+    maxHp: kind === 'barricade' ? 150 : 78,
+    radius: kind === 'barricade' ? 7.4 : 6.0,
+  };
+
+  if (kind === 'barricade') {
+    for (let i = 0; i < 4; i++) {
+      const log = new THREE.Mesh(a.log, a.wood);
+      log.position.set(0, 0.48 + i * 0.58, (i % 2 ? -0.32 : 0.32));
+      log.rotation.z = (i % 2 ? 0.05 : -0.05);
+      g.add(log);
+    }
+    for (const sx of [-3.9, 3.9]) {
+      const brace = new THREE.Mesh(a.brace, a.wood);
+      brace.position.set(sx, 1.2, 0);
+      brace.rotation.z = sx < 0 ? -0.45 : 0.45;
+      g.add(brace);
+    }
+    const cap = new THREE.Mesh(a.snowCap, a.snow);
+    cap.position.y = 2.82;
+    g.add(cap);
+  } else {
+    for (let i = 0; i < 9; i++) {
+      const spike = new THREE.Mesh(a.spike, i % 3 === 0 ? a.iron : a.wood);
+      const ox = (i - 4) * 1.0;
+      spike.position.set(ox, 1.25, (rnd() - 0.5) * 1.3);
+      spike.rotation.set(0.58 + rnd() * 0.25, rnd() * Math.PI, (rnd() - 0.5) * 0.24);
+      g.add(spike);
+    }
+  }
+
+  castBuildable(g);
+  env.group.add(g);
+  env.buildables.push(item);
+  return item;
+}
+
+function destroyBuildable(env, item) {
+  if (!item.alive) return;
+  item.alive = false;
+  item.group.visible = false;
+  spawnDebris(env, item.x, item.z, item.kind === 'barricade' ? 5.5 : 3.5, item.kind === 'barricade' ? 12 : 7, false);
+  placeGroundScar(env, item.x, item.z, item.kind === 'barricade' ? 4.2 : 3.0);
+}
+
+function buildPressure(x, z, dt) {
+  const env = activeEnv;
+  if (!env) return null;
+  let speedMul = 1;
+  let damage = 0;
+  for (const item of env.buildables) {
+    if (!item.alive) continue;
+    const d = Math.hypot(item.x - x, item.z - z);
+    if (d > item.radius) continue;
+    const k = 1 - d / item.radius;
+    if (item.kind === 'spikes') {
+      speedMul = Math.min(speedMul, 0.44 + (1 - k) * 0.22);
+      damage += dt * (1.3 + k * 3.6);
+      item.hp -= dt * (1.0 + k * 2.4);
+    } else {
+      speedMul = Math.min(speedMul, 0.12 + (1 - k) * 0.34);
+      item.hp -= dt * (7.0 + k * 18.0);
+    }
+    if (item.hp <= 0) destroyBuildable(env, item);
+  }
+  return speedMul < 1 || damage > 0 ? { speedMul, damage } : null;
+}
+
+function repairGate(amount = 90) {
+  const env = activeEnv;
+  if (!env?.gate) return 0;
+  const before = env.gate.hp;
+  env.gate.hp = clamp(Math.max(0, env.gate.hp) + amount, 0, env.gate.maxHp);
+  if (env.gate.broken && env.gate.hp > env.gate.maxHp * 0.22) {
+    env.gate.broken = false;
+    for (const p of env.gate.parts) p.visible = true;
+    placeWallScar(env, 0, WALL_Z, 6);
+  }
+  return env.gate.hp - before;
+}
+
+function gateHealth() {
+  const env = activeEnv;
+  if (!env?.gate) return 1;
+  return clamp(env.gate.hp / env.gate.maxHp, 0, 1);
 }
 
 function addTreeline(group) {
@@ -905,6 +1043,7 @@ function damageBreakables(env, x, z, radius, damage) {
 function breakGate(env) {
   if (!env.gate || env.gate.broken) return;
   env.gate.broken = true;
+  env.gate.hp = 0;
   for (const p of env.gate.parts) p.visible = false;
   spawnDebris(env, 0, WALL_Z + 1, 11, 34, true);
   placeWallScar(env, 0, WALL_Z, 10);
@@ -964,6 +1103,8 @@ export function buildField(scene) {
     groundScarHead: 0,
     wallScarHead: 0,
     debrisHead: 0,
+    buildId: 0,
+    buildables: [],
   };
   activeEnv = env;
   const terrain = addTerrain(group, placementTargets, env);
@@ -1031,6 +1172,12 @@ export function buildField(scene) {
     heightAt,
     blast: blastEnvironment,
     damageEnvironment: blastEnvironment,
+    placeBuildable,
+    canPlaceBuildable: (kind, x, z) => canPlaceBuildable(env, kind, x, z),
+    buildPressure,
+    repairGate,
+    gateHealth,
+    works: () => env.buildables.filter(b => b.alive).length,
     update,
   };
 }

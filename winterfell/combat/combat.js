@@ -192,6 +192,34 @@ export class Combat {
     fx.update(dt);
   }
 
+  // a shot fired by the possessed soldier along its aim — nearest agent in a
+  // forward cone takes the hit (tracer always drawn so it reads as firing)
+  playerShot(avatar, yaw) {
+    const { horde, fx, state } = this;
+    const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
+    const ox = avatar.pos.x, oz = avatar.pos.z, range = 150;
+    let best = -1, bestT = 1e9;
+    for (let i = 0; i < horde.agents.length; i++) {
+      const a = horde.agents[i];
+      if (a.dead) continue;
+      const dx = a.x - ox, dz = a.z - oz;
+      const t = dx * fwx + dz * fwz;            // distance along aim
+      if (t < 2 || t > range) continue;
+      const perp = Math.abs(dx * fwz - dz * fwx);
+      if (perp > 2.5 + t * 0.05) continue;       // cone
+      if (t < bestT) { bestT = t; best = i; }
+    }
+    const from = this._from.set(avatar.pos.x, avatar.pos.y + 2.4, avatar.pos.z);
+    if (best < 0) {
+      fx.shot(from, this._to.set(ox + fwx * range, avatar.pos.y + 2.2, oz + fwz * range));
+      return;
+    }
+    const a = horde.agents[best];
+    fx.shot(from, this._to.set(a.x, horde.field.heightAt(a.x, a.z) + 1.2, a.z));
+    a.hp -= 2;
+    if (a.hp <= 0) { fx.burst(this._to); horde.kill(best); state.kills++; }
+  }
+
   _nearestSoldier(x, z, maxD) {
     let best = null, bd = maxD * maxD;
     for (const m of this.force.soldiers) {

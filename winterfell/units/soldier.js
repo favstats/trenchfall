@@ -85,6 +85,7 @@ export class Soldier {
     this.reload = 0;         // seconds until next shot (combat fills this)
     this.deadT = 0;          // time since death (for reanimation)
     this.risen = false;      // has this body risen as undead yet
+    this.possessed = false;  // under direct player control
     this.squad = squad;
   }
 
@@ -109,6 +110,18 @@ export class Soldier {
       const k = Math.min(this.deadT / 0.5, 1);
       this.g.rotation.x = -Math.PI / 2 * k * 0.92;
       this.g.position.y = this.elevation - 0.2 * k;
+      return;
+    }
+
+    // under direct control: skip squad AI, just follow terrain + light gait
+    if (this.possessed) {
+      const h = heightAt(this.pos.x, this.pos.z);
+      this.elevation += (h - this.elevation) * Math.min(1, dt * 12);
+      this.g.position.y = this.elevation;
+      this.g.rotation.y = this.heading;
+      this.phase += dt * 9;
+      const s = Math.sin(this.phase) * 0.4;
+      this.parts.legL.rotation.x = s; this.parts.legR.rotation.x = -s;
       return;
     }
 

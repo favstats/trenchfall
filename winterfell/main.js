@@ -5,6 +5,7 @@ import { buildField } from './world/field.js';
 import { makeCameraRig, makePicker } from './engine/input.js';
 import { GameState } from './game/state.js';
 import { Force } from './units/squads.js';
+import { Possession } from './game/possession.js';
 import { Horde } from './horde/horde.js';
 import { WALL_Z, NORTH_Z } from './world/field.js';
 import { Combat } from './combat/combat.js';
@@ -30,7 +31,58 @@ const horde = new Horde(scene, state, field);
 // the dead muster at the back, by the godswood, and march south on the wall
 horde.spawnWave(Math.floor(horde.cap * 0.55), NORTH_Z + 10, NORTH_Z + 115);
 const combat = new Combat(scene, force, horde, state);
+const possession = new Possession(camera, rig, force, combat, canvas);
+let lastKillSupply = 0;
+
+function addSupply(n) {
+  state.supply = Math.min(state.supplyMax, state.supply + n);
+}
+
+function spendSupply(kind) {
+  const cost = state.costs[kind] ?? 0;
+  if (state.supply < cost) return false;
+  state.supply -= cost;
+  return true;
+}
+
+function updateEconomy(dt) {
+  addSupply(dt * state.supplyRate);
+  if (state.kills > lastKillSupply) {
+    addSupply((state.kills - lastKillSupply) * 0.22);
+    lastKillSupply = state.kills;
+  }
+  state.gateHp = field.gateHealth?.() ?? 1;
+  state.works = field.works?.() ?? 0;
+}
+
+function setBuildMode(kind) {
+  state.buildMode = state.buildMode === kind ? null : kind;
+}
+
+function placeSelectedWork(x, z) {
+  const kind = state.buildMode;
+  if (!kind) return false;
+  if (!field.canPlaceBuildable?.(kind, x, z)) return true;
+  if (!spendSupply(kind)) return true;
+  field.placeBuildable(kind, x, z);
+  state.buildMode = null;
+  return true;
+}
+
+function callReserve() {
+  if (!spendSupply('recruit')) return;
+  state.recruits++;
+  const side = state.recruits % 2 ? -1 : 1;
+  force.addSquad(`GARRISON ${state.recruits}`, 'rifle', side * 14, WALL_Z + 40, 6); // muster at the gate
+}
+
+function repairGate() {
+  if ((field.gateHealth?.() ?? 1) >= 0.995) return;
+  if (!spendSupply('repair')) return;
+  field.repairGate?.(105);
+}
 let spawnAcc = 0;
+let surgeAt = 28;
 
 function pickMortarTarget() {
   const A = horde.agents;
@@ -82,7 +134,10 @@ function fireMortarCallIn() {
 
 const hud = createHUD(hudRoot, state, {
   onMortar: fireMortarCallIn,
-  onReserve: () => console.log('[WF] reserve (M5)'),
+  onReserve: callReserve,
+  onBuildBarricade: () => setBuildMode('barricade'),
+  onBuildSpikes: () => setBuildMode('spikes'),
+  onRepair: repairGate,
 });
 
 // ---------------- input: selection + orders ----------------
@@ -93,6 +148,13 @@ const DRAG_MIN = 6;
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('mousedown', e => {
+  if (possession.active) return;
+  if (e.button === 0 && state.buildMode) {
+    const p = picker.ground(e.clientX, e.clientY);
+    if (p) placeSelectedWork(p.x, p.z);
+    down = null; dragging = false;
+    return;
+  }
   if (e.button === 0) { down = { x: e.clientX, y: e.clientY }; dragging = false; }
 });
 
@@ -102,6 +164,7 @@ canvas.addEventListener('mousemove', e => {
 });
 
 window.addEventListener('mouseup', e => {
+  if (possession.active) { down = null; dragging = false; hud.hideDragBox(); return; }
   if (e.button === 2) { // right-click order — lands on wall/embankment/ground
     const hits = picker.objects(e.clientX, e.clientY, field.placementTargets);
     const p = hits.length ? hits[0].point : picker.ground(e.clientX, e.clientY);
@@ -128,6 +191,17 @@ window.addEventListener('mouseup', e => {
 
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (k === 'f') {
+    if (possession.active) possession.exit();
+    else { const m = force.selected().flatMap(s => s.alive)[0]; if (m) possession.enter(m); }
+    return;
+  }
+  if (possession.active) return; // direct-control owns the keyboard
+  if (k === 'v') fireMortarCallIn();
+  else if (k === 'c') callReserve();
+  else if (k === 'b') setBuildMode('barricade');
+  else if (k === 'n') setBuildMode('spikes');
+  else if (k === 'r') repairGate();
   if (k === 'h') force.orderSelected('HOLD');
   else if (k === 'x') force.orderSelected('FALL_BACK', { x: force.selected()[0]?.centroid().x ?? 0, z: field.wallZ + 9 });
   else if (k === 'z') {
@@ -146,10 +220,19 @@ async function frame(now) {
   last = now;
   if (state.phase === 'battle') {
     state.time += dt;
+    updateEconomy(dt);
     force.update(dt);
     // keep the tide topped up — the dead never stop coming
     spawnAcc += dt;
-    if (spawnAcc > 0.35 && horde.count < horde.cap) { horde.spawnWave(30); spawnAcc = 0; }
+    const pressure = 1 + state.time / state.waveDuration;
+    if (spawnAcc > Math.max(0.16, 0.42 - pressure * 0.08) && horde.count < horde.cap) {
+      horde.spawnWave(Math.floor(22 + pressure * 18));
+      spawnAcc = 0;
+    }
+    if (state.time >= surgeAt) {
+      horde.spawnWave(Math.floor(160 + pressure * 90), NORTH_Z - 8, NORTH_Z + 70);
+      surgeAt += 26;
+    }
     horde.update(dt);
     combat.update(dt);
     // ---- win / lose ----
@@ -158,6 +241,8 @@ async function frame(now) {
   }
   if (field.update) field.update(dt, camera);
   rig.update(dt);
+  possession.update(dt);
+  state.possession = possession.active ? (possession.avatar?.squad?.label ?? 'DIRECT') : null;
   hud.update(force);
   window.WF.stats = {
     cam: camera.position.toArray().map(n => +n.toFixed(1)),
@@ -166,6 +251,8 @@ async function frame(now) {
     horde: horde.count, corpses: horde.corpseCount, crest: horde.wallCrest(),
     phase: state.phase,
     selected: force.selected().map(s => s.label),
+    supply: Math.floor(state.supply), gate: +state.gateHp.toFixed(2), works: state.works,
+    possession: state.possession,
   };
   await R.render();
   requestAnimationFrame(frame);
@@ -181,8 +268,14 @@ window.WF.test = {
   killSome: (n = 3) => force.soldiers.slice(0, n).forEach(m => m.kill()),
   horde: () => horde.count,
   spawn: (n = 200) => horde.spawnWave(n),
+  possess: () => { const m = force.soldiers.find(s => s.alive); if (m) { possession.enter(m); possession.keys.add('w'); possession.firing = true; } return !!m; },
+  release: () => possession.exit(),
+  reserve: () => callReserve(),
   heightAt: (x = 0, z = WALL_Z - 42) => field.heightAt(x, z),
   blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
+  build: (kind = 'barricade', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
+  repair: () => field.repairGate?.(105),
+  supply: (n = 100) => addSupply(n),
 };
 
 if (params.get('end')) { state.phase = params.get('end'); state.kills = 842; state.menLost = 7; state.menRisen = 4; hud.showEnd(); }
@@ -190,6 +283,10 @@ if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('look') === 'wall') rig.frame(-70, 40, 34);
 if (params.get('look') === 'climb') rig.frame(-28, 42, 40);
+if (params.get('demo') === 'possess') {
+  const m = force.soldiers.find(s => s.alive);
+  if (m) { possession.enter(m); possession.keys.add('w'); possession.firing = true; }
+}
 if (params.get('demo') === 'climb') {
   // send 3 RIFLES (mustered behind) up onto the rampart
   const sq = force.squads.find(s => s.label === '3 RIFLES');

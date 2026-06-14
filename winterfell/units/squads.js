@@ -66,6 +66,12 @@ export class Force {
     this._recount();
   }
 
+  addSquad(label, type, x, z, n) {
+    const s = new Squad(this.scene, label, type, x, z, n, this.state);
+    this.squads.push(s); this._recount();
+    return s;
+  }
+
   get soldiers() { return this.squads.flatMap(s => s.members); }
   get pickables() { return this.soldiers.filter(m => m.alive).map(m => m.g); }
 

@@ -16,8 +16,20 @@ export class GameState {
     this.waveDuration = 150;    // seconds to hold
     this.hordeBroken = 60;     // win early if living horde falls below this
 
+    // Stronghold-style command economy: trickle income plus a small bounty for
+    // killing the dead, spent on repairs, mustering, and field works.
+    this.supply = 95;
+    this.supplyMax = 260;
+    this.supplyRate = 4.2;
+    this.costs = { barricade: 35, spikes: 26, repair: 45, recruit: 65 };
+    this.buildMode = null;     // null | 'barricade' | 'spikes'
+    this.gateHp = 1;
+    this.works = 0;
+    this.possession = null;    // label of directly controlled soldier, if any
+    this.recruits = 0;
+
     // limited fire support
-    this.charges = { mortar: 1, reserve: 1 };
+    this.charges = { mortar: 1 };
   }
 
   get held() { return this.phase === 'won'; }

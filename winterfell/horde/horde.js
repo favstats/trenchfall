@@ -276,8 +276,14 @@ export class Horde {
           if (dd > 0 && dd < CELL * CELL) { const inv = 1 / Math.sqrt(dd); sx += ddx * inv; sz += ddz * inv; }
         }
       }
+      const pressure = this.field.buildPressure?.(a.x, a.z, dt);
+      if (pressure?.damage) {
+        a.hp -= pressure.damage;
+        if (a.hp <= 0) { this.kill(i); continue; }
+      }
+
       const arrived = a.z >= NORTH_FACE - 1.2;
-      const spd = arrived ? 0 : a.spd;
+      const spd = arrived ? 0 : a.spd * (pressure?.speedMul ?? 1);
       a.x += (mvx + sx * 0.45) * spd * dt;
       a.z += (mvz + sz * 0.45) * spd * dt;
       a.x = THREE.MathUtils.clamp(a.x, -FIELD_HALF_X, FIELD_HALF_X);
