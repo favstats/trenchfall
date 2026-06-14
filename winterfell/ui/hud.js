@@ -32,6 +32,7 @@ export function createHUD(root, state, hooks = {}) {
         <button class="cmd-tab" data-tab="support">SUPPORT</button>
       </div>
       <div id="cmdGrid"></div>
+      <div id="cmdProg" class="cmd-prog" style="display:none"><i></i></div>
     </div>
 
     <div id="possessionTag"></div>
@@ -55,6 +56,7 @@ export function createHUD(root, state, hooks = {}) {
     gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
+    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
@@ -100,35 +102,54 @@ export function createHUD(root, state, hooks = {}) {
     `<button class="cmd-btn ${opts.spent ? 'spent' : ''} ${opts.active ? 'active' : ''}" data-act="${act}" title="${opts.tip || ''}">
        <span class="cmd-ico">${icon || ''}</span><span class="cmd-lbl">${label}</span>${cost != null ? `<span class="cmd-cost">${cost}</span>` : ''}</button>`;
 
+  // The grid buttons must be DOM-STABLE: rewriting innerHTML every frame destroys
+  // the button mid-interaction so the browser can't form a click (down+up on the
+  // same node). So we build the html, diff it, and only rewrite when it changes.
+  // Anything that animates per-frame (the production bar) lives outside the grid.
+  let lastGridHtml = null, lastTabsShown = null;
+  function setGrid(html) {
+    if (html !== lastGridHtml) { el.cmdGrid.innerHTML = html; lastGridHtml = html; }
+  }
+  function showTabs(on) {
+    if (on !== lastTabsShown) { el.cmdTabs.style.display = on ? 'flex' : 'none'; lastTabsShown = on; }
+  }
+  function progBar(pct) { // pct < 0 hides; this animates without rebuilding the grid
+    if (pct < 0) { if (el.cmdProg.style.display !== 'none') el.cmdProg.style.display = 'none'; return; }
+    if (el.cmdProg.style.display !== 'block') el.cmdProg.style.display = 'block';
+    el.cmdProgFill.style.width = `${Math.round(pct * 100)}%`;
+  }
+
   function renderCommand() {
     const sb = state.selBuilding;
     if (sb) {
       const hpPct = Math.round(((sb.hp ?? 1) / Math.max(1, sb.maxHp ?? 1)) * 100);
       const status = sb.build ? `BUILD ${Math.round(sb.build.pct * 100)}%` : `HP ${hpPct}%`;
-      el.cmdTabs.style.display = 'none';
+      showTabs(false);
       el.cmdTitle.textContent = sb.kind.toUpperCase();
       if (sb.kind === 'barracks') {
         el.cmdSub.textContent = sb.build
           ? status
           : `${sb.prod ? `TRAINING ${sb.prod.key.toUpperCase()}` : (sb.queue ? `${sb.queue} QUEUED` : 'RMB = rally' + (sb.hasRally ? ' ✓' : ''))} · ${status}`;
-        el.cmdGrid.innerHTML =
+        setGrid(
           btn('prod:rifles', 'RIFLES', ICON.rifles, 40, { spent: !can(40), tip: 'Train a rifle squad' }) +
           btn('prod:mg', 'MG TEAM', ICON.mg, 60, { spent: !can(60), tip: 'Train a machine-gun team' }) +
-          btn('prod:engineer', 'ENGINEERS', ICON.engineer, 55, { spent: !can(55), tip: TIP.engineer }) +
-          (sb.prod ? `<div class="cmd-prog"><i style="width:${Math.round(sb.prod.pct * 100)}%"></i></div>` : '');
+          btn('prod:engineer', 'ENGINEERS', ICON.engineer, 55, { spent: !can(55), tip: TIP.engineer }));
+        progBar(sb.prod ? sb.prod.pct : -1);
       } else if (sb.kind === 'lab') {
         el.cmdSub.textContent = `${Math.floor(state.research ?? 0)} RP · ${status}`;
-        el.cmdGrid.innerHTML = (state.techs || []).map((t, i) => {
+        setGrid((state.techs || []).map((t, i) => {
           const c = state.techCost ? state.techCost(t) : t.base;
           return btn('rsc:' + i, t.key, '✦', c, { spent: (state.research ?? 0) < c, tip: `Research ${t.key} (L${t.lvl})` })
             .replace('cmd-cost">' + c, `cmd-cost">L${t.lvl} · ${c}`);
-        }).join('');
+        }).join(''));
+        progBar(-1);
       } else {
         el.cmdSub.textContent = status;
-        el.cmdGrid.innerHTML = `<div class="cmd-info">${TIP[sb.kind] || ''}</div>`;
+        setGrid(`<div class="cmd-info">${TIP[sb.kind] || ''}</div>`);
+        progBar(-1);
       }
     } else {
-      el.cmdTabs.style.display = 'flex';
+      showTabs(true);
       el.cmdTitle.textContent = 'CONSTRUCTION';
       el.cmdSub.textContent = tab.toUpperCase();
       for (const t of el.cmdTabs.children) t.classList.toggle('on', t.dataset.tab === tab);
@@ -141,7 +162,8 @@ export function createHUD(root, state, hooks = {}) {
         const rc = state.costs?.recruit ?? 0;
         html += btn('call:reserve', 'RESERVE', ICON.reserve, rc, { spent: !can(rc), tip: TIP.reserve });
       }
-      el.cmdGrid.innerHTML = html;
+      setGrid(html);
+      progBar(-1);
     }
   }
 
