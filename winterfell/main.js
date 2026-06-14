@@ -70,15 +70,24 @@ const GHOST_SIZE = {
   floodlight: [1.6, 5, 1.6], ammo: [5, 2.2, 4], bunker: [6.2, 2.4, 4.6], brazier: [2.2, 3.2, 2.2],
   barracks: [8, 4, 6], depot: [6.6, 2, 4.6], lab: [7, 3, 6],
 };
+const EFFECT_RANGE = {
+  nest: 155, tower: 185, bunker: 155,
+  floodlight: 18, ammo: 7.2, brazier: 12.5,
+  trench: 8, wire: 6.2, sandbag: 6.8, pit: 5.9,
+};
 const ghost = new THREE.Group();
 const ghostRing = new THREE.Mesh(
   new THREE.RingGeometry(0.86, 1, 32),
   new THREE.MeshBasicMaterial({ color: 0x5ad17a, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, fog: false }));
 ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.y = 0.15;
+const ghostRange = new THREE.Mesh(
+  new THREE.RingGeometry(0.995, 1, 72),
+  new THREE.MeshBasicMaterial({ color: 0x8dd8ff, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+ghostRange.rotation.x = -Math.PI / 2; ghostRange.position.y = 0.18; ghostRange.visible = false;
 const ghostBox = new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 1),
   new THREE.MeshBasicMaterial({ color: 0x5ad17a, transparent: true, opacity: 0.22, depthWrite: false, fog: false }));
-ghost.add(ghostRing, ghostBox);
+ghost.add(ghostRange, ghostRing, ghostBox);
 ghost.visible = false;
 scene.add(ghost);
 let lastMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -90,6 +99,11 @@ const selRing = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, fog: false }),
 );
 selRing.rotation.x = -Math.PI / 2;
+const rangeRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.995, 1, 96),
+  new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide, fog: false }),
+);
+rangeRing.rotation.x = -Math.PI / 2;
 const hpBillboard = new THREE.Group();
 const hpBack = new THREE.Mesh(
   new THREE.PlaneGeometry(3.4, 0.28),
@@ -101,7 +115,7 @@ const hpFill = new THREE.Mesh(
 );
 hpFill.position.z = 0.01;
 hpBillboard.add(hpBack, hpFill);
-selFx.add(selRing, hpBillboard);
+selFx.add(rangeRing, selRing, hpBillboard);
 scene.add(selFx);
 selFx.visible = false;
 
@@ -139,6 +153,12 @@ function updateGhost() {
   ghostRing.material.color.setHex(col); ghostBox.material.color.setHex(col);
   const r = Math.max(dims[0], dims[2]) * 0.5 + 0.6;
   ghostRing.scale.set(r, r, 1);
+  const effect = EFFECT_RANGE[state.buildMode] || 0;
+  ghostRange.visible = effect > r + 1.5;
+  if (ghostRange.visible) {
+    ghostRange.material.color.setHex(ok ? 0x8dd8ff : 0xff8a7a);
+    ghostRange.scale.set(effect, effect, 1);
+  }
   ghostBox.scale.set(dims[0], dims[1], dims[2]); ghostBox.position.y = dims[1] / 2;
   ghost.position.set(p.x, field.heightAt(p.x, p.z), p.z);
   ghost.visible = true;
@@ -155,6 +175,12 @@ function updateSelectionFeedback() {
   const r = Math.max(2.8, (selBuilding.radius ?? 7) * 0.62);
   selRing.scale.set(r, r, 1);
   selRing.position.set(selBuilding.x, ground + 0.16, selBuilding.z);
+  const effect = EFFECT_RANGE[selBuilding.kind] || 0;
+  rangeRing.visible = effect > r + 1.5;
+  if (rangeRing.visible) {
+    rangeRing.scale.set(effect, effect, 1);
+    rangeRing.position.set(selBuilding.x, ground + 0.19, selBuilding.z);
+  }
   hpBillboard.position.set(selBuilding.x, ground + Math.max(3.2, r * 0.42 + 2.2), selBuilding.z);
   hpBillboard.quaternion.copy(camera.quaternion);
   const hp = Math.max(0, Math.min(1, (selBuilding.hp ?? 1) / (selBuilding.maxHp ?? 1)));

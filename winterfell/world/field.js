@@ -524,20 +524,29 @@ function addWall(group, torches, placementTargets, env) {
   buttresses.castShadow = buttresses.receiveShadow = true;
   wall.add(buttresses);
 
-  const merlonGeo = new THREE.BoxGeometry(2.35, 2.1, WALL_T + 0.85);
-  const merlons = new THREE.InstancedMesh(merlonGeo, stone, 80);
+  // crenellations: snow-capped stone merlons with their own masonry mapping so
+  // they read as battlements, not flat grey boxes
+  const merlonTex = stampMasonry(); merlonTex.repeat.set(1.2, 0.8);
+  const merlonMat = new THREE.MeshStandardMaterial({ map: merlonTex, bumpMap: merlonTex, bumpScale: 0.35, color: 0x828b96, roughness: 0.93 });
+  const merlonGeo = new THREE.BoxGeometry(2.5, 2.0, WALL_T + 0.5);
+  const merlonCapGeo = new THREE.BoxGeometry(2.7, 0.4, WALL_T + 0.7);
+  const merlons = new THREE.InstancedMesh(merlonGeo, merlonMat, 80);
+  const merlonCaps = new THREE.InstancedMesh(merlonCapGeo, snowCap, 80);
   let mi = 0;
-  for (let x = -FIELD_HALF_X + 2.4; x <= FIELD_HALF_X - 2.4 && mi < 80; x += 4.15) {
-    if (Math.abs(x) < GATE_W / 2 + 1.8) continue;
-    o.position.set(x, WALL_H + 1.15, WALL_Z - 0.1);
+  for (let x = -FIELD_HALF_X + 3; x <= FIELD_HALF_X - 3 && mi < 80; x += 4.3) {
+    if (Math.abs(x) < GATE_W / 2 + 2) continue;
     o.rotation.set(0, 0, 0);
-    o.updateMatrix();
+    o.position.set(x, WALL_H + 1.05, WALL_Z - 0.1); o.updateMatrix();
+    merlons.setMatrixAt(mi, o.matrix);
+    o.position.set(x, WALL_H + 2.25, WALL_Z - 0.1); o.updateMatrix();
+    merlonCaps.setMatrixAt(mi, o.matrix);
     env.breakables.push({ kind: 'merlon', mesh: merlons, index: mi, x, z: WALL_Z, hp: 42, alive: true });
-    merlons.setMatrixAt(mi++, o.matrix);
+    mi++;
   }
-  merlons.count = mi;
+  merlons.count = merlonCaps.count = mi;
   merlons.castShadow = merlons.receiveShadow = true;
-  wall.add(merlons);
+  merlonCaps.castShadow = true;
+  wall.add(merlons, merlonCaps);
 
   const towerH = 17.8;
   for (const side of [-1, 1]) {

@@ -40,6 +40,9 @@ export class GameState {
     this.buildMode = null;     // null | field-work kind
     this.gateHp = 1;
     this.works = 0;
+    this.noise = 0;          // gunfire, explosions, and industry draw the dead
+    this.threat = 0;         // wave pressure shown to the player
+    this.engineersRepairing = 0;
     this.possession = null;    // label of directly controlled soldier, if any
     this.recruits = 0;
 
