@@ -76,6 +76,13 @@ try {
     console.log(`[WF] ${gl ? 'webgl2' : 'webgpu'} info:`, JSON.stringify(info));
 
     if (capture) {
+      // exercise selection so rings/HUD show in the capture, then report squads
+      const sq = await page.evaluate(() => {
+        try { window.WF?.test?.selectAll?.(); } catch {}
+        return window.WF?.test?.squads ? window.WF.test.squads() : null;
+      });
+      if (sq) console.log('[WF] squads:', JSON.stringify(sq));
+      await sleep(400);
       const shot = `dist/shots/winterfell-${TAG}.png`;
       await page.screenshot({ path: shot, timeout: 60000 });
       console.log('[WF] screenshot:', shot);

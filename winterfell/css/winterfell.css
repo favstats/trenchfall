@@ -14,5 +14,64 @@ body { font-family: 'Saira Condensed', 'Segoe UI', system-ui, sans-serif; }
 
 #bootTag {
   position: fixed; left: 18px; bottom: 14px; font-size: 13px;
-  letter-spacing: .12em; text-transform: uppercase; opacity: .55;
+  letter-spacing: .12em; text-transform: uppercase; opacity: .45;
 }
+
+.panel {
+  position: fixed; background: rgba(10,16,24,.72); border: 1px solid rgba(120,150,180,.22);
+  backdrop-filter: blur(6px); border-radius: 7px; padding: 10px 13px;
+}
+
+/* objective banner, top-center */
+#objective { top: 16px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 230px; }
+.obj-title { font-family: 'Saira Stencil One', sans-serif; font-size: 22px; letter-spacing: .04em; color: #e7eefa; }
+.obj-sub { font-size: 12px; opacity: .65; letter-spacing: .08em; text-transform: uppercase; margin-top: 1px; }
+.obj-timer { font-family: 'Special Elite', monospace; font-size: 28px; color: #9fd0ff; margin-top: 3px; }
+
+/* tallies, top-right */
+#tally { top: 16px; right: 16px; display: flex; gap: 18px; }
+#tally div { text-align: center; }
+#tally span { display: block; font-family: 'Special Elite', monospace; font-size: 24px; color: #cfe2f6; }
+#tally label { font-size: 9.5px; letter-spacing: .1em; opacity: .55; }
+#tally div:nth-child(3) span { color: #ff7a6b; }
+
+/* selection readout, bottom-left */
+#selPanel { left: 16px; bottom: 44px; min-width: 240px; max-width: 320px; }
+.sel-empty { opacity: .4; font-size: 13px; font-style: italic; }
+.sel-row { display: flex; align-items: center; gap: 9px; padding: 3px 0; font-size: 14px; }
+.sel-row b { flex: 1; letter-spacing: .03em; }
+.sel-row.mg b { color: #ffd27a; }
+.sel-n { font-family: 'Special Elite', monospace; color: #cfe2f6; }
+.sel-n small { opacity: .5; }
+.sel-order { font-size: 10px; letter-spacing: .08em; padding: 2px 6px; border-radius: 4px;
+  background: rgba(90,209,255,.16); color: #9fd0ff; }
+.sel-order.hold { background: rgba(255,120,90,.18); color: #ff9d86; }
+
+/* call-ins, bottom-right */
+#callins { position: fixed; right: 16px; bottom: 44px; display: flex; gap: 10px; pointer-events: auto; }
+.callin { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .06em;
+  color: #e7eefa; background: rgba(20,30,42,.85); border: 1px solid rgba(140,170,200,.3);
+  border-radius: 7px; padding: 11px 16px; cursor: pointer; transition: .15s; }
+.callin:hover { background: rgba(40,60,84,.95); border-color: #6fb0e0; }
+.callin small { display: block; font-size: 10px; opacity: .6; margin-top: 2px; }
+.callin.spent { opacity: .35; pointer-events: none; }
+
+#hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  font-size: 11.5px; letter-spacing: .06em; opacity: .5; }
+
+#dragbox { position: fixed; display: none; border: 1.5px solid #5ad1ff;
+  background: rgba(90,209,255,.12); pointer-events: none; z-index: 5; }
+
+/* end screen */
+#endscreen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: rgba(4,8,12,.78); pointer-events: auto; backdrop-filter: blur(3px); }
+#endscreen.show { display: flex; }
+.end-card { text-align: center; padding: 40px 56px; }
+.end-card h1 { font-family: 'Saira Stencil One', sans-serif; font-size: 58px; letter-spacing: .02em; }
+.end-card h1.win { color: #9fe0a8; } .end-card h1.lose { color: #ff7a6b; }
+#endSub { opacity: .7; margin: 8px 0 26px; letter-spacing: .06em; }
+.end-stats { display: flex; gap: 34px; justify-content: center; margin-bottom: 30px; }
+.end-stats div { font-size: 12px; letter-spacing: .08em; opacity: .7; text-transform: uppercase; }
+.end-stats span { display: block; font-family: 'Special Elite', monospace; font-size: 34px; color: #cfe2f6; opacity: 1; }
+#endAgain { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: .08em;
+  color: #06121d; background: #9fd0ff; border: 0; border-radius: 7px; padding: 13px 30px; cursor: pointer; }
