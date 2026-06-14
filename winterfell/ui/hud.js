@@ -18,6 +18,7 @@ export function createHUD(root, state, hooks = {}) {
       <div class="gate-read"><label>LINE</label><div class="gate-track"><i id="gateBar"></i></div></div>
       <div class="works-read"><label>WORKS</label><span id="tWorks">0</span></div>
     </div>
+    <div id="research" class="panel"><div class="rsc-top"><label>RESEARCH</label><span id="rscPts">0</span></div><div id="rscTechs"></div></div>
     <div id="selPanel" class="panel"><div class="sel-empty">no unit selected</div></div>
     <div id="callins">
       <button class="callin" id="ciMortar" data-k="V">MORTAR<small>×1</small></button>
@@ -50,6 +51,7 @@ export function createHUD(root, state, hooks = {}) {
     objSub: $('#objSub'), timer: $('#objTimer'),
     kills: $('#tKills'), men: $('#tMen'), risen: $('#tRisen'),
     supply: $('#tSupply'), gateBar: $('#gateBar'), works: $('#tWorks'),
+    rscPts: $('#rscPts'), rscTechs: $('#rscTechs'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     mortar: $('#ciMortar'), reserve: $('#ciReserve'),
     trench: $('#ciTrench'), wire: $('#ciWire'), sandbag: $('#ciSandbag'),
@@ -84,6 +86,14 @@ export function createHUD(root, state, hooks = {}) {
     el.timer.textContent = fmt(state.time); // endless — counts how long you've held
     el.supply.textContent = Math.floor(state.supply ?? 0);
     el.works.textContent = state.works ?? 0;
+    if (state.techs && el.rscTechs) {
+      el.rscPts.textContent = Math.floor(state.research ?? 0);
+      el.rscTechs.innerHTML = state.techs.map((t, i) => {
+        const cost = state.techCost ? state.techCost(t) : t.base;
+        const can = (state.research ?? 0) >= cost;
+        return `<div class="rsc-tech ${can ? 'can' : ''}"><b>${i + 1} ${t.key}</b><span>L${t.lvl} · ${cost}</span></div>`;
+      }).join('');
+    }
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
     el.mortar.classList.toggle('spent', state.charges.mortar <= 0);
     el.mortar.querySelector('small').textContent = '×' + (state.charges.mortar ?? 0);

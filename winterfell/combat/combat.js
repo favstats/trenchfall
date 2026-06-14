@@ -156,10 +156,11 @@ export class Combat {
       const a = horde.agents[idx];
       m.faceTo(a.x, a.z);
       if (m.mag === undefined) m.mag = w.mag;
+      const fr = state.fireRate || 1; // CADENCE research speeds the whole line up
       if (--m.mag <= 0) {                       // empty — work the bolt / change the belt
-        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1); m.reloading = true;
+        m.mag = w.mag; m.reload = w.reload * (cover?.reloadMul ?? 1) * fr; m.reloading = true;
       } else {
-        m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * (0.85 + Math.random() * 0.3);
+        m.reload = w.cd * (cover?.reloadMul ?? 1) * heapReload * fr * (0.85 + Math.random() * 0.3);
       }
 
       this._from.set(m.pos.x, m.pos.y + 2.4, m.pos.z);

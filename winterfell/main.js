@@ -54,7 +54,7 @@ seedFieldWorks();
 // the dead muster at the back, by the godswood, and march south on the wall
 // the dead first appear as distant specks at the godswood, far to the north,
 // then march the long way in — a calm before the tide reaches the wall
-horde.spawnWave(Math.floor(horde.cap * 0.16), NORTH_Z - 16, NORTH_Z + 10);
+horde.spawnWave(14, NORTH_Z - 16, NORTH_Z + 6); // only a few stragglers at first light
 const combat = new Combat(scene, force, horde, state);
 const possession = new Possession(camera, rig, force, combat, canvas);
 let lastKillSupply = 0;
@@ -109,7 +109,9 @@ function spendSupply(kind) {
 function updateEconomy(dt) {
   addSupply(dt * state.supplyRate);
   if (state.kills > lastKillSupply) {
-    addSupply((state.kills - lastKillSupply) * 0.22);
+    const dk = state.kills - lastKillSupply;
+    addSupply(dk * 0.22);
+    state.research = (state.research || 0) + dk * 0.5; // kills fund research
     lastKillSupply = state.kills;
   }
   state.gateHp = field.gateHealth?.() ?? 1;
@@ -164,6 +166,24 @@ let spawnAcc = 0;
 let surgeAt = 28;
 let reinforceAt = 16, reliefN = 0;   // endless British relief — more & stronger over time
 state.might = 1;                      // global firepower doctrine, ramps with the night
+
+// ---------------- research (spend points from kills on permanent upgrades) ----
+state.research = 0; state.mightBonus = 0; state.fireRate = 1; state.musterBonus = 0;
+const TECHS = [
+  { key: 'FIREPOWER', base: 8, lvl: 0, apply: () => { state.mightBonus += 0.4; } },
+  { key: 'CADENCE',   base: 8, lvl: 0, apply: () => { state.fireRate *= 0.85; } },
+  { key: 'LOGISTICS', base: 6, lvl: 0, apply: () => { state.supplyRate += 1.8; } },
+  { key: 'MUSTER',    base: 7, lvl: 0, apply: () => { state.musterBonus += 1; } },
+];
+state.techs = TECHS;
+const techCost = (t) => t.base * (t.lvl + 1);
+function doResearch(i) {
+  const t = TECHS[i]; if (!t) return;
+  const c = techCost(t);
+  if ((state.research || 0) < c) return;
+  state.research -= c; t.lvl++; t.apply();
+}
+state.techCost = techCost;
 
 function pickMortarTarget() {
   const A = horde.agents;
@@ -299,6 +319,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (possession.active) return; // direct-control owns the keyboard
+  if (k >= '1' && k <= '4') doResearch(+k - 1); // research techs
   if (k === 'v') fireMortarCallIn();
   else if (k === 'c') callReserve();
   else if (k === 't') setBuildMode('trench');
@@ -331,27 +352,28 @@ async function frame(now) {
     state.time += dt;
     updateEconomy(dt);
     force.update(dt);
-    // keep the tide topped up — the dead never stop coming
+    // ---- gradual threat curve: a few stragglers at first, easing up to the
+    // full cap over ~9 minutes so the night starts slow and builds ----
+    const ramp = Math.min(1, state.time / 540);
+    state.threat = ramp;
+    const targetLive = Math.floor(18 + ramp * ramp * (horde.cap - 18)); // ease-in
     spawnAcc += dt;
-    const pressure = 1 + state.time / 150;
-    // grace period: reinforcements only start streaming in after the first wave
-    // has had time to approach, so the night opens quiet
-    if (state.time > 12 && spawnAcc > Math.max(0.16, 0.42 - pressure * 0.08) && horde.count < horde.cap) {
-      horde.spawnWave(Math.floor(22 + pressure * 18), NORTH_Z - 16, NORTH_Z + 18);
+    if (spawnAcc > 0.45 && horde.count < targetLive) {
+      horde.spawnWave(Math.min(targetLive - horde.count, Math.ceil(3 + ramp * 38)), NORTH_Z - 16, NORTH_Z + 16);
       spawnAcc = 0;
     }
-    if (state.time >= surgeAt) {
-      horde.spawnWave(Math.floor(160 + pressure * 90), NORTH_Z - 16, NORTH_Z + 30);
-      surgeAt += 26;
+    if (state.time >= surgeAt) {                            // surges only once it's built up
+      if (state.time > 75) horde.spawnWave(Math.floor(30 + ramp * 240), NORTH_Z - 16, NORTH_Z + 30);
+      surgeAt += 30;
     }
     // ---- RELIEF: more and stronger soldiers march up to hold the wall ----
-    state.might = 1 + state.time / 130;                  // firepower ramps all night
+    state.might = 1 + state.time / 130 + (state.mightBonus || 0); // ramps + research
     if (state.time >= reinforceAt && force.soldiers.length < 150) {
       const tier = 1 + Math.floor(state.time / 38);      // doctrine tier climbs
       const type = (reliefN % 4 === 3) ? 'mg' : 'rifle';
       const sq = force.addSquad(`RELIEF ${++reliefN}`, type, (Math.random() * 2 - 1) * 104, WALL_Z, type === 'mg' ? 3 : 6);
       for (const m of sq.members) m.hp = 3 + tier;       // each wave of relief is hardier
-      reinforceAt += Math.max(6, 17 - tier);             // and they come faster and faster
+      reinforceAt += Math.max(4, 17 - tier - (state.musterBonus || 0) * 2); // MUSTER research quickens relief
     }
     horde.update(dt, camera);
     combat.update(dt);
