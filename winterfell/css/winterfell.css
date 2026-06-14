@@ -80,6 +80,19 @@ body::after {
 .rsc-tech b { font-weight: 700; letter-spacing: .02em; }
 .rsc-tech span { font-family: 'Special Elite', monospace; opacity: .8; }
 
+/* selected-building action panel (RTS) */
+#bldPanel { display: none; left: 8px; bottom: 96px; min-width: 168px; }
+#bldPanel.show { display: block; }
+.bld-name { font-family: 'Saira Stencil One', sans-serif; font-size: 13px; color: #ffd27a; letter-spacing: .04em; margin-bottom: 3px; }
+.bld-row { display: flex; gap: 4px; margin: 3px 0; }
+.bld-btn { flex: 1; font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 10px; color: #e7eefa;
+  background: rgba(20,30,42,.85); border: 1px solid rgba(140,170,200,.3); border-radius: 4px; padding: 4px; cursor: pointer; }
+.bld-btn:hover { background: rgba(40,60,84,.95); border-color: #6fb0e0; }
+.bld-btn small { display: block; font-size: 8px; opacity: .6; }
+.bld-prog { height: 5px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; margin: 3px 0; }
+.bld-prog i { display: block; height: 100%; background: linear-gradient(90deg, #9fd0ff, #9fe0a8); }
+.bld-sub { font-size: 8.5px; opacity: .6; letter-spacing: .05em; }
+
 /* selection readout, bottom-left */
 #selPanel { left: 8px; bottom: 30px; min-width: 150px; max-width: 210px; }
 .sel-empty { opacity: .4; font-size: 10px; font-style: italic; }

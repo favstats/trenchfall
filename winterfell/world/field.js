@@ -1193,6 +1193,7 @@ function placeBuildable(kind, x, z, opts = {}) {
 
   castBuildable(g);
   env.group.add(g);
+  g.userData.item = item;          // for click-to-select
   env.buildables.push(item);
   // real excavation: carve the terrain so the trench is dug into the ground
   if (kind === 'trench') { digCarve(x, z, 2.8, 5.6); spawnDebris(env, x, z, 2.2, 2, false); }
@@ -1800,6 +1801,7 @@ export function buildField(scene) {
     targetVulnerabilityAt,
     emplacements: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'nest' || b.kind === 'tower' || b.kind === 'bunker')) : []),
     baseBuildings: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && (b.kind === 'barracks' || b.kind === 'depot' || b.kind === 'lab')) : []),
+    buildingGroups: () => (activeEnv ? activeEnv.buildables.filter(b => b.alive && b.group).map(b => b.group) : []),
     repairGate,
     gateHealth,
     works: () => env.buildables.filter(b => b.alive).length,

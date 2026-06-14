@@ -19,6 +19,7 @@ export function createHUD(root, state, hooks = {}) {
       <div class="works-read"><label>WORKS</label><span id="tWorks">0</span></div>
     </div>
     <div id="research" class="panel"><div class="rsc-top"><label>RESEARCH</label><span id="rscPts">0</span><span id="rscRate" class="rate">+0/s</span></div><div id="rscTechs"></div></div>
+    <div id="bldPanel" class="panel"></div>
     <div id="selPanel" class="panel"><div class="sel-empty">no unit selected</div></div>
     <div id="callins">
       <button class="callin" id="ciMortar" data-k="V">MORTAR<small>×1</small></button>
@@ -55,7 +56,7 @@ export function createHUD(root, state, hooks = {}) {
     kills: $('#tKills'), men: $('#tMen'), risen: $('#tRisen'),
     supply: $('#tSupply'), gateBar: $('#gateBar'), works: $('#tWorks'),
     rscPts: $('#rscPts'), rscTechs: $('#rscTechs'),
-    supplyRate: $('#tSupplyRate'), rscRate: $('#rscRate'),
+    supplyRate: $('#tSupplyRate'), rscRate: $('#rscRate'), bld: $('#bldPanel'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     mortar: $('#ciMortar'), reserve: $('#ciReserve'),
     trench: $('#ciTrench'), wire: $('#ciWire'), sandbag: $('#ciSandbag'),
@@ -103,6 +104,12 @@ export function createHUD(root, state, hooks = {}) {
     lab: 'LAB (base) — generates RESEARCH points',
   };
   for (const k in TIPS) if (el[k]) el[k].title = TIPS[k] + (state.costs[k] ? ` · ${state.costs[k]} supply` : '');
+
+  // building action panel uses delegated clicks (its buttons are re-rendered)
+  el.bld.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-prod]');
+    if (btn && hooks.onProduce) hooks.onProduce(btn.dataset.prod);
+  });
   el.endAgain.onclick = () => location.reload();
 
   function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${m}:${String(s).padStart(2, '0')}`; }
@@ -172,6 +179,28 @@ export function createHUD(root, state, hooks = {}) {
       el[k].classList.toggle('active', state.buildMode === k);
       const s = el[k].querySelector('small'); if (s) s.textContent = state.costs[k];
     }
+
+    // selected-building action panel (RTS)
+    const sb = state.selBuilding;
+    if (sb) {
+      el.bld.classList.add('show');
+      if (sb.kind === 'barracks') {
+        const prog = sb.prod
+          ? `<div class="bld-prog"><i style="width:${Math.round(sb.prod.pct * 100)}%"></i></div><div class="bld-sub">training ${sb.prod.key.toUpperCase()} · ${sb.queue} queued</div>`
+          : `<div class="bld-sub">${sb.queue ? sb.queue + ' queued' : 'idle'}</div>`;
+        el.bld.innerHTML = `<div class="bld-name">BARRACKS</div>
+          <div class="bld-row"><button class="bld-btn" data-prod="rifles">RIFLES<small>40</small></button>
+          <button class="bld-btn" data-prod="mg">MG TEAM<small>60</small></button></div>${prog}
+          <div class="bld-sub">RMB sets rally${sb.hasRally ? ' ✓' : ''}</div>`;
+      } else if (sb.kind === 'depot') {
+        el.bld.innerHTML = `<div class="bld-name">DEPOT</div><div class="bld-sub">boosts supply income while it stands</div>`;
+      } else if (sb.kind === 'lab') {
+        el.bld.innerHTML = `<div class="bld-name">LAB</div><div class="bld-sub">generates research — spend with 1-4</div>`;
+      } else {
+        el.bld.innerHTML = `<div class="bld-name">${sb.kind.toUpperCase()}</div>`;
+      }
+    } else el.bld.classList.remove('show');
+
     if (state.possession) {
       el.possession.textContent = `DIRECT · ${state.possession}   ${state.reloading ? 'RELOADING…' : 'AMMO ' + (state.ammo ?? '')}`;
     } else el.possession.textContent = '';

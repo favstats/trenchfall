@@ -117,10 +117,7 @@ function updateEconomy(dt) {
   for (const b of (field.baseBuildings?.() || [])) {
     if (b.kind === 'depot') supplyRate += 2.4;
     else if (b.kind === 'lab') researchRate += 0.9;             // research comes from labs
-    else if (b.kind === 'barracks') {
-      b._cd = (b._cd ?? 16) - dt;
-      if (b._cd <= 0) { b._cd = 16; force.addSquad('GARRISON', 'rifle', b.x + (Math.random() * 2 - 1) * 8, WALL_Z, 6); }
-    }
+    // barracks produce on demand via the selection panel (updateProduction), not passively
   }
   addSupply(dt * supplyRate);
   state.research = (state.research || 0) + dt * researchRate;
@@ -180,6 +177,34 @@ let spawnAcc = 0;
 let surgeAt = 28;
 let reinforceAt = 16, reliefN = 0;   // endless British relief — more & stronger over time
 state.might = 1;                      // global firepower doctrine, ramps with the night
+
+// ---------------- RTS building selection + barracks unit production ----------
+let selBuilding = null;
+const spend = (n) => { if (state.supply < n) return false; state.supply -= n; return true; };
+const UNIT_PROD = {
+  rifles: { cost: 40, dur: 6, type: 'rifle', n: 6, label: 'RIFLES' },
+  mg: { cost: 60, dur: 9, type: 'mg', n: 3, label: 'MG TEAM' },
+};
+function queueUnit(key) {
+  if (!selBuilding || selBuilding.kind !== 'barracks' || !UNIT_PROD[key]) return;
+  if (!spend(UNIT_PROD[key].cost)) return;
+  (selBuilding.queue || (selBuilding.queue = [])).push(key);
+}
+function updateProduction(dt) {
+  for (const b of (field.baseBuildings?.() || [])) {
+    if (b.kind !== 'barracks') continue;
+    if (!b.prod && b.queue && b.queue.length) { const key = b.queue.shift(); b.prod = { key, t: 0, dur: UNIT_PROD[key].dur }; }
+    if (b.prod) {
+      b.prod.t += dt;
+      if (b.prod.t >= b.prod.dur) {
+        const u = UNIT_PROD[b.prod.key];
+        const rx = b.rally ? b.rally.x : b.x, rz = b.rally ? b.rally.z : WALL_Z;
+        force.addSquad(u.label, u.type, rx, rz, u.n);
+        b.prod = null;
+      }
+    }
+  }
+}
 
 // ---------------- research (spend points from kills on permanent upgrades) ----
 state.research = 0; state.mightBonus = 0; state.fireRate = 1; state.musterBonus = 0;
@@ -263,6 +288,7 @@ const hud = createHUD(hudRoot, state, {
   onBuildBunker: () => setBuildMode('bunker'),
   onBuildBrazier: () => setBuildMode('brazier'),
   onBuild: (kind) => setBuildMode(kind),
+  onProduce: (key) => queueUnit(key),
 });
 
 // ---------------- input: selection + orders ----------------
@@ -302,9 +328,10 @@ canvas.addEventListener('mousemove', e => {
 window.addEventListener('mouseup', e => {
   if (drawing) { drawing = false; lastDraw = null; return; } // keep build mode — dig more lines
   if (possession.active) { down = null; dragging = false; hud.hideDragBox(); return; }
-  if (e.button === 2) { // right-click order — lands on wall/embankment/ground
+  if (e.button === 2) { // right-click
     const hits = picker.objects(e.clientX, e.clientY, field.placementTargets);
     const p = hits.length ? hits[0].point : picker.ground(e.clientX, e.clientY);
+    if (p && selBuilding && selBuilding.kind === 'barracks') { selBuilding.rally = { x: p.x, z: p.z }; return; } // set rally point
     if (p) force.orderSelected(e.shiftKey ? 'ATTACK_MOVE' : 'MOVE', { x: p.x, z: p.z });
     return;
   }
@@ -320,8 +347,14 @@ window.addEventListener('mouseup', e => {
     }, e.shiftKey);
   } else {
     const hits = picker.objects(e.clientX, e.clientY, force.pickables);
-    if (hits.length) force.selectSquadByObject(hits[0].object, e.shiftKey);
-    else if (!e.shiftKey) force.clearSelection();
+    if (hits.length) { force.selectSquadByObject(hits[0].object, e.shiftKey); selBuilding = null; }
+    else {
+      // try selecting a placed building (RTS-style)
+      const bh = picker.objects(e.clientX, e.clientY, field.buildingGroups?.() || []);
+      let node = bh[0]?.object; while (node && !node.userData.item) node = node.parent;
+      if (node) { selBuilding = node.userData.item; force.clearSelection(); }
+      else if (!e.shiftKey) { force.clearSelection(); selBuilding = null; }
+    }
   }
   down = null; dragging = false;
 });
@@ -396,6 +429,14 @@ async function frame(now) {
     }
     horde.update(dt, camera);
     combat.update(dt);
+    updateProduction(dt);
+    // expose selected-building info for the RTS panel
+    state.selBuilding = selBuilding && selBuilding.alive ? {
+      kind: selBuilding.kind, x: selBuilding.x,
+      prod: selBuilding.prod ? { key: selBuilding.prod.key, pct: selBuilding.prod.t / selBuilding.prod.dur } : null,
+      queue: (selBuilding.queue || []).length, hasRally: !!selBuilding.rally,
+    } : null;
+    if (selBuilding && !selBuilding.alive) selBuilding = null;
     // ---- win / lose ----
     // lose when the line is wiped or enough dead pour over and overrun the keep
     // endless: there is no winning the Long Night — only how long you hold
@@ -466,6 +507,12 @@ if (params.get('build')) state.buildMode = params.get('build'); // QA: preview t
 if (params.get('wave')) state.waveDuration = parseFloat(params.get('wave'));
 if (params.get('pitch')) rig.setPitch(parseFloat(params.get('pitch')));
 if (params.get('demo') === 'dig') { window.WF.test.digLine(-55, WALL_Z - 18, 55, WALL_Z - 26); window.WF.test.digLine(-30, WALL_Z - 40, 40, WALL_Z - 40, 'wire'); rig.frame(0, WALL_Z - 36, 40); rig.setPitch(0.26); }
+if (params.get('demo') === 'rts') {
+  state.supply = 999;
+  const b = field.placeBuildable('barracks', -10, WALL_Z + 24);
+  selBuilding = b; queueUnit('rifles');
+  rig.frame(-10, WALL_Z + 16, 40); rig.setPitch(0.55);
+}
 if (params.get('demo') === 'base') {
   field.placeBuildable('barracks', -28, WALL_Z + 24);
   field.placeBuildable('depot', 0, WALL_Z + 24);
