@@ -1,14 +1,19 @@
 // renderer.js — WebGPU renderer (auto WebGL2 fallback), lighting, post stack,
 // fidelity dial. Knows nothing about units, horde, or gameplay.
 import * as THREE from './three.js';
-import { pass } from './tsl.js';
+import {
+  pass, uniform, uv, vec2, vec3, vec4, float,
+  mix, clamp, pow, dot, fract, sin, smoothstep, luminance, Fn,
+} from './tsl.js';
 import { bloom } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/tsl/display/BloomNode.js';
 import { season } from '../game/season.js';
 
 const FIDELITY = {
-  low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.5 },
-  medium: { shadow: 2048, pixelRatio: 1.45, bloom: true,  exposure: 1.55 },
-  high:   { shadow: 4096, pixelRatio: 1.75, bloom: true,  exposure: 1.6 },
+  // exposure pulled back slightly vs. before — the cinematic grade lifts shadows
+  // and protects highlights, so we no longer need to over-expose to stay readable
+  low:    { shadow: 1536, pixelRatio: 1,    bloom: false, exposure: 1.34 },
+  medium: { shadow: 2560, pixelRatio: 1.45, bloom: true,  exposure: 1.38 },
+  high:   { shadow: 4096, pixelRatio: 1.75, bloom: true,  exposure: 1.42 },
 };
 
 function probeFidelity(hasGPU) {
@@ -180,8 +185,9 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
   const s = sun.shadow.camera;
   s.near = 1; s.far = 560;
   s.left = -230; s.right = 230; s.top = 230; s.bottom = -230;
-  sun.shadow.bias = -0.00022;
-  sun.shadow.normalBias = 0.018;
+  sun.shadow.bias = -0.00018;
+  sun.shadow.normalBias = 0.02;
+  if ('radius' in sun.shadow) sun.shadow.radius = 3; // softer contact edges (PCF)
   scene.add(sun);
   scene.add(sun.target);
 
@@ -206,25 +212,78 @@ export async function createRenderer(canvas, forcedFidelity, forceWebGL) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  // bloom post-process so tracers, muzzle flashes, explosions, fire & the moon
-  // glow (progressive enhancement — falls back to direct render on any failure)
+  // ----- cinematic post stack -----
+  // bloom (only bright sources glow) -> filmic night grade (teal-shadow / warm-
+  // highlight tone, S-curve, saturation, vignette, animated grain). Progressive
+  // enhancement: any TSL/post failure drops to a plain direct render so a shader
+  // problem can never blank the playable field.
+  const grainTime = uniform(0); // bumped each frame to animate the grain
   let post = null;
-  if (fq.bloom) {
-    try {
-      post = new THREE.PostProcessing(renderer);
-      const scenePass = pass(scene, camera);
-      const bloomPass = bloom(scenePass, 0.5, 0.45, 0.2); // gentler — only bright sources glow
-      post.outputNode = scenePass.add(bloomPass);
-    } catch (e) { console.warn('[WF] bloom unavailable — direct render', e); post = null; }
-  }
+  // the grade (tone, vignette, grain) is cheap and always applied for a uniform
+  // cinematic look; bloom is layered in only when the fidelity dial allows it.
+  try {
+    post = new THREE.PostProcessing(renderer);
+    const scenePass = pass(scene, camera);
+    let lit = scenePass;
+    if (fq.bloom) {
+      // tighter threshold + softer strength: braziers, muzzle flashes, floodlights
+      // and the moon bloom; the snow field and walls stay crisp.
+      lit = scenePass.add(bloom(scenePass, 0.62, 0.5, 0.62));
+    }
+    post.outputNode = nightGrade(lit, grainTime);
+  } catch (e) { console.warn('[WF] post unavailable — direct render', e); post = null; }
 
   async function render() {
+    grainTime.value = (performance.now ? performance.now() : Date.now()) * 0.001;
     if (post) {
       try { await post.renderAsync(); return; }
-      catch (e) { console.warn('[WF] bloom render failed — falling back', e); post = null; }
+      catch (e) { console.warn('[WF] post render failed — falling back', e); post = null; }
     }
     await renderer.renderAsync(scene, camera);
   }
 
   return { renderer, scene, camera, sun, render, setSize, backend, fidelity };
+}
+
+// filmic night grade as a TSL node: shadow/highlight split-tone, a gentle
+// contrast S-curve, mild saturation lift, vignette and very low animated grain.
+// Built defensively — the whole thing is wrapped at the call site in try/guard.
+function nightGrade(input, t) {
+  return Fn(() => {
+    const src = input.rgb;
+    let c = clamp(src, 0.0, 4.0);
+
+    // split-tone: push cool teal/blue into the shadows, warm the highlights so
+    // the night reads moody rather than a flat grey. blend by luminance.
+    const lum = luminance(c);
+    const shadowTint = vec3(0.78, 0.96, 1.18); // cool blue shadows
+    const highTint   = vec3(1.10, 1.01, 0.86); // warm highlights
+    const tint = mix(shadowTint, highTint, smoothstep(0.04, 0.62, lum));
+    c = c.mul(tint);
+
+    // lift / gamma / gain — lift the deep shadows a touch so detail survives,
+    // pull a soft contrast S-curve through the mids, keep highlights from clipping
+    c = c.add(vec3(0.012, 0.016, 0.026)); // lift (slightly blue)
+    c = pow(c.max(vec3(0.0)), vec3(0.94)); // gamma: open mids
+    // S-curve contrast around 0.5
+    const x = clamp(c, 0.0, 1.0);
+    const scurve = x.mul(x).mul(x.mul(-2.0).add(3.0)); // smoothstep(0,1,x)
+    c = mix(c, scurve, float(0.34));
+
+    // saturation: gentle boost, computed against perceptual luma
+    const g = luminance(c);
+    c = mix(vec3(g), c, float(1.16));
+
+    // vignette — subtle darkened corners
+    const p = uv().sub(vec2(0.5, 0.5));
+    const vig = smoothstep(0.92, 0.32, dot(p, p).mul(2.0));
+    c = c.mul(mix(float(0.82), float(1.0), vig));
+
+    // film grain — very low amplitude animated noise so flat darks don't band
+    const seed = dot(uv().mul(vec2(640.0, 360.0)), vec2(12.9898, 78.233)).add(t.mul(57.0));
+    const grain = fract(sin(seed).mul(43758.5453)).sub(0.5);
+    c = c.add(grain.mul(0.022));
+
+    return vec4(c.max(vec3(0.0)), input.a);
+  })();
 }
