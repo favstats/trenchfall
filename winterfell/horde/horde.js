@@ -87,6 +87,7 @@ export class Horde {
     this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
     this.mesh.castShadow = true;
     this.mesh.count = 0;
+    this.mesh.frustumCulled = false; // instances span the field; origin-based culling would hide them
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.mesh);
 
@@ -96,6 +97,7 @@ export class Horde {
     this.corpses = new THREE.InstancedMesh(geo, corpseMat, this._corpseCap);
     this.corpses.castShadow = true; this.corpses.receiveShadow = true;
     this.corpses.count = 0;
+    this.corpses.frustumCulled = false; // the corpse-hill must render from every angle
     this.corpses.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     this._corpseHead = 0; this._corpseN = 0;
     scene.add(this.corpses);
@@ -116,6 +118,7 @@ export class Horde {
     });
     this.far = new THREE.InstancedMesh(new THREE.PlaneGeometry(2.4, 3.6), planeMat, imp);
     this.far.count = imp;
+    this.far.frustumCulled = false;
     this.far.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this._farData = [];
     const fo = new THREE.Object3D();
