@@ -13,7 +13,7 @@ export const FIELD_HALF_X = 150;
 export const WALL_H = 9.2;
 export const WALL_T = 4.6;
 export const GATE_W = 18;
-export const RAMP_D = 18;
+export const RAMP_D = 6; // short steep scramble at the wall back (units climb via ladders)
 
 export const BOUNDS = {
   minX: -FIELD_HALF_X, maxX: FIELD_HALF_X,
@@ -432,12 +432,54 @@ function addWall(group, torches, placementTargets, env) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(spanLen, 0.42, WALL_T + 0.75), snowCap);
     cap.position.set(span.position.x, WALL_H + 0.18, WALL_Z - 0.15);
     wall.add(cap);
+  }
 
-    const x0 = side < 0 ? -FIELD_HALF_X : GATE_W / 2;
-    const x1 = side < 0 ? -GATE_W / 2 : FIELD_HALF_X;
-    const ramp = makeRamp(x0, x1, rampMat);
-    wall.add(ramp);
-    placementTargets.push(ramp);
+  // ladders up the back (south) face instead of an earthwork ramp
+  const ladderMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.9 });
+  const railGeo = new THREE.BoxGeometry(0.16, WALL_H + 1.4, 0.16);
+  const rungGeo = new THREE.BoxGeometry(1.5, 0.13, 0.13);
+  for (let x = -FIELD_HALF_X + 14; x <= FIELD_HALF_X - 14; x += 22) {
+    if (Math.abs(x) < GATE_W / 2 + 6) continue;
+    const lad = new THREE.Group();
+    for (const rx of [-0.7, 0.7]) {
+      const rail = new THREE.Mesh(railGeo, ladderMat);
+      rail.position.set(rx, (WALL_H + 1.4) / 2, 0);
+      lad.add(rail);
+    }
+    for (let r = 0; r < 9; r++) {
+      const rung = new THREE.Mesh(rungGeo, ladderMat);
+      rung.position.set(0, 0.7 + r * (WALL_H / 9), 0);
+      lad.add(rung);
+    }
+    lad.position.set(x, 0, WALL_Z + WALL_T / 2 + 0.5);
+    lad.rotation.x = -0.16; // lean against the parapet
+    lad.castShadow = true;
+    wall.add(lad);
+  }
+
+  // corner bastions so the wall terminates in fortifications, not a raw cut edge
+  for (const side of [-1, 1]) {
+    const bastH = 21;
+    const bastion = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 9.6, bastH, 14), stone);
+    bastion.position.set(side * (FIELD_HALF_X + 2), bastH / 2, WALL_Z);
+    wall.add(bastion);
+    const bcrown = new THREE.Mesh(new THREE.CylinderGeometry(9.4, 8.8, 2.2, 14), darkStone);
+    bcrown.position.set(bastion.position.x, bastH + 0.8, WALL_Z);
+    wall.add(bcrown);
+    const bcap = new THREE.Mesh(new THREE.CylinderGeometry(9.7, 9.2, 0.5, 14), snowCap);
+    bcap.position.set(bastion.position.x, bastH + 2.1, WALL_Z);
+    wall.add(bcap);
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.0, 1.5), stone);
+      m.position.set(bastion.position.x + Math.cos(a) * 8.4, bastH + 2.6, WALL_Z + Math.sin(a) * 8.4);
+      m.rotation.y = -a;
+      wall.add(m);
+    }
+    // the wall continues a little past the bastion so it reads as part of a longer line
+    const stub = new THREE.Mesh(new THREE.BoxGeometry(40, WALL_H, WALL_T), stone);
+    stub.position.set(side * (FIELD_HALF_X + 24), WALL_H / 2, WALL_Z);
+    wall.add(stub);
   }
 
   const buttressGeo = new THREE.BoxGeometry(1.65, WALL_H + 1.4, 6.8);
