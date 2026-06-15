@@ -362,8 +362,9 @@ export class Horde {
     const imp = Math.min(this.cap * 2, 5200); // cheap billboards, but transparency overdraws — keep modest
     const planeMat = new THREE.MeshBasicMaterial({
       map: silhouetteTexture(), transparent: true, alphaTest: 0.18,
-      color: 0x34445a, opacity: 0.32, fog: true, depthWrite: false,
+      color: 0x283648, opacity: 0.46, fog: true, depthWrite: false, // darker + denser: a solid tide, not scattered cutouts
     });
+    this._farMat = planeMat;
     this.far = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.55, 3.35), planeMat, imp);
     this.far.count = imp;
     this.far.frustumCulled = false;
@@ -713,5 +714,7 @@ export class Horde {
     }
     this.far.instanceMatrix.needsUpdate = true;
     this.farEyes.instanceMatrix.needsUpdate = true;
+    // the distant mass breathes — a restless shimmer over the tide
+    this._farMat.opacity = 0.46 + Math.sin(performance.now() * 0.0006) * 0.06;
   }
 }
