@@ -314,6 +314,18 @@ export class Horde {
     this._eyeBlue = new THREE.Color(0x8fd4ff);  // rank-and-file wights
     this._eyeRed = new THREE.Color(0xff5230);   // giants — baleful red
     this._eyeCyan = new THREE.Color(0xb0f2ff);  // runners — brighter, colder
+    // cold blue glow halos around the giants (additive sprites — NO lights, so no per-fragment cost)
+    const gg = document.createElement('canvas'); gg.width = gg.height = 64;
+    const gctx = gg.getContext('2d');
+    const grd = gctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(160,205,255,0.8)'); grd.addColorStop(0.5, 'rgba(90,160,255,0.28)'); grd.addColorStop(1, 'rgba(90,160,255,0)');
+    gctx.fillStyle = grd; gctx.fillRect(0, 0, 64, 64);
+    const gTex = new THREE.CanvasTexture(gg); gTex.colorSpace = THREE.SRGBColorSpace;
+    this._giantGlows = [];
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: gTex, color: 0x6ab0ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true, opacity: 0.55 }));
+      m.visible = false; m.frustumCulled = false; scene.add(m); this._giantGlows.push(m);
+    }
 
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(Math.ceil(this.cap * 1.4), 3600); // static, but still drawn every frame
@@ -634,6 +646,20 @@ export class Horde {
     this.eyes.count = this.mesh.count;
     this.eyes.instanceMatrix.needsUpdate = true;
     if (this.eyes.instanceColor) this.eyes.instanceColor.needsUpdate = true;
+
+    // hang a cold glow halo on the first few visible giants (per-frame, no bookkeeping)
+    let gi = 0;
+    for (let i = 0; i < A.length && gi < this._giantGlows.length; i++) {
+      const a = A[i];
+      if (a.giant && !a.dead) {
+        const m = this._giantGlows[gi++];
+        m.position.set(a.x, (a.y || heightAt(a.x, a.z)) + 3.5, a.z);
+        if (camera) m.quaternion.copy(camera.quaternion);
+        m.scale.setScalar(9);
+        m.visible = true;
+      }
+    }
+    for (let k = gi; k < this._giantGlows.length; k++) this._giantGlows[k].visible = false;
 
     // bury bodies that finished falling into the static corpse pool
     if (this._bury.length) {
