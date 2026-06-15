@@ -382,6 +382,22 @@ export class Horde {
     }
     this.far.instanceMatrix.needsUpdate = true;
     scene.add(this.far);
+
+    // the far tide's eyes too — a blue glint per distant silhouette, so the whole field
+    // out to the horizon glitters with the dead's eyes
+    const fe = document.createElement('canvas'); fe.width = fe.height = 16;
+    const fc = fe.getContext('2d');
+    for (const dx of [5, 11]) {
+      const grd = fc.createRadialGradient(dx, 8, 0, dx, 8, 4.5);
+      grd.addColorStop(0, 'rgba(205,236,255,1)'); grd.addColorStop(1, 'rgba(143,212,255,0)');
+      fc.fillStyle = grd; fc.beginPath(); fc.arc(dx, 8, 4.5, 0, Math.PI * 2); fc.fill();
+    }
+    const feTex = new THREE.CanvasTexture(fe); feTex.colorSpace = THREE.SRGBColorSpace;
+    this.farEyes = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.7, 0.32),
+      new THREE.MeshBasicMaterial({ map: feTex, color: 0x8fd4ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true, opacity: 0.7 }), imp);
+    this.farEyes.count = imp; this.farEyes.frustumCulled = false;
+    this.farEyes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(this.farEyes);
   }
 
   get count() { return this.agents.length; }
@@ -690,7 +706,12 @@ export class Horde {
       o.scale.setScalar(f.s);
       o.updateMatrix();
       this.far.setMatrixAt(i, o.matrix);
+      // its eyes, riding the same billboard, up at the head
+      o.position.y = 1.8 + 1.2 * f.s; o.scale.setScalar(f.s * 0.95);
+      o.updateMatrix();
+      this.farEyes.setMatrixAt(i, o.matrix);
     }
     this.far.instanceMatrix.needsUpdate = true;
+    this.farEyes.instanceMatrix.needsUpdate = true;
   }
 }
