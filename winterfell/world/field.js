@@ -2032,7 +2032,8 @@ export function buildField(scene) {
   addTreeline(group);
   addMist(group, mists);
   const groundFog = addGroundFog(group);
-  const snow = season().snow ? addSnow(group) : null; // snowfall only in winter
+  const snow = null; // snowfall is handled by the camera-following weather.js now —
+  // running this field-wide field too was double the snow (and double the overdraw)
 
   scene.add(group);
 
