@@ -24,6 +24,7 @@ import { createBloodField } from './world/bloodfield.js';
 import { createSearchlights } from './world/searchlights.js';
 import { createWarGlow } from './world/warglow.js';
 import { createBreath } from './world/breath.js';
+import { createSpindrift } from './world/spindrift.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -56,6 +57,7 @@ horde.onCorpse = (x, z) => bloodField.stain(x, z);
 const searchlights = createSearchlights(scene); // beams sweeping the killing ground from the towers
 const warGlow = createWarGlow(scene); // distant fires burning in the dead-lands to the north
 const breath = createBreath(scene, force); // frozen breath from the living on the line
+const spindrift = createSpindrift(scene); // wind-blown ground snow racing across the field
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
@@ -640,6 +642,7 @@ async function frame(now) {
   searchlights.update(dt);
   warGlow.update(dt);
   breath.update(dt, camera);
+  spindrift.update(dt, camera);
   rig.update(dt);
   possession.update(dt);
   updateGhost();
