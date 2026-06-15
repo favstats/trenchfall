@@ -1879,8 +1879,19 @@ function explodeFx(x, y, z, scale = 1) {
   light.position.set(x, y + 4 * scale, z);
   env.group.add(light);
   env.lights.push({ light, t: 0.45 });
-  spawnDebris(env, x, z, 4.2 * scale, 16, true);
-  env.blasts.push({ fire, smoke, t: 0, life: 0.6 + 0.25 * scale, scale });
+  // hot white-out core that flashes and dies fast — the initial punch
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0xfff6dc, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  core.position.copy(fire.position);
+  env.group.add(core);
+  // ground shockwave ring expanding outward
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 1, 40),
+    new THREE.MeshBasicMaterial({ color: 0xffd49a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, y + 0.3, z);
+  env.group.add(ring);
+  spawnDebris(env, x, z, 4.2 * scale, 22, true);
+  env.blasts.push({ fire, core, smoke, ring, t: 0, life: 0.6 + 0.25 * scale, scale });
 }
 
 function deformTerrain(env, x, z, radius, depth) {
@@ -2069,12 +2080,16 @@ export function buildField(scene) {
       const k = b.t / b.life;
       if (k >= 1) {
         env.group.remove(b.fire); env.group.remove(b.smoke);
+        if (b.core) { env.group.remove(b.core); b.core.geometry.dispose(); b.core.material.dispose(); }
+        if (b.ring) { env.group.remove(b.ring); b.ring.geometry.dispose(); b.ring.material.dispose(); }
         b.fire.geometry.dispose(); b.fire.material.dispose(); b.smoke.material.dispose();
         env.blasts.splice(i, 1);
         continue;
       }
       b.fire.scale.setScalar((2.5 + k * 9) * b.scale);
       b.fire.material.opacity = Math.max(0, 1 - k * 1.6);
+      if (b.core) { b.core.scale.setScalar((1.6 + k * 5) * b.scale); b.core.material.opacity = Math.max(0, 1 - k * 3.2); }
+      if (b.ring) { const rk = Math.min(1, k * 1.4); b.ring.scale.setScalar((3 + rk * 24) * b.scale); b.ring.material.opacity = Math.max(0, 0.9 * (1 - rk)); }
       b.smoke.scale.setScalar((4 + k * 12) * b.scale);
       b.smoke.material.opacity = 0.85 * (1 - k);
       b.smoke.position.y += dt * 5;
