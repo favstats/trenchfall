@@ -18,6 +18,7 @@ import { createEmbers } from './world/embers.js';
 import { createLightShafts } from './world/lightshafts.js';
 import { createLightning } from './world/lightning.js';
 import { createAurora } from './world/aurora.js';
+import { createBanners } from './world/banners.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -43,6 +44,7 @@ const embers = createEmbers(scene);   // warm ash rising off the smouldering kil
 const lightShafts = createLightShafts(scene, field); // volumetric beams under the floodlights
 const lightning = createLightning(scene); // thundersnow flashes over the field
 const aurora = createAurora(scene); // northern lights drifting in the night sky
+const banners = createBanners(scene); // war banners rippling along the battlements
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
@@ -622,6 +624,7 @@ async function frame(now) {
   lightShafts.update(dt);
   lightning.update(dt);
   aurora.update(dt);
+  banners.update(dt);
   rig.update(dt);
   possession.update(dt);
   updateGhost();
