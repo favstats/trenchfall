@@ -27,6 +27,7 @@ import { createBreath } from './world/breath.js';
 import { createSpindrift } from './world/spindrift.js';
 import { createFlares } from './world/flares.js';
 import { createWeirwood } from './world/weirwood.js';
+import { createStars } from './world/stars.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -62,6 +63,7 @@ const breath = createBreath(scene, force); // frozen breath from the living on t
 const spindrift = createSpindrift(scene); // wind-blown ground snow racing across the field
 const flares = createFlares(scene); // signal flares arcing up and drifting down on the line
 const weirwood = createWeirwood(scene); // the godswood heart tree behind the wall
+const stars = createStars(scene); // twinkling starfield + the odd shooting star
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
@@ -649,6 +651,7 @@ async function frame(now) {
   spindrift.update(dt, camera);
   flares.update(dt, camera);
   weirwood.update(dt);
+  stars.update(dt, camera);
   rig.update(dt);
   possession.update(dt);
   updateGhost();
