@@ -178,7 +178,14 @@ export function createHUD(root, state, hooks = {}) {
     }
   }
 
+  // pulse a readout when its value changes — kills/losses register viscerally
+  const bump = (e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); };
+  let _pk = 0, _pm = -1, _pr = 0;
+
   function update(force) {
+    if (state.kills !== _pk) { _pk = state.kills; bump(el.kills); }
+    if (state.menRemaining !== _pm) { _pm = state.menRemaining; bump(el.men); }
+    if (state.menRisen !== _pr) { _pr = state.menRisen; bump(el.risen); }
     el.kills.textContent = state.kills;
     el.men.textContent = state.menRemaining;
     el.risen.textContent = state.menRisen;

@@ -55,6 +55,8 @@ body::after {
 #tally span { display: block; font-family: 'Special Elite', monospace; font-size: 15px; color: #cfe2f6; }
 #tally label { font-size: 7.5px; letter-spacing: .08em; opacity: .5; }
 #tally div:nth-child(3) span { color: #ff7a6b; }
+@keyframes hudBump { 0% { transform: scale(1.4); filter: brightness(2); } 100% { transform: scale(1); filter: brightness(1); } }
+#tally span.bump { animation: hudBump .42s ease-out; }
 
 /* command economy */
 #economy { top: 8px; left: 8px; width: 124px; display: grid; gap: 3px; }
