@@ -311,6 +311,9 @@ export class Horde {
     this.eyes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.eyes);
     this._eyeHidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    this._eyeBlue = new THREE.Color(0x8fd4ff);  // rank-and-file wights
+    this._eyeRed = new THREE.Color(0xff5230);   // giants — baleful red
+    this._eyeCyan = new THREE.Color(0xb0f2ff);  // runners — brighter, colder
 
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(Math.ceil(this.cap * 1.4), 3600); // static, but still drawn every frame
@@ -565,6 +568,7 @@ export class Horde {
         o.updateMatrix();
         this.mesh.setMatrixAt(i, o.matrix);
         this.eyes.setMatrixAt(i, o.matrix);
+        this.eyes.setColorAt(i, a.giant ? this._eyeRed : a.runner ? this._eyeCyan : this._eyeBlue);
         continue;
       }
 
@@ -624,10 +628,12 @@ export class Horde {
       o.updateMatrix();
       this.mesh.setMatrixAt(i, o.matrix);
       this.eyes.setMatrixAt(i, o.matrix);
+      this.eyes.setColorAt(i, a.giant ? this._eyeRed : a.runner ? this._eyeCyan : this._eyeBlue);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     this.eyes.count = this.mesh.count;
     this.eyes.instanceMatrix.needsUpdate = true;
+    if (this.eyes.instanceColor) this.eyes.instanceColor.needsUpdate = true;
 
     // bury bodies that finished falling into the static corpse pool
     if (this._bury.length) {
