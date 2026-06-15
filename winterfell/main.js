@@ -22,6 +22,7 @@ import { createBanners } from './world/banners.js';
 import { createCrows } from './world/crows.js';
 import { createBloodField } from './world/bloodfield.js';
 import { createSearchlights } from './world/searchlights.js';
+import { createWarGlow } from './world/warglow.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -52,6 +53,7 @@ const crows = createCrows(scene); // carrion birds wheeling over the killing gro
 const bloodField = createBloodField(scene); // the snow soaks red where the dead fall
 horde.onCorpse = (x, z) => bloodField.stain(x, z);
 const searchlights = createSearchlights(scene); // beams sweeping the killing ground from the towers
+const warGlow = createWarGlow(scene); // distant fires burning in the dead-lands to the north
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
@@ -634,6 +636,7 @@ async function frame(now) {
   banners.update(dt);
   crows.update(dt, camera);
   searchlights.update(dt);
+  warGlow.update(dt);
   rig.update(dt);
   possession.update(dt);
   updateGhost();
