@@ -35,6 +35,7 @@ export function createHUD(root, state, hooks = {}) {
       <div id="cmdProg" class="cmd-prog" style="display:none"><i></i></div>
     </div>
 
+    <div id="crisis"></div>
     <div id="placeBanner"></div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
@@ -57,7 +58,7 @@ export function createHUD(root, state, hooks = {}) {
     gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
-    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'), placeBanner: $('#placeBanner'),
+    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'), placeBanner: $('#placeBanner'), crisis: $('#crisis'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
@@ -194,6 +195,11 @@ export function createHUD(root, state, hooks = {}) {
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
 
     renderCommand();
+
+    // crisis vignette — red edges pulse as the gate fails / the threat surges
+    const danger = Math.min(1, (1 - (state.gateHp ?? 1)) * 0.95 + (state.threat ?? 0) * 0.45);
+    el.crisis.style.opacity = danger > 0.02
+      ? (danger * (0.72 + 0.28 * Math.sin(performance.now() * 0.006))).toFixed(3) : '0';
 
     // placement banner — armed build mode is obvious + tells you how to place it
     const bm = state.buildMode;
