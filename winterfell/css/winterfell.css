@@ -211,14 +211,23 @@ body::after {
 
 /* end screen */
 #endscreen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-  background: rgba(4,8,12,.78); pointer-events: auto; backdrop-filter: blur(3px); }
-#endscreen.show { display: flex; }
-.end-card { text-align: center; padding: 40px 56px; }
-.end-card h1 { font-family: 'Saira Stencil One', sans-serif; font-size: 58px; letter-spacing: .02em; }
-.end-card h1.win { color: #9fe0a8; } .end-card h1.lose { color: #ff7a6b; }
-#endSub { opacity: .7; margin: 8px 0 26px; letter-spacing: .06em; }
-.end-stats { display: flex; gap: 34px; justify-content: center; margin-bottom: 30px; }
-.end-stats div { font-size: 12px; letter-spacing: .08em; opacity: .7; text-transform: uppercase; }
-.end-stats span { display: block; font-family: 'Special Elite', monospace; font-size: 34px; color: #cfe2f6; opacity: 1; }
+  background: radial-gradient(ellipse at center, rgba(7,11,18,.66), rgba(2,4,7,.93)); pointer-events: auto; backdrop-filter: blur(5px); }
+#endscreen.show { display: flex; animation: endFade .5s ease-out; }
+@keyframes endFade { from { opacity: 0; } to { opacity: 1; } }
+.end-card { text-align: center; padding: 46px 66px;
+  background: linear-gradient(180deg, rgba(20,29,42,.92), rgba(9,14,21,.94));
+  border: 1px solid rgba(140,170,205,.3); border-radius: 12px;
+  box-shadow: 0 24px 90px rgba(0,0,0,.62), inset 0 1px 0 rgba(185,210,240,.14);
+  animation: endRise .6s cubic-bezier(.2,.8,.2,1); }
+@keyframes endRise { from { transform: translateY(26px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+.end-card h1 { font-family: 'Saira Stencil One', sans-serif; font-size: 62px; letter-spacing: .03em; margin: 0; }
+.end-card h1.win { color: #9fe0a8; text-shadow: 0 0 44px rgba(120,224,140,.5); }
+.end-card h1.lose { color: #ff7a6b; text-shadow: 0 0 44px rgba(255,90,70,.5); }
+#endSub { opacity: .68; margin: 10px 0 28px; letter-spacing: .07em; font-style: italic; }
+.end-stats { display: flex; gap: 36px; justify-content: center; margin-bottom: 32px; }
+.end-stats div { font-size: 11.5px; letter-spacing: .09em; opacity: .65; text-transform: uppercase; }
+.end-stats span { display: block; font-family: 'Special Elite', monospace; font-size: 36px; color: #e7eefa; opacity: 1; margin-bottom: 3px; }
 #endAgain { font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: .08em;
-  color: #06121d; background: #9fd0ff; border: 0; border-radius: 7px; padding: 13px 30px; cursor: pointer; }
+  color: #06121d; background: #9fd0ff; border: 0; border-radius: 7px; padding: 13px 32px; cursor: pointer; transition: .15s;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+#endAgain:hover { background: #c2e1ff; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,.5); }
