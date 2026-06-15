@@ -1396,15 +1396,18 @@ function placeBuildable(kind, x, z, opts = {}) {
     const bowl = new THREE.Mesh(a.bowl, a.iron);
     bowl.position.y = 1.32;
     g.add(bowl);
+    const brFlames = [];
     for (const rot of [0, Math.PI / 2]) {
       const flame = new THREE.Mesh(a.flamePlane, a.flame.clone());
       flame.position.y = 2.55;
       flame.rotation.y = rot;
       g.add(flame);
+      brFlames.push(flame);
     }
     const glow = new THREE.PointLight(0xff8a38, 4.2, 28, 2.0);
     glow.position.set(0, 2.25, 0);
     g.add(glow);
+    env.flames.push({ light: glow, flames: brFlames, base: 4.2, ph: rnd() * 6 }); // living fire
   } else if (kind === 'ammo') {
     for (let i = 0; i < 7; i++) {
       const crate = new THREE.Mesh(a.crate, i % 3 === 0 ? a.iron : a.wood);
@@ -2033,6 +2036,7 @@ export function buildField(scene) {
     dig: new Float32Array(DIG_W * DIG_H),
     constructing: [],
     spinners: [],
+    flames: [],        // brazier fires registered for flicker
     terrainDirty: false,
     blasts: [],
   };
@@ -2105,6 +2109,16 @@ export function buildField(scene) {
       item.flame.material.opacity = 0.62 + f * 0.22;
       const s = 0.84 + f * 0.18;
       item.flame.scale.set(s * (0.92 + Math.sin(time * 17 + item.torch.userData.phase) * 0.04), s, 1);
+    }
+
+    for (const it of env.flames) {   // brazier fires flicker like the torches
+      const f = 0.74 + Math.sin(time * 8.5 + it.ph) * 0.16 + Math.sin(time * 21 + it.ph) * 0.08;
+      it.light.intensity = it.base * f;
+      const s = 0.85 + f * 0.22;
+      for (const fl of it.flames) {
+        fl.material.opacity = 0.7 + f * 0.25;
+        fl.scale.set(s * (0.9 + Math.sin(time * 15 + it.ph) * 0.05), s, 1);
+      }
     }
 
     for (const m of mists) {
