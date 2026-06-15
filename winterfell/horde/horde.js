@@ -421,6 +421,7 @@ export class Horde {
     // each death first raises the solid earth mound, then the body lies ON it — so
     // the hill is a continuous surface (no see-through holes), bodies just clad it
     raiseMound(x, z, 0.055);
+    if (this.onCorpse) this.onCorpse(x, z); // optional hook: blood-soak the ground
     const y = heightAt(x, z);
     const i = this._corpseHead;
     this._corpseHead = (this._corpseHead + 1) % this._corpseCap;

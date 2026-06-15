@@ -20,6 +20,7 @@ import { createLightning } from './world/lightning.js';
 import { createAurora } from './world/aurora.js';
 import { createBanners } from './world/banners.js';
 import { createCrows } from './world/crows.js';
+import { createBloodField } from './world/bloodfield.js';
 
 const canvas = document.getElementById('gl');
 const hudRoot = document.getElementById('hud');
@@ -47,6 +48,8 @@ const lightning = createLightning(scene); // thundersnow flashes over the field
 const aurora = createAurora(scene); // northern lights drifting in the night sky
 const banners = createBanners(scene); // war banners rippling along the battlements
 const crows = createCrows(scene); // carrion birds wheeling over the killing ground
+const bloodField = createBloodField(scene); // the snow soaks red where the dead fall
+horde.onCorpse = (x, z) => bloodField.stain(x, z);
 function seedFieldWorks() {
   for (const [kind, x, z] of [
     // a dug-in line already crewed and firing when the night begins
