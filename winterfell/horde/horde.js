@@ -302,6 +302,16 @@ export class Horde {
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.mesh);
 
+    // cold blue wight-eyes — a sea of pinpoints in the dark, riding each live agent's head
+    const eyeL = new THREE.SphereGeometry(0.085, 5, 4); eyeL.translate(-0.1, 1.78, -0.26);
+    const eyeR = new THREE.SphereGeometry(0.085, 5, 4); eyeR.translate(0.1, 1.78, -0.26);
+    this.eyes = new THREE.InstancedMesh(mergeRaw([eyeL, eyeR]),
+      new THREE.MeshBasicMaterial({ color: 0x8fd4ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, fog: true }), this.cap);
+    this.eyes.frustumCulled = false; this.eyes.count = 0;
+    this.eyes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(this.eyes);
+    this._eyeHidden = new THREE.Matrix4().makeScale(0, 0, 0);
+
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(Math.ceil(this.cap * 1.4), 3600); // static, but still drawn every frame
     const corpseMat = new THREE.MeshStandardMaterial({
@@ -532,6 +542,7 @@ export class Horde {
         o.scale.set(ds * (a.sx || 1), ds * (a.sy || 1), ds * (a.sz || 1));
         o.updateMatrix();
         this.mesh.setMatrixAt(i, o.matrix);
+        this.eyes.setMatrixAt(i, this._eyeHidden); // the dead eyes go out
         if (t >= 1) this._bury.push(a);
         continue;
       }
@@ -553,6 +564,7 @@ export class Horde {
         o.scale.set(os * (a.sx || 1), os * (a.sy || 1), os * (a.sz || 1));
         o.updateMatrix();
         this.mesh.setMatrixAt(i, o.matrix);
+        this.eyes.setMatrixAt(i, o.matrix);
         continue;
       }
 
@@ -611,8 +623,11 @@ export class Horde {
       o.scale.set(a.scl * (a.sx || 1), a.scl * (a.sy || 1), a.scl * (a.sz || 1));
       o.updateMatrix();
       this.mesh.setMatrixAt(i, o.matrix);
+      this.eyes.setMatrixAt(i, o.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.eyes.count = this.mesh.count;
+    this.eyes.instanceMatrix.needsUpdate = true;
 
     // bury bodies that finished falling into the static corpse pool
     if (this._bury.length) {
