@@ -878,12 +878,16 @@ function addWall(group, torches, placementTargets, env) {
   }
   for (let i = 0; i < 16; i++) {
     const slit = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 1.8, 0.06),
-      new THREE.MeshBasicMaterial({ color: 0xff9d42, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, fog: false }),
+      new THREE.BoxGeometry(0.6, 1.9, 0.06),
+      new THREE.MeshBasicMaterial({ color: 0xffb24a, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, fog: false }),
     );
     slit.position.set(-9.5 + (i % 8) * 2.72, 10 + Math.floor(i / 8) * 7, keepZ + 5.56);
     keep.add(slit);
   }
+  // the keep is the lit heart of the defence — warm light spills from the great hall
+  const keepGlow = new THREE.PointLight(0xffb368, 4.6, 46, 2);
+  keepGlow.position.set(0, 13, keepZ + 4);
+  keep.add(keepGlow);
   wall.add(keep);
 
   addTorches(wall, torches);
