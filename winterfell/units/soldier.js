@@ -14,15 +14,19 @@ function shared() {
     skin:    new THREE.MeshStandardMaterial({ color: 0xc59a76, roughness: 0.7 }),
     gun:     new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.4 }),
   };
+  // rounded, tapered forms instead of boxes — same mesh count (no extra draw calls),
+  // just less blocky so the troops read as well as the detailed dead
   const geo = {
-    hips:  new THREE.BoxGeometry(1.0, 0.5, 0.6),
-    torso: new THREE.BoxGeometry(1.05, 1.0, 0.62),
-    leg:   new THREE.BoxGeometry(0.4, 1.0, 0.48),
-    arm:   new THREE.BoxGeometry(0.3, 0.95, 0.36),
-    head:  new THREE.BoxGeometry(0.5, 0.5, 0.5),
-    helmet:new THREE.SphereGeometry(0.38, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    hips:  new THREE.CylinderGeometry(0.46, 0.4, 0.5, 8),
+    torso: new THREE.CylinderGeometry(0.5, 0.42, 1.05, 8),   // chest down to a tapered waist
+    leg:   new THREE.CylinderGeometry(0.2, 0.15, 1.0, 6),    // thigh tapering to the boot
+    arm:   new THREE.CylinderGeometry(0.15, 0.11, 0.95, 6),
+    head:  new THREE.SphereGeometry(0.27, 8, 6),
+    helmet:new THREE.SphereGeometry(0.4, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
     rifle: new THREE.BoxGeometry(0.14, 0.16, 1.7),
   };
+  geo.torso.scale(1.18, 1, 0.62);    // oval cross-section: a chest, not a column
+  geo.hips.scale(1.1, 1, 0.64);
   // center leg/arm geo at top so we can pivot from the joint
   geo.leg.translate(0, -0.5, 0);
   geo.arm.translate(0, -0.475, 0);
