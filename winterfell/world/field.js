@@ -1684,7 +1684,7 @@ function addMist(group, mists) {
     [1.00, 'rgba(0,0,0,0)'],
   ]);
   const geo = new THREE.PlaneGeometry(1, 1);
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < 22; i++) { // trimmed from 34 — less transparent overdraw (snow/spindrift/embers carry the air now)
     const mat = new THREE.MeshBasicMaterial({
       map: mistTex,
       transparent: true,
@@ -1717,7 +1717,7 @@ function addGroundFog(group) {
   const tint = new THREE.Color(season().fog).lerp(new THREE.Color(0xffffff), 0.68);
   const list = [];
   const geo = new THREE.PlaneGeometry(1, 1);
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 15; i++) { // trimmed from 22 — fewer big fog banks, same depth read
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, fog: false, color: tint });
     const m = new THREE.Mesh(geo, mat);
     m.position.set((rnd() * 2 - 1) * (FIELD_HALF_X + 8), 3 + rnd() * 4, NORTH_Z + 24 + rnd() * 205);
