@@ -122,9 +122,32 @@ function addSky(scene) {
   moonGlow.position.set(-170, 145, -265);
   scene.add(moonGlow);
 
+  // a real lunar face: cool cream disc, limb-darkened, with maria + craters
+  const moonTex = (() => {
+    const mc = document.createElement('canvas'); mc.width = mc.height = 256;
+    const m = mc.getContext('2d');
+    const lg = m.createRadialGradient(118, 110, 10, 128, 128, 128);
+    lg.addColorStop(0, '#f2f6ff'); lg.addColorStop(0.7, '#dfe8fb'); lg.addColorStop(1, '#9fb0cf'); // limb darkening
+    m.fillStyle = lg; m.beginPath(); m.arc(128, 128, 128, 0, Math.PI * 2); m.fill();
+    for (let i = 0; i < 9; i++) {            // maria — dim grey-blue seas
+      const x = 50 + Math.random() * 156, y = 50 + Math.random() * 156, r = 14 + Math.random() * 40;
+      if (Math.hypot(x - 128, y - 128) > 112) continue;
+      const mg = m.createRadialGradient(x, y, 1, x, y, r);
+      mg.addColorStop(0, 'rgba(150,166,196,0.5)'); mg.addColorStop(1, 'rgba(150,166,196,0)');
+      m.fillStyle = mg; m.beginPath(); m.arc(x, y, r, 0, Math.PI * 2); m.fill();
+    }
+    for (let i = 0; i < 26; i++) {           // craters — bright rim, dark floor
+      const x = 30 + Math.random() * 196, y = 30 + Math.random() * 196, r = 2 + Math.random() * 8;
+      if (Math.hypot(x - 128, y - 128) > 118) continue;
+      m.strokeStyle = 'rgba(255,255,255,0.5)'; m.lineWidth = 1;
+      m.beginPath(); m.arc(x, y, r, 0, Math.PI * 2); m.stroke();
+      m.fillStyle = 'rgba(120,134,162,0.35)'; m.beginPath(); m.arc(x, y, r * 0.8, 0, Math.PI * 2); m.fill();
+    }
+    const t = new THREE.CanvasTexture(mc); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
   const moon = new THREE.Mesh(
-    new THREE.CircleGeometry(13, 64),
-    new THREE.MeshBasicMaterial({ color: 0xdbeaff, fog: false }),
+    new THREE.CircleGeometry(16, 64),
+    new THREE.MeshBasicMaterial({ map: moonTex, color: 0xffffff, fog: false }),
   );
   moon.position.set(-170, 145, -264);
   scene.add(moon);
