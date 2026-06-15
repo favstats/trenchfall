@@ -1429,6 +1429,7 @@ function placeBuildable(kind, x, z, opts = {}) {
     const door = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.0, 0.15), a.wood); door.position.set(0, 1.0, 3.05); g.add(door);
     const chim = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), wm); chim.position.set(3.2, 5.4, -1.6); g.add(chim);
     const ember = new THREE.PointLight(0xff7a2a, 1.6, 16, 2); ember.position.set(3.2, 6.6, -1.6); g.add(ember);
+    const hearth = new THREE.PointLight(0xffb060, 3.6, 28, 2); hearth.position.set(0, 2.2, 0.6); g.add(hearth); // warm spill — quarters are manned
     addSandbags(g, a, 7, 1, 3.7);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6, 5), a.iron); pole.position.set(-4.4, 3, -2.6); g.add(pole);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x7e1f2c, roughness: 0.9, side: THREE.DoubleSide }));
@@ -1444,6 +1445,8 @@ function placeBuildable(kind, x, z, opts = {}) {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 5), a.iron); pole.position.set(-4.6, 2.5, -2.8); g.add(pole);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(2, 1.2), new THREE.MeshStandardMaterial({ color: 0x3a5a82, roughness: 0.9, side: THREE.DoubleSide }));
     flag.position.set(-3.6, 4.4, -2.8); g.add(flag); env.spinners.push({ m: flag, wave: true, ph: rnd() * 6 });
+    const lantern = new THREE.PointLight(0xffc070, 2.6, 24, 2); lantern.position.set(0, 2.6, 0); g.add(lantern); // depot worklight
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffd89a, fog: false })); lamp.position.set(3.6, 3.4, 2.4); g.add(lamp);
   } else if (kind === 'lab') {
     const wm = a._wallMat || (a._wallMat = new THREE.MeshStandardMaterial({ map: stampMasonry(), color: 0x8a929c, roughness: 0.92 }));
     const win = a._winMat || (a._winMat = new THREE.MeshBasicMaterial({ color: 0xffb24a, fog: false }));
