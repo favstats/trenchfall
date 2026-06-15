@@ -330,13 +330,15 @@ export class Horde {
     // ----- corpses: the slain remain and heap up -----
     this._corpseCap = Math.min(Math.ceil(this.cap * 1.4), 3600); // static, but still drawn every frame
     const corpseMat = new THREE.MeshStandardMaterial({
-      color: 0x8a9296,             // greyer/colder than the living, baked colors still read
+      color: 0x90a0b0,             // frosted blue-grey: the slain freeze in the snow
       map: undeadTex,
       bumpMap: undeadTex,
       bumpScale: 0.35,
       vertexColors: true,
       roughness: 1,
       metalness: 0,
+      emissive: 0x0c1826,          // faint cold death-glow so the Leichenberg reads at night
+      emissiveIntensity: 0.14,
       side: THREE.FrontSide,
     });
     this.corpses = new THREE.InstancedMesh(geo, corpseMat, this._corpseCap);
