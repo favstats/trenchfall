@@ -126,5 +126,42 @@ export function makeTextures() {
     }
   });
 
-  return { wallpaper, carpet, ceiling, concrete, concreteWall, tile, caustics };
+  // ---- level fun: pastel party wall covered in crayon ----
+  const crayon = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#c9bfa4'; g.fillRect(0, 0, w, h);
+    speckle(g, w, h, 900, '#bdb298', 0.5);
+    const cols = ['#b04a3e', '#3e6ab0', '#b0a03e', '#4ab05e', '#8a4ab0'];
+    for (let i = 0; i < 22; i++) {                          // crayon scribbles
+      g.strokeStyle = cols[i % cols.length];
+      g.globalAlpha = 0.5 + Math.random() * 0.4;
+      g.lineWidth = 2 + Math.random() * 3;
+      g.beginPath();
+      let x = Math.random() * w, y = Math.random() * h;
+      g.moveTo(x, y);
+      for (let k = 0; k < 5; k++) { x += (Math.random() - 0.5) * 60; y += (Math.random() - 0.5) * 60; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    // the smiles
+    g.strokeStyle = '#8a3226'; g.lineWidth = 4;
+    for (let i = 0; i < 4; i++) {
+      const x = 30 + Math.random() * (w - 60), y = 30 + Math.random() * (h - 60);
+      g.beginPath(); g.arc(x, y, 16, 0.2, Math.PI - 0.2); g.stroke();
+      g.beginPath(); g.arc(x - 7, y - 8, 2.5, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(x + 7, y - 8, 2.5, 0, Math.PI * 2); g.stroke();
+    }
+    grime(g, w, h, 18, 0.1);
+  });
+
+  // ---- red hall: painted brick-red maintenance corridor ----
+  const redwall = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#6e1f18'; g.fillRect(0, 0, w, h);
+    speckle(g, w, h, 3200, '#611b14', 0.7);
+    speckle(g, w, h, 1200, '#7d2620', 0.6);
+    g.fillStyle = 'rgba(20,6,4,0.5)';
+    for (let y = 42; y < h; y += 42) g.fillRect(0, y, w, 3);  // panel lines
+    grime(g, w, h, 26, 0.22);
+  });
+
+  return { wallpaper, carpet, ceiling, concrete, concreteWall, tile, caustics, crayon, redwall };
 }

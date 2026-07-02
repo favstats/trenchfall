@@ -1,7 +1,7 @@
 // noclip-shot.mjs — headless boot + behavioral + screenshot QA for NOCLIP.
-// Boots, walks the yellow rooms, descends to the garage, spawns the Grin and
-// looks at it, descends to the poolrooms, wins at the red door. Asserts zero
-// console errors and the full phase arc; writes screenshots per zone.
+// Walks all five levels: yellow rooms → level fun → garage (entity + touch +
+// almond water) → poolrooms → red hall chase → the white door. Asserts zero
+// console errors and the full arc; writes a screenshot per level.
 //
 //   node scripts/noclip-shot.mjs [tag]
 import { chromium } from 'playwright';
@@ -41,50 +41,76 @@ try {
   await sleep(1200);
   await page.screenshot({ path: `dist/shots/noclip-${TAG}-intro.png` });
 
-  // yellow rooms: walk forward, look around
+  // L0 yellow rooms: walk, look (wait on distance, not wall-clock — headless
+  // frame time stretches sim time)
   await page.evaluate(() => { window.NC.test.start(); window.NC.test.look(-0.7, 0.02); window.NC.test.move(1); });
-  await sleep(2600);
+  await page.waitForFunction(() => window.NC.stats.walked >= 4, { timeout: 15000 })
+    .catch(() => errs.push('player did not move in the yellow rooms'));
   await page.evaluate(() => window.NC.test.move(0));
   await sleep(400);
   const s0 = await page.evaluate(() => window.NC.stats);
   console.log('[NC] yellow:', JSON.stringify(s0));
-  if (s0.walked < 3) errs.push('player did not move in the yellow rooms');
   await page.screenshot({ path: `dist/shots/noclip-${TAG}-yellow.png` });
 
-  // descend to the garage, spawn the Grin ahead and look at it
-  await page.evaluate(() => { window.NC.test.descend(); });
-  await sleep(1200);
+  // L1 level fun: look across the party
+  await page.evaluate(() => { window.NC.test.descend(); window.NC.test.look(-0.9, 0.04); });
+  await sleep(1400);
+  const s1 = await page.evaluate(() => window.NC.stats);
+  console.log('[NC] fun:', JSON.stringify(s1));
+  if (s1.zone !== 1) errs.push(`expected zone 1, got ${s1.zone}`);
+  await page.screenshot({ path: `dist/shots/noclip-${TAG}-fun.png` });
+
+  // L2 garage: entity in a dark gap, then a touch (tape 3 -> 2), then water
   await page.evaluate(() => {
-    window.NC.test.look(-2.2, 0);                 // face into the column field
-    window.NC.test.entityAt(-38.5, -28);          // midpoint between fixtures = dark
+    window.NC.test.descend();
+    window.NC.test.look(-2.2, 0);
+    window.NC.test.entityAt(-38.5, -28, 'grin');
   });
   await sleep(1500);
-  const s1 = await page.evaluate(() => window.NC.stats);
-  console.log('[NC] garage:', JSON.stringify(s1));
-  if (s1.zone !== 1) errs.push(`expected zone 1, got ${s1.zone}`);
-  if (s1.entity !== 'STALK') errs.push(`entity did not stalk (state=${s1.entity})`);
-  await page.screenshot({ path: `dist/shots/noclip-${TAG}-garage.png` });
-
-  // a touch costs tape integrity
-  await page.evaluate(() => window.NC.test.touch());
-  await sleep(600);
   const s2 = await page.evaluate(() => window.NC.stats);
-  if (s2.tape !== 2) errs.push(`tape integrity should be 2 after touch, got ${s2.tape}`);
-  await page.screenshot({ path: `dist/shots/noclip-${TAG}-skip.png` });
+  console.log('[NC] garage:', JSON.stringify(s2));
+  if (s2.zone !== 2) errs.push(`expected zone 2, got ${s2.zone}`);
+  if (s2.entity !== 'STALK') errs.push(`entity did not stalk (state=${s2.entity})`);
+  await page.screenshot({ path: `dist/shots/noclip-${TAG}-garage.png` });
+  await page.evaluate(() => window.NC.test.touch());
+  await sleep(500);
+  let tape = await page.evaluate(() => window.NC.stats.tape);
+  if (tape !== 2) errs.push(`tape should be 2 after touch, got ${tape}`);
+  await page.evaluate(() => window.NC.test.pickup());
+  await sleep(700);
+  tape = await page.evaluate(() => window.NC.stats.tape);
+  const water = await page.evaluate(() => window.NC.stats.water);
+  if (tape !== 3 || water !== 1) errs.push(`almond water should restore tape (tape=${tape}, water=${water})`);
 
-  // poolrooms: descend, look across the water, then walk out the red door
-  await page.evaluate(() => { window.NC.test.descend(); window.NC.test.look(-2.2, -0.04); });
-  await sleep(1500);
+  // L3 poolrooms: the mannequin pool
+  await page.evaluate(() => { window.NC.test.descend(); window.NC.test.look(2.2, -0.02); });
+  await sleep(1400);
   const s3 = await page.evaluate(() => window.NC.stats);
   console.log('[NC] pool:', JSON.stringify(s3));
-  if (s3.zone !== 2) errs.push(`expected zone 2, got ${s3.zone}`);
+  if (s3.zone !== 3) errs.push(`expected zone 3, got ${s3.zone}`);
   await page.screenshot({ path: `dist/shots/noclip-${TAG}-pool.png` });
 
+  // L4 red hall: cross the trigger, confirm the chase, outrun it. Headless
+  // frame-time stretches sim time (dt clamp), so wait FOR the chase, not a
+  // fixed wall-clock guess.
+  await page.evaluate(() => { window.NC.test.descend(); window.NC.test.look(-Math.PI / 2, 0); window.NC.test.move(1); window.NC.test.sprint(true); });
+  await page.waitForFunction(() => window.NC.stats.chase === true, { timeout: 20000 })
+    .catch(() => errs.push('chase never started in the red hall'));
+  const s4 = await page.evaluate(() => window.NC.stats);
+  console.log('[NC] redhall:', JSON.stringify(s4));
+  if (s4.zone !== 4) errs.push(`expected zone 4, got ${s4.zone}`);
+  if (s4.chase && s4.entityMode !== 'chaser') errs.push(`expected chaser, got ${s4.entityMode}`);
+  await page.evaluate(() => window.NC.test.look(Math.PI / 2, 0)); // glance back at it
+  await sleep(300);
+  await page.screenshot({ path: `dist/shots/noclip-${TAG}-redhall.png` });
+  await page.evaluate(() => { window.NC.test.look(-Math.PI / 2, 0); window.NC.test.move(0); window.NC.test.sprint(false); });
+
+  // the white door
   await page.evaluate(() => window.NC.test.exit());
   await sleep(900);
-  const s4 = await page.evaluate(() => window.NC.stats);
-  console.log('[NC] end:', JSON.stringify(s4));
-  if (s4.phase !== 'won') errs.push(`expected phase won at the red door, got ${s4.phase}`);
+  const s5 = await page.evaluate(() => window.NC.stats);
+  console.log('[NC] end:', JSON.stringify(s5));
+  if (s5.phase !== 'won') errs.push(`expected phase won at the white door, got ${s5.phase}`);
   await page.screenshot({ path: `dist/shots/noclip-${TAG}-end.png` });
 
   await browser.close();
@@ -93,7 +119,7 @@ try {
     console.error(`\n[NC] ${errs.length} ERROR(S):`);
     for (const e of errs) console.error('  - ' + e);
   } else {
-    console.log('[NC] boot + walk + descend + entity + skip + ending all clean ✓');
+    console.log('[NC] all five levels + entity + water + chase + ending clean ✓');
   }
 } catch (e) {
   failed = true;

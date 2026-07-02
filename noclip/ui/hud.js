@@ -45,7 +45,7 @@ export function createHUD(root, hooks = {}) {
 
   const $ = s => root.querySelector(s);
   const el = {
-    vf: $('#vf'), rec: $('#recDot'), stampTime: $('#stampTime'),
+    vf: $('#vf'), rec: $('#recDot'), stampTime: $('#stampTime'), stampDate: $('#stampDate'),
     battFill: $('#battFill'), integrity: $('#integrity'),
     zone: $('#zoneCard'), zcName: $('#zcName'), zcSub: $('#zcSub'),
     whisper: $('#whisper'),
@@ -72,6 +72,9 @@ export function createHUD(root, hooks = {}) {
     whisperT = secs;
   }
 
+  // the deeper he goes, the less the date agrees with itself
+  function setStamp(dateStr) { el.stampDate.textContent = dateStr; }
+
   function update(S, dt) {
     clock += dt;
     const h = Math.floor(clock / 3600) % 24, m = Math.floor(clock / 60) % 60, s = Math.floor(clock) % 60;
@@ -94,11 +97,12 @@ export function createHUD(root, hooks = {}) {
       : 'the remainder of the tape is unrecoverable. the last intact frame shows teeth.';
     el.endStats.innerHTML = `
       <div><span>${Math.floor(S.time / 60)}:${String(Math.floor(S.time % 60)).padStart(2, '0')}</span>footage</div>
-      <div><span>${S.zonesSeen}/3</span>levels</div>
+      <div><span>${S.zonesSeen}/5</span>levels</div>
       <div><span>${Math.round(S.walked)}m</span>walked</div>
-      <div><span>${S.encounters}</span>sightings</div>`;
+      <div><span>${S.encounters}</span>sightings</div>
+      <div><span>${S.water}</span>almond water</div>`;
     el.end.classList.add('show');
   }
 
-  return { update, zone, whisper, showEnd };
+  return { update, zone, whisper, showEnd, setStamp };
 }

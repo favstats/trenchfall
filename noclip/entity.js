@@ -31,9 +31,22 @@ function grinTexture() {
   return t;
 }
 
+// behaviour presets — the same silhouette, three different rules, which is
+// exactly what makes learning them matter:
+//   grin: classic — moves only unobserved, light banishes it
+//   party: Level Fun's host — never stops walking, observed or not; only light
+//   chaser: the Red Hall — ignores your gaze AND the light; outrun it or lose
+const MODES = {
+  grin:   { freeze: true,  lit: true,  speed: 1.7, tint: 0xffffff },
+  party:  { freeze: false, lit: true,  speed: 1.05, tint: 0xffd24a },
+  chaser: { freeze: false, lit: false, speed: 4.5, tint: 0xff5040 },
+};
+
 export class Entity {
   constructor(scene) {
     this.state = 'DORMANT';        // DORMANT | STALK
+    this.mode = 'grin';
+    this.cfg = MODES.grin;
     this.pos = new THREE.Vector3();
     this.seenOnce = false;
     this.onTouch = null;
@@ -51,8 +64,11 @@ export class Entity {
     this._tmp = new THREE.Vector3();
   }
 
-  spawn(x, y, z) {
+  spawn(x, y, z, mode = 'grin') {
     this.state = 'STALK';
+    this.mode = mode;
+    this.cfg = MODES[mode] || MODES.grin;
+    this.face.material.color.setHex(this.cfg.tint);
     this.pos.set(x, y, z);
     this.seenOnce = false;
   }
@@ -79,15 +95,18 @@ export class Entity {
 
     if (observed && !this.seenOnce) { this.seenOnce = true; sfxStinger(); }
 
-    // it advances only while unobserved; faster when you sprint (it hears)
-    if (!observed && dist > 0.6) {
-      const speed = 1.7 + (ctx.sprinting ? 1.6 : 0) + Math.max(0, (18 - dist)) * 0.05;
+    // movement rule depends on what this one is
+    const mayMove = this.cfg.freeze ? !observed : true;
+    if (mayMove && dist > 0.6) {
+      const speed = this.cfg.speed
+        + (ctx.sprinting && this.mode !== 'chaser' ? 1.6 : 0)
+        + (this.mode === 'grin' ? Math.max(0, (18 - dist)) * 0.05 : 0);
       this.pos.x -= (dx / dist) * speed * dt;
       this.pos.z -= (dz / dist) * speed * dt;
     }
 
-    // light is a wall to it
-    if (ctx.litAt(this.pos.x, this.pos.z)) { this.despawn(); return { dist: Infinity, observed: false }; }
+    // light is a wall to it (the chaser does not care)
+    if (this.cfg.lit && ctx.litAt(this.pos.x, this.pos.z)) { this.despawn(); return { dist: Infinity, observed: false }; }
 
     // touch: the tape skips, it leaves
     if (dist < 1.1) {

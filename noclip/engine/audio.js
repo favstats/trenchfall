@@ -95,6 +95,29 @@ export function sfxEnd(won) {
   else noiseBurst(2.5, 0.5, 1200, 0.3, 'highpass');
 }
 
+// ---- event one-shots ----
+export function sfxSlam() { noiseBurst(0.4, 0.4, 120, 0.8, 'lowpass'); blip('sine', 55, 30, 0.5, 0.2); }
+export function sfxPop() { noiseBurst(0.06, 0.35, 1800, 0.8); blip('sine', 320, 90, 0.09, 0.12); }
+export function sfxSplash() { noiseBurst(0.5, 0.22, 900, 0.7); noiseBurst(0.9, 0.1, 500, 0.5, 'lowpass'); }
+export function sfxChirp() { blip('square', 1560, 1560, 0.09, 0.06); setTimeout(() => blip('square', 1560, 1560, 0.09, 0.06), 160); }
+export function sfxPickup() { blip('sine', 620, 920, 0.16, 0.1); blip('sine', 930, 1380, 0.22, 0.07); }
+// a laugh from another room: warbled falling thirds through the echo
+export function sfxLaugh() {
+  if (!ctx) return;
+  for (let i = 0; i < 4; i++) {
+    setTimeout(() => blip('triangle', 480 - i * 40 + Math.random() * 30, 300 - i * 30, 0.16, 0.05), i * 140);
+  }
+}
+// the phone: repeating double-ring until answered
+let ringTimer = null;
+export function startRing() {
+  if (ringTimer || !ctx) return;
+  const one = () => { for (const d of [0, 90, 180, 270]) setTimeout(() => blip('sine', 1420, 1380, 0.07, 0.075), d); };
+  one();
+  ringTimer = setInterval(one, 2400);
+}
+export function stopRing() { if (ringTimer) { clearInterval(ringTimer); ringTimer = null; } }
+
 // continuous levels, driven each frame
 export function setHum(k) { if (humGain) humGain.gain.setTargetAtTime(0.05 * k, ctx.currentTime, 0.3); }
 export function setDrone(k) { if (droneGain) droneGain.gain.setTargetAtTime(0.22 * k, ctx.currentTime, 0.5); }
