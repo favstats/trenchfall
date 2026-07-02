@@ -437,6 +437,7 @@ export class Combat {
     avatar.mag = (avatar.mag ?? W.mag) - 1;
     if (avatar.mag <= 0) { avatar.mag = W.mag; avatar.reload = W.reload; avatar.reloading = true; }
     else avatar.reloading = false;
+    sfxShot(); // your own rifle answers — the AI line's crackle never covers it
     const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
     const ox = avatar.pos.x, oz = avatar.pos.z, range = 150;
     let best = -1, bestT = 1e9;

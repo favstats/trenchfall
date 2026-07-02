@@ -35,6 +35,15 @@ body::after {
   letter-spacing: .12em; text-transform: uppercase; opacity: .45;
 }
 
+/* cinematic intro title — fades in then out on load, never blocks input */
+#titleCard { position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none; z-index: 9; opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(4,7,12,.2), rgba(2,4,7,.55)); } /* opacity driven by the HUD */
+.tc-title { font-family: 'Saira Stencil One', sans-serif; font-size: 74px; color: #eef4ff;
+  letter-spacing: .06em; text-shadow: 0 0 54px rgba(159,208,255,.55), 0 4px 18px rgba(0,0,0,.6); }
+.tc-sub { margin-top: 12px; font-family: 'Saira Condensed', sans-serif; font-weight: 700;
+  letter-spacing: .22em; font-size: 14px; color: #9fd0ff; opacity: .82; }
+
 .panel {
   position: fixed;
   background: linear-gradient(180deg, rgba(20,29,42,.82), rgba(9,14,21,.78));
@@ -102,7 +111,13 @@ body::after {
 /* selection readout, bottom-left */
 #selPanel { left: 8px; bottom: 30px; min-width: 150px; max-width: 210px; }
 .sel-empty { opacity: .4; font-size: 10px; font-style: italic; }
-.sel-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; font-size: 11px; }
+.sel-row { display: flex; align-items: center; gap: 6px; padding: 1px 0 3px; font-size: 11px; flex-wrap: wrap; }
+.sel-hp { flex-basis: 100%; height: 3px; background: rgba(255,255,255,.09);
+  border-radius: 999px; overflow: hidden; margin-top: 1px; }
+.sel-hp i { display: block; height: 100%; border-radius: 999px; transition: width .25s ease; }
+.sel-hp i.ok { background: #9fe0a8; }
+.sel-hp i.mid { background: #ffd27a; }
+.sel-hp i.low { background: #ff725f; box-shadow: 0 0 6px rgba(255,90,70,.6); }
 .sel-row b { flex: 1; letter-spacing: .02em; }
 .sel-row.mg b { color: #ffd27a; }
 .sel-row.engineer b { color: #bfe6c8; }
@@ -176,6 +191,44 @@ body::after {
 /* crisis vignette — red screen-edge danger pulse (opacity driven by the HUD) */
 #crisis { position: fixed; inset: 0; pointer-events: none; z-index: 7; opacity: 0;
   box-shadow: inset 0 0 170px 36px rgba(196,28,20,.6); }
+
+/* surge alarm — the horde telegraphs its rush a few breaths early */
+#surgeWarn { position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  display: none; font-family: 'Saira Stencil One', sans-serif; font-size: 17px; letter-spacing: .1em;
+  color: #ffb3a6; background: rgba(60,10,8,.78); border: 1px solid rgba(255,110,90,.55);
+  border-radius: 6px; padding: 6px 18px; pointer-events: none; z-index: 8;
+  text-shadow: 0 0 18px rgba(255,90,70,.7); box-shadow: 0 0 26px rgba(196,28,20,.4); }
+#surgeWarn.show { display: block; animation: surgePulse .8s ease-in-out infinite; }
+#surgeWarn span { font-family: 'Special Elite', monospace; font-size: 14px; color: #ffd8cf; margin-left: 8px; }
+@keyframes surgePulse { 0%, 100% { opacity: .82; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.045); } }
+
+/* pause chip */
+#pausedTag { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+  display: none; font-family: 'Saira Stencil One', sans-serif; font-size: 26px; letter-spacing: .16em;
+  color: #dce9fa; background: rgba(9,14,21,.82); border: 1px solid rgba(140,170,205,.4);
+  border-radius: 9px; padding: 14px 34px; pointer-events: none; z-index: 8;
+  text-shadow: 0 0 22px rgba(159,208,255,.5); box-shadow: 0 10px 40px rgba(0,0,0,.55); }
+#pausedTag.show { display: block; }
+
+/* field manual — full keybind reference, toggled with ? */
+#helpOverlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: rgba(2,4,7,.62); backdrop-filter: blur(4px); z-index: 10; pointer-events: auto; }
+#helpOverlay.show { display: flex; animation: endFade .25s ease-out; }
+.help-card { padding: 26px 34px; max-width: min(860px, calc(100vw - 40px));
+  background: linear-gradient(180deg, rgba(20,29,42,.94), rgba(9,14,21,.95));
+  border: 1px solid rgba(140,170,205,.32); border-radius: 12px;
+  box-shadow: 0 24px 90px rgba(0,0,0,.6), inset 0 1px 0 rgba(185,210,240,.14); }
+.help-title { font-family: 'Saira Stencil One', sans-serif; font-size: 22px; letter-spacing: .08em;
+  color: #eef4ff; text-align: center; margin-bottom: 16px; text-shadow: 0 0 24px rgba(159,208,255,.4); }
+.help-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+.help-cols h4 { font-family: 'Saira Condensed', sans-serif; font-size: 11px; letter-spacing: .16em;
+  color: #9fd0ff; opacity: .85; margin-bottom: 7px; }
+.help-row { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; color: #c9d8ea; padding: 2px 0; }
+.help-row i { font-style: normal; font-family: 'Special Elite', monospace; font-size: 10px; color: #ffd27a;
+  background: rgba(0,0,0,.4); border: 1px solid rgba(255,210,122,.3); border-radius: 3px;
+  padding: 1px 5px; white-space: nowrap; }
+@media (max-width: 780px) { .help-cols { grid-template-columns: 1fr; gap: 14px; } }
 
 #placeBanner { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); display: none;
   font-family: 'Saira Condensed', sans-serif; font-weight: 700; letter-spacing: .07em; font-size: 12px;

@@ -173,6 +173,48 @@ scene.add(rallyFx, rallyLine);
 rallyFx.visible = rallyLine.visible = false;
 rallyLine.frustumCulled = false;
 
+// ---------------- order-confirm markers (RTS feedback) ----------------
+// a right-click order answers back: a ring stamps the ground at the destination
+// and collapses inward while it fades — blue for move, red for attack-move,
+// gold for a rally point. Pooled; zero allocation per order.
+const ORDER_N = 8;
+const orderMarkers = [];
+{
+  const geoOuter = new THREE.RingGeometry(0.82, 1, 40);
+  const geoInner = new THREE.RingGeometry(0.16, 0.3, 24);
+  for (let i = 0; i < ORDER_N; i++) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: 0x5ad1ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    const outer = new THREE.Mesh(geoOuter, mat);
+    const inner = new THREE.Mesh(geoInner, mat);
+    outer.rotation.x = inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.02;
+    g.add(outer, inner);
+    g.visible = false;
+    scene.add(g);
+    orderMarkers.push({ g, mat, life: 0, max: 0.9 });
+  }
+}
+let orderHead = 0;
+function stampOrder(x, z, color) {
+  const m = orderMarkers[orderHead]; orderHead = (orderHead + 1) % ORDER_N;
+  m.mat.color.setHex(color);
+  m.g.position.set(x, field.heightAt(x, z) + 0.14, z);
+  m.life = m.max;
+  m.g.visible = true;
+}
+function updateOrderMarkers(dt) {
+  for (const m of orderMarkers) {
+    if (m.life <= 0) continue;
+    m.life -= dt;
+    if (m.life <= 0) { m.g.visible = false; m.mat.opacity = 0; continue; }
+    const k = m.life / m.max;                 // 1 → 0
+    const s = 1.2 + k * k * 3.4;              // ring collapses onto the point
+    m.g.scale.set(s, 1, s);
+    m.mat.opacity = Math.min(1, (1 - k) * 6) * k * 0.95; // snap in, fade out
+  }
+}
+
 function updateGhost() {
   if (!state.buildMode || possession.active) { ghost.visible = false; return; }
   const p = picker.ground(lastMouse.x, lastMouse.y);
@@ -499,8 +541,12 @@ window.addEventListener('mouseup', e => {
   if (e.button === 2) { // right-click
     const hits = picker.objects(e.clientX, e.clientY, field.placementTargets);
     const p = hits.length ? hits[0].point : picker.ground(e.clientX, e.clientY);
-    if (p && selBuilding && selBuilding.kind === 'barracks') { selBuilding.rally = { x: p.x, z: p.z }; return; } // set rally point
-    if (p) force.orderSelected(e.shiftKey ? 'ATTACK_MOVE' : 'MOVE', { x: p.x, z: p.z });
+    if (p && selBuilding && selBuilding.kind === 'barracks') { selBuilding.rally = { x: p.x, z: p.z }; stampOrder(p.x, p.z, 0xffd27a); return; } // set rally point
+    if (p && force.selected().length) {
+      const attack = e.shiftKey;
+      force.orderSelected(attack ? 'ATTACK_MOVE' : 'MOVE', { x: p.x, z: p.z });
+      stampOrder(p.x, p.z, attack ? 0xff6a55 : 0x5ad1ff);
+    }
     return;
   }
   if (e.button !== 0 || !down) return;
@@ -529,13 +575,19 @@ window.addEventListener('mouseup', e => {
 
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k === 'escape') { state.buildMode = null; drawing = false; }
+  if (k === 'escape') { state.buildMode = null; drawing = false; hud.hideHelp(); }
+  if (e.key === '?') { hud.toggleHelp(); return; }
   if (k === 'f') {
     if (possession.active) possession.exit();
     else { const m = force.selected().flatMap(s => s.alive)[0]; if (m) possession.enter(m); }
     return;
   }
   if (possession.active) return; // direct-control owns the keyboard
+  if (k === ' ') { // pause — the battle freezes, the night keeps breathing
+    if (state.phase === 'battle') state.paused = !state.paused;
+    e.preventDefault();
+    return;
+  }
   if (k >= '1' && k <= '4') doResearch(+k - 1); // research techs
   if (k === 'v') fireMortarCallIn();
   else if (k === 'c') callReserve();
@@ -581,7 +633,7 @@ async function frame(now) {
   const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
   last = now;
   adaptResolution(dt);
-  if (state.phase === 'battle') {
+  if (state.phase === 'battle' && !state.paused) {
     state.time += dt;
     updateEconomy(dt);
     force.update(dt);
@@ -601,6 +653,9 @@ async function frame(now) {
       );
       spawnAcc = 0;
     }
+    // forecast the next surge so the HUD can sound the alarm a few breaths early
+    state.surgeIn = surgeAt - state.time;
+    state.surgeArmed = surgeAt > 75 || noiseK > 0.68;
     if (state.time >= surgeAt) {                            // surges only once it's built up
       if (state.time > 75 || noiseK > 0.68) horde.spawnWave(
         Math.floor(30 + ramp * 240 + noiseK * 120),
@@ -616,7 +671,7 @@ async function frame(now) {
       const tier = 1 + Math.floor(state.time / 38);      // doctrine tier climbs
       const type = (reliefN % 4 === 3) ? 'mg' : 'rifle';
       const sq = force.addSquad(`RELIEF ${++reliefN}`, type, (Math.random() * 2 - 1) * 104, WALL_Z, type === 'mg' ? 3 : 6);
-      for (const m of sq.members) m.hp = 3 + tier;       // each wave of relief is hardier
+      for (const m of sq.members) m.hp = m.maxHp = 3 + tier; // each wave of relief is hardier
       reinforceAt += Math.max(4, 17 - tier - (state.musterBonus || 0) * 2); // MUSTER research quickens relief
     }
     horde.update(dt, camera);
@@ -656,6 +711,7 @@ async function frame(now) {
   possession.update(dt);
   updateGhost();
   updateSelectionFeedback();
+  updateOrderMarkers(dt);
   // camera shake — applied last so it offsets whatever rig/possession set this frame
   if (shake > 0.002) {
     camera.position.x += (Math.random() * 2 - 1) * shake;
@@ -676,6 +732,7 @@ async function frame(now) {
     selBuilding: state.selBuilding?.kind || null,
     supply: Math.floor(state.supply), gate: +state.gateHp.toFixed(2), works: state.works,
     noise: Math.round(state.noise || 0), threat: +(state.threat || 0).toFixed(2),
+    paused: !!state.paused, surgeIn: +(state.surgeIn ?? -1).toFixed(1),
     engineersRepairing: state.engineersRepairing || 0,
     possession: state.possession,
   };
@@ -700,6 +757,9 @@ window.WF.test = {
   blast: (x = 0, z = WALL_Z - 42, r = 10) => detonate(x, z, r, 120, 1.25),
   build: (kind = 'trench', x = 0, z = WALL_Z - 28) => field.placeBuildable(kind, x, z),
   noise: (n = 50) => addNoise(n),
+  pause: (v) => (state.paused = v ?? !state.paused),
+  help: () => hud.toggleHelp(),
+  order: (x = 0, z = WALL_Z - 30, attack = false) => stampOrder(x, z, attack ? 0xff6a55 : 0x5ad1ff),
   damageWork: (kind = 'bunker', frac = 0.25) => {
     const b = (field.allBuildables?.() || []).find(item => item.alive && item.kind === kind);
     if (!b) return null;

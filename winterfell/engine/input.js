@@ -5,8 +5,13 @@ import * as THREE from './three.js';
 // wheel zoom, Q/E or middle-drag rotate. Clamped to the battlefield bounds.
 export function makeCameraRig(camera, dom, bounds) {
   const focus = new THREE.Vector3(0, 3.2, -24); // orbit centre ~unit height (good close-ups)
+  // every parameter is smooth-damped toward a target so pans glide, zooms ease
+  // in, and rotates settle instead of snapping — the single biggest feel lever
+  const focusT = focus.clone();
   let dist = 158, yaw = 0;
+  let distT = dist, yawT = yaw;
   let pitch = 0.58; // radians from horizontal — adjustable (tilt the perspective)
+  let pitchT = pitch;
   const PITCH_MIN = 0.14, PITCH_MAX = 1.32;
   // perspective presets cycled with [P]: tactical → top-down → cinematic ground
   const PRESETS = [
@@ -30,13 +35,13 @@ export function makeCameraRig(camera, dom, bounds) {
 
   function cyclePerspective() {
     preset = (preset + 1) % PRESETS.length;
-    pitch = PRESETS[preset].pitch;
-    dist = PRESETS[preset].dist;
+    pitchT = PRESETS[preset].pitch;
+    distT = PRESETS[preset].dist;
   }
 
   dom.addEventListener('wheel', e => {
     // proportional step eases down for fine close-up control; min 6 = right down on the line
-    dist = THREE.MathUtils.clamp(dist + Math.sign(e.deltaY) * Math.max(3, dist * 0.09), 6, 235);
+    distT = THREE.MathUtils.clamp(distT + Math.sign(e.deltaY) * Math.max(3, distT * 0.09), 6, 235);
     e.preventDefault();
   }, { passive: false });
 
@@ -44,8 +49,8 @@ export function makeCameraRig(camera, dom, bounds) {
   dom.ownerDocument.addEventListener('mouseup', e => { if (e.button === 1) dragRotate = false; });
   dom.addEventListener('mousemove', e => {
     if (dragRotate) {
-      yaw -= (e.clientX - lastX) * 0.005; lastX = e.clientX;
-      pitch = THREE.MathUtils.clamp(pitch + (e.clientY - lastY) * 0.004, PITCH_MIN, PITCH_MAX); lastY = e.clientY;
+      yawT -= (e.clientX - lastX) * 0.005; lastX = e.clientX;
+      pitchT = THREE.MathUtils.clamp(pitchT + (e.clientY - lastY) * 0.004, PITCH_MIN, PITCH_MAX); lastY = e.clientY;
     }
     // edge scroll
     const w = dom.clientWidth, h = dom.clientHeight, M = 24;
@@ -60,17 +65,30 @@ export function makeCameraRig(camera, dom, bounds) {
     let mf = 0, mr = 0;                       // forward (W/S) and right (A/D)
     if (keys.has('w')) mf += 1; if (keys.has('s')) mf -= 1;
     if (keys.has('d')) mr += 1; if (keys.has('a')) mr -= 1;
-    if (keys.has('q')) yaw += dt * 1.2;
-    if (keys.has('e')) yaw -= dt * 1.2;
+    if (keys.has('q')) yawT += dt * 1.2;
+    if (keys.has('e')) yawT -= dt * 1.2;
     mf += -edge.z; mr += edge.x;
     // pan on the ground in the direction the camera is actually looking — correct
     // at ANY yaw or pitch (forward = into the screen, right = screen-right)
     const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
     const rgx = Math.cos(yaw), rgz = -Math.sin(yaw);
-    focus.x += (fwx * mf + rgx * mr) * panSpeed;
-    focus.z += (fwz * mf + rgz * mr) * panSpeed;
-    focus.x = THREE.MathUtils.clamp(focus.x, bounds.minX, bounds.maxX);
-    focus.z = THREE.MathUtils.clamp(focus.z, bounds.minZ, bounds.maxZ);
+    focusT.x += (fwx * mf + rgx * mr) * panSpeed;
+    focusT.z += (fwz * mf + rgz * mr) * panSpeed;
+    focusT.x = THREE.MathUtils.clamp(focusT.x, bounds.minX, bounds.maxX);
+    focusT.z = THREE.MathUtils.clamp(focusT.z, bounds.minZ, bounds.maxZ);
+
+    // smooth-damp everything toward its target — pans glide to a stop, wheel
+    // zooms ease, and rotates settle. Rates differ: pan tightest (stays under
+    // the cursor), zoom/rotate a touch looser for the cinematic ease.
+    const kPan = 1 - Math.exp(-11 * dt);
+    const kZoom = 1 - Math.exp(-7.5 * dt);
+    const kRot = 1 - Math.exp(-13 * dt);
+    focus.x += (focusT.x - focus.x) * kPan;
+    focus.z += (focusT.z - focus.z) * kPan;
+    focus.y = focusT.y;
+    dist += (distT - dist) * kZoom;
+    yaw += (yawT - yaw) * kRot;
+    pitch += (pitchT - pitch) * kRot;
 
     const horiz = dist * Math.cos(pitch), height = dist * Math.sin(pitch);
     camera.position.set(
@@ -87,8 +105,10 @@ export function makeCameraRig(camera, dom, bounds) {
     get pitch() { return pitch; },
     setEnabled(v) { enabled = v; },
     cyclePerspective,
-    setPitch(p) { pitch = THREE.MathUtils.clamp(p, PITCH_MIN, PITCH_MAX); },
-    frame(x, z, d) { focus.set(x, 3.2, z); if (d) dist = d; },
+    // setPitch/frame snap current AND target — QA screenshots and demo params
+    // rely on landing instantly, not easing in over half a second
+    setPitch(p) { pitch = pitchT = THREE.MathUtils.clamp(p, PITCH_MIN, PITCH_MAX); },
+    frame(x, z, d) { focus.set(x, 3.2, z); focusT.copy(focus); if (d) dist = distT = d; },
   };
 }
 

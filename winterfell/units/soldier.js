@@ -95,6 +95,7 @@ export class Soldier {
     this.state = 'idle';     // idle | move | aim | dead
     this.alive = true;
     this.hp = 3;
+    this.maxHp = 3;      // relief tiers raise both — the HUD reads hp/maxHp
     this.speed = 7.5;
     this.phase = Math.random() * Math.PI * 2; // gait offset
     this.reload = 0;         // seconds until next shot (combat fills this)

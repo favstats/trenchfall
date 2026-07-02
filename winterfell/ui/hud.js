@@ -5,6 +5,7 @@
 export function createHUD(root, state, hooks = {}) {
   root.innerHTML = `
     <div id="bootTag">THE LONG NIGHT · DIG IN</div>
+    <div id="titleCard"><div class="tc-title">THE LONG NIGHT</div><div class="tc-sub">DIG IN · HOLD WINTERFELL AGAINST THE DEAD</div></div>
     <div id="objective" class="panel">
       <div class="obj-title">DIG IN</div>
       <div class="obj-sub" id="objSub">hold the line · survive the night</div>
@@ -36,10 +37,44 @@ export function createHUD(root, state, hooks = {}) {
     </div>
 
     <div id="crisis"></div>
+    <div id="surgeWarn">⚠ THE DEAD SURGE <span id="surgeIn"></span></div>
+    <div id="pausedTag">II PAUSED — SPACE TO RESUME</div>
+    <div id="helpOverlay"><div class="help-card">
+      <div class="help-title">FIELD MANUAL</div>
+      <div class="help-cols">
+        <div><h4>COMMAND</h4>
+          <div class="help-row"><i>LMB</i>select · drag = box</div>
+          <div class="help-row"><i>RMB</i>move · rally</div>
+          <div class="help-row"><i>⇧RMB</i>attack-move</div>
+          <div class="help-row"><i>H</i>hold position</div>
+          <div class="help-row"><i>X</i>fall back to the wall</div>
+          <div class="help-row"><i>Z</i>toggle hold fire</div>
+          <div class="help-row"><i>F</i>take direct control</div>
+        </div>
+        <div><h4>BUILD</h4>
+          <div class="help-row"><i>T</i>trench · drag</div>
+          <div class="help-row"><i>N</i>wire · drag</div>
+          <div class="help-row"><i>B</i>sandbags · drag</div>
+          <div class="help-row"><i>G / Y / Q</i>nest · tower · bunker</div>
+          <div class="help-row"><i>M / L / O / E</i>pit · light · ammo · brazier</div>
+          <div class="help-row"><i>K / J / U</i>barracks · depot · lab</div>
+          <div class="help-row"><i>Esc</i>cancel placement</div>
+        </div>
+        <div><h4>SUPPORT & CAMERA</h4>
+          <div class="help-row"><i>V</i>mortar strike</div>
+          <div class="help-row"><i>C</i>muster reserves</div>
+          <div class="help-row"><i>1–4</i>research techs</div>
+          <div class="help-row"><i>WASD</i>pan · <i>Q/E</i> rotate</div>
+          <div class="help-row"><i>MMB</i>drag = tilt · <i>P</i> presets</div>
+          <div class="help-row"><i>Space</i>pause</div>
+          <div class="help-row"><i>?</i>close this manual</div>
+        </div>
+      </div>
+    </div></div>
     <div id="placeBanner"></div>
     <div id="possessionTag"></div>
     <div id="crosshair"></div>
-    <div id="hint">LMB select · drag box · RMB move/rally · click a building to command it · Esc cancel</div>
+    <div id="hint">LMB select · drag box · RMB move/rally · click a building to command it · Space pause · ? field manual</div>
     <div id="dragbox"></div>
     <div id="endscreen"><div class="end-card">
       <h1 id="endTitle">HELD</h1>
@@ -58,8 +93,9 @@ export function createHUD(root, state, hooks = {}) {
     gateBar: $('#gateBar'), works: $('#tWorks'),
     sel: $('#selPanel'), dragbox: $('#dragbox'),
     cmdTitle: $('#cmdTitle'), cmdSub: $('#cmdSub'), cmdTabs: $('#cmdTabs'), cmdGrid: $('#cmdGrid'),
-    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'), placeBanner: $('#placeBanner'), crisis: $('#crisis'),
+    cmdProg: $('#cmdProg'), cmdProgFill: $('#cmdProg > i'), placeBanner: $('#placeBanner'), crisis: $('#crisis'), titleCard: $('#titleCard'),
     possession: $('#possessionTag'), crosshair: $('#crosshair'),
+    surge: $('#surgeWarn'), surgeIn: $('#surgeIn'), paused: $('#pausedTag'), help: $('#helpOverlay'),
     end: $('#endscreen'), endTitle: $('#endTitle'), endSub: $('#endSub'),
     endStats: $('#endStats'), endAgain: $('#endAgain'),
   };
@@ -181,8 +217,20 @@ export function createHUD(root, state, hooks = {}) {
   // pulse a readout when its value changes — kills/losses register viscerally
   const bump = (e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); };
   let _pk = 0, _pm = -1, _pr = 0;
+  let titleStart = null; // intro title fade, driven in JS (reliable across browsers)
 
   function update(force) {
+    // cinematic intro title: fade in, hold, fade out over the first ~4.2s of play
+    if (el.titleCard) {
+      if (titleStart === null) titleStart = performance.now();
+      const te = (performance.now() - titleStart) / 1000;
+      if (te < 4.2) {
+        const op = te < 0.5 ? te / 0.5 : te < 2.6 ? 1 : 1 - (te - 2.6) / 1.6;
+        el.titleCard.style.opacity = Math.max(0, Math.min(1, op)).toFixed(3);
+      } else if (el.titleCard.style.visibility !== 'hidden') {
+        el.titleCard.style.opacity = '0'; el.titleCard.style.visibility = 'hidden';
+      }
+    }
     if (state.kills !== _pk) { _pk = state.kills; bump(el.kills); }
     if (state.menRemaining !== _pm) { _pm = state.menRemaining; bump(el.men); }
     if (state.menRisen !== _pr) { _pr = state.menRisen; bump(el.risen); }
@@ -202,6 +250,14 @@ export function createHUD(root, state, hooks = {}) {
     el.gateBar.style.width = `${Math.max(0, Math.min(1, state.gateHp ?? 1)) * 100}%`;
 
     renderCommand();
+
+    // pause chip + surge alarm — the horde telegraphs its rushes now
+    el.paused.classList.toggle('show', !!state.paused);
+    const si = state.surgeIn;
+    const surging = state.phase === 'battle' && !state.paused && state.surgeArmed
+      && si != null && si > 0 && si <= 6;
+    if (surging) el.surgeIn.textContent = `IN ${Math.ceil(si)}`;
+    el.surge.classList.toggle('show', surging);
 
     // crisis vignette — red edges pulse as the gate fails / the threat surges
     const danger = Math.min(1, (1 - (state.gateHp ?? 1)) * 0.95 + (state.threat ?? 0) * 0.45);
@@ -227,12 +283,22 @@ export function createHUD(root, state, hooks = {}) {
     const sel = force.selected();
     el.sel.style.display = state.selBuilding ? 'none' : '';
     if (!sel.length) { el.sel.innerHTML = '<div class="sel-empty">no unit selected</div>'; return; }
-    el.sel.innerHTML = sel.map(s => `
+    const squadHp = (s) => {
+      let hp = 0, mx = 0;
+      for (const m of s.members) { mx += m.maxHp ?? 3; if (m.alive) hp += Math.max(0, m.hp); }
+      return mx ? Math.max(0, Math.min(1, hp / mx)) : 0;
+    };
+    el.sel.innerHTML = sel.map(s => {
+      const hp = squadHp(s);
+      const cls = hp > 0.55 ? 'ok' : hp > 0.25 ? 'mid' : 'low';
+      return `
       <div class="sel-row ${s.type}">
         <b>${s.label}</b>
         <span class="sel-n">${s.count}<small>/${s.members.length}</small></span>
         <span class="sel-order ${s.holdFire ? 'hold' : ''}">${s.holdFire ? 'HOLD FIRE' : s.order}</span>
-      </div>`).join('');
+        <div class="sel-hp"><i class="${cls}" style="width:${Math.round(hp * 100)}%"></i></div>
+      </div>`;
+    }).join('');
   }
 
   function showDragBox(x0, y0, x1, y1) {
@@ -256,5 +322,8 @@ export function createHUD(root, state, hooks = {}) {
     el.end.classList.add('show');
   }
 
-  return { update, showDragBox, hideDragBox, showEnd };
+  function toggleHelp() { el.help.classList.toggle('show'); }
+  function hideHelp() { el.help.classList.remove('show'); }
+
+  return { update, showDragBox, hideDragBox, showEnd, toggleHelp, hideHelp };
 }

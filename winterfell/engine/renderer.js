@@ -11,8 +11,10 @@ import { season } from '../game/season.js';
 const FIDELITY = {
   // exposure pulled back slightly vs. before — the cinematic grade lifts shadows
   // and protects highlights, so we no longer need to over-expose to stay readable
+  // medium gets bloom too — the braziers/muzzle glow carry most of the night's
+  // mood and the pass is cheap next to the horde; only 'low' goes without
   low:    { shadow: 1024, pixelRatio: 1,    bloom: false, exposure: 1.34 },
-  medium: { shadow: 1792, pixelRatio: 1.2,  bloom: false, exposure: 1.38 },
+  medium: { shadow: 1792, pixelRatio: 1.2,  bloom: true,  exposure: 1.38 },
   high:   { shadow: 2560, pixelRatio: 1.4,  bloom: true,  exposure: 1.42 },
 };
 

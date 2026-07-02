@@ -12,6 +12,7 @@ export class Possession {
     this.active = false; this.avatar = null;
     this.keys = new Set();
     this.yaw = 0; this.pitch = 0; this.firing = false; this._cd = 0;
+    this.recoil = 0; // transient muzzle climb — kicks on each shot, decays fast
     this._look = new THREE.Vector3();
 
     const doc = dom.ownerDocument;
@@ -76,14 +77,20 @@ export class Possession {
     a.elevation += (heightAt(a.pos.x, a.pos.z) - a.elevation) * Math.min(1, dt * 14);
     a.pos.y = a.elevation;
 
-    // over-the-shoulder camera
+    // over-the-shoulder camera — recoil rides on the aim pitch and eases back
+    this.recoil *= Math.exp(-9 * dt);
     const headY = a.pos.y + 3.2;
     this.camera.position.set(a.pos.x - fx * 7, headY + 2.4, a.pos.z - fz * 7);
-    this._look.set(a.pos.x + fx * 14, headY + this.pitch * 16, a.pos.z + fz * 14);
+    this._look.set(a.pos.x + fx * 14, headY + (this.pitch + this.recoil) * 16, a.pos.z + fz * 14);
     this.camera.lookAt(this._look);
 
     // fire
     this._cd -= dt;
-    if (this.firing && this._cd <= 0) { this._cd = 0.13; this.combat.playerShot(a, this.yaw); }
+    if (this.firing && this._cd <= 0) {
+      this._cd = 0.13;
+      const fired = a.reload <= 0; // playerShot no-ops while reloading
+      this.combat.playerShot(a, this.yaw);
+      if (fired) this.recoil = Math.min(0.12, this.recoil + 0.022);
+    }
   }
 }
