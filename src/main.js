@@ -3241,7 +3241,9 @@ const gunModels=[];
       for(const ch of host.children)ch.visible=false; // the wooden stand-in steps aside
       host.add(holder);
     },undefined,()=>{});
-    upgradeGun('assets/models/sniper.glb',3,1.24,0,/sniper/i,null); // the marksman gets the hero rifle
+    upgradeGun('assets/models/sniper.glb',3,1.24,0,/sniper/i,null); // the marksman keeps the hero rifle
+    // TODO next pass: full FPS arms rig (sniper.glb whole) — first mount attempt sat out of frame;
+    // needs a live-tune session with the ?px/py/pz knobs, not a blind offset guess.
     // (scar.glb was re-exported since its mount was tuned — its axes no longer hold; the M1 keeps its wood)
   }catch(e){}
 }
@@ -7478,6 +7480,9 @@ function fireWeapon(){
       for(const h of hits){
         const pnt=new THREE.Vector3(_org.x+d.x*h.t,_org.y+d.y*h.t,_org.z+d.z*h.t);
         damageZombie(h.zb,(h.head?w.head:w.dmg)*G.dmgMul,pnt,h.head);
+        // the hit answers in blood: a dark mist at the wound, worse for the skull
+        burst(pnt.x,pnt.y,pnt.z,h.head?5:3,0x4a100c,h.head?2.2:1.5,2.4);
+        burst(pnt.x+d.x*.2,pnt.y,pnt.z+d.z*.2,1,0x270806,1.1,3.4); // the through-spray, darker
         if(h.head)G.score+=5;
         if(w.knock){h.zb.x+=d.x*w.knock;h.zb.z+=d.z*w.knock;}
         pEnd=pnt;
