@@ -1707,6 +1707,54 @@ let shaftMesh=null,scatterShafts=null;
   };
   scatterShafts();
 }
+/* ---------------- military props: real modeled steel for the depot ---------------- */
+const MILP={group:new THREE.Group(),kits:{},ready:0,want:4};
+scene.add(MILP.group);
+try{
+  for(const[name,tgt]of[['watch_tower',6.5],['barrier',1.1],['military_crate',.75],['barbed_wire',1.4]]){
+    new GLTFLoader().load('assets/models/props/'+name+'.glb',g=>{
+      g.scene.updateMatrixWorld(true);
+      const body=new THREE.Group();
+      g.scene.traverse(o=>{
+        if(!o.isMesh)return;
+        const c=new THREE.Mesh(o.geometry,o.material);
+        c.applyMatrix4(o.matrixWorld);c.castShadow=true;c.receiveShadow=true;
+        body.add(c);
+      });
+      const bb=new THREE.Box3().setFromObject(body);
+      const sz=bb.getSize(new THREE.Vector3());
+      body.scale.setScalar(tgt/((name==='barbed_wire'?Math.max(sz.x,sz.z):sz.y)||1));
+      const bb2=new THREE.Box3().setFromObject(body);
+      body.position.y=-bb2.min.y;                    // feet on the ground, whatever the export thought
+      body.position.x=-(bb2.min.x+bb2.max.x)/2;body.position.z=-(bb2.min.z+bb2.max.z)/2;
+      const kit=new THREE.Group();kit.add(body);
+      MILP.kits[name]=kit;
+      if(++MILP.ready===MILP.want){scatterMilProps();rebuildColGrid();}
+    },undefined,()=>{MILP.want--;});
+  }
+}catch(e){}
+function scatterMilProps(){
+  if(MILP.ready<1)return;
+  MILP.group.clear();
+  const put=(name,x,z,ry=0)=>{
+    const kit=MILP.kits[name];if(!kit)return;
+    const m=kit.clone();
+    m.position.set(x,heightAt(x,z),z);
+    m.rotation.y=ry;
+    MILP.group.add(m);
+  };
+  // the depot wears real steel: a watchtower, crate stacks, barriers on the road shoulders
+  put('watch_tower',17,16,-.6);
+  put('military_crate',-5.5,13.2,.4);put('military_crate',-4.6,13.8,1.2);put('military_crate',-6.3,14.1,2.1);
+  for(const sx of[-1,1]){
+    put('barrier',sx*13,roadZ(sx*13)+3.2,sx*.2);
+    put('barrier',sx*19,roadZ(sx*19)-3.4,-sx*.25);
+    put('barbed_wire',sx*24,roadZ(sx*24)+4.2,sx*.5);
+  }
+  COLLIDERS.push({x:17,z:16,r:1.4},{x:-5.5,z:13.5,r:1.2},
+    {x:13,z:roadZ(13)+3.2,r:1},{x:-13,z:roadZ(-13)+3.2,r:1},
+    {x:19,z:roadZ(19)-3.4,r:1},{x:-19,z:roadZ(-19)-3.4,r:1});
+}
 const _gM=new THREE.Matrix4(),_gZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
 function snapGrass(x,z,radius){ // dug earth swallows the grass; piled earth lifts it
   if(!grassMesh)return;
@@ -3146,6 +3194,43 @@ const gunModels=[];
     const g=new THREE.Group();builders[i](g);
     g.visible=i===0;vm.add(g);gunModels.push(g);
   }
+  /* the rifles trade wood for the real thing: baked GLB bodies inside the same
+     gun groups, so the game's own bob, recoil, and switching keep working */
+  try{
+    const upgradeGun=(url,wid,len,rz,keepRe,junkRe)=>new GLTFLoader().load(url,g2=>{
+      g2.scene.updateMatrixWorld(true);
+      const body=new THREE.Group();
+      g2.scene.traverse(o=>{
+        if(!o.isMesh&&!o.isSkinnedMesh)return;
+        const mn=(o.material&&o.material.name)||'';
+        if(keepRe&&!keepRe.test(mn))return;
+        if(junkRe&&junkRe.test(mn))return;
+        const geo=o.geometry.clone();
+        geo.deleteAttribute('skinIndex');geo.deleteAttribute('skinWeight');
+        const c=new THREE.Mesh(geo,o.material);
+        c.applyMatrix4(o.matrixWorld);
+        const bb2=new THREE.Box3().setFromObject(c),sz=bb2.getSize(new THREE.Vector3());
+        if(Math.max(sz.x,sz.y,sz.z)>30)return;   // nothing rifle-sized is thirty units long
+        c.frustumCulled=false;body.add(c);
+      });
+      if(!body.children.length)return;
+      const bb=new THREE.Box3().setFromObject(body);
+      const dim=bb.getSize(new THREE.Vector3());
+      const L=Math.max(dim.x,dim.y,dim.z)||1;
+      const ctr=bb.getCenter(new THREE.Vector3());
+      body.position.copy(ctr).multiplyScalar(-1);
+      const holder=new THREE.Group();
+      holder.add(body);
+      holder.scale.setScalar(len/L);
+      holder.rotation.set(Math.PI/2,Math.PI-.12,rz); // both makers called the stock 'forward'
+      holder.position.set(0,.015,-.42);
+      const host=gunModels[wid];
+      for(const ch of host.children)ch.visible=false; // the wooden stand-in steps aside
+      host.add(holder);
+    },undefined,()=>{});
+    upgradeGun('assets/models/sniper.glb',3,1.24,0,/sniper/i,null); // the marksman gets the hero rifle
+    // (scar.glb was re-exported since its mount was tuned — its axes no longer hold; the M1 keeps its wood)
+  }catch(e){}
 }
 const vmShovel=new THREE.Group();
 {
@@ -5435,7 +5520,7 @@ function buildWorld(legSeed){
   buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
-  scatterPosts();scatterForest();scatterSetpieces();scatterRuins();scatterPonds();scatterGrass();scatterUnderbrush();scatterShafts();scatterCity();
+  scatterPosts();scatterForest();scatterSetpieces();scatterRuins();scatterPonds();scatterGrass();scatterUnderbrush();scatterShafts();scatterMilProps();scatterCity();
   buildRiverMesh();
   scatterDeer();
   rebuildColGrid();
