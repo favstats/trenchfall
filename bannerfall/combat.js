@@ -197,8 +197,14 @@ export class Battle {
 
         if (d > s.range && mayAdvance) {
           s.moving = true;
-          const mx = gx - s.pos.x, mz = gz - s.pos.z, md = Math.hypot(mx, mz) || 1;
-          s.faceTo(gx, gz);
+          let mx, mz;
+          if (d > 22 && (!isAlly || this.order !== 'follow')) {
+            // march in ranks: hold your file (anchor x), advance on the foe
+            mx = Math.max(-1.6, Math.min(1.6, s.anchor.x - s.pos.x));
+            mz = t.pos.z - s.pos.z;
+          } else { mx = gx - s.pos.x; mz = gz - s.pos.z; }
+          const md = Math.hypot(mx, mz) || 1;
+          s.faceTo(s.pos.x + mx, s.pos.z + mz);
           s.pos.x += (mx / md) * s.speed * dt;
           s.pos.z += (mz / md) * s.speed * dt;
           if (Math.random() < dt * 1.2) this.world.puffDust(s.pos.x, s.pos.y, s.pos.z);
@@ -218,6 +224,8 @@ export class Battle {
               } else {
                 t.hp -= s.dmg * (0.8 + Math.random() * 0.5);
                 this._dir.set(dx / (d || 1), 0, dz / (d || 1));
+                // the shove: every landed blow drives a man back a step
+                t.pos.x += this._dir.x * 0.45; t.pos.z += this._dir.z * 0.45;
                 if (t.hp <= 0) {
                   this._slaughter(t, s.dmg, this._dir, false);
                   if (isAlly) this.kills++; else this.losses++;
@@ -226,6 +234,25 @@ export class Battle {
             }
           }
         }
+      }
+    }
+
+    // ---- body against body: no two men share the same ground. This is what
+    // turns overlapping blobs into a shoving front line with ranks behind it.
+    const men = [];
+    for (const s of this.allies) if (s.alive && s.order !== 'rout') men.push(s);
+    for (const s of this.enemies) if (s.alive && s.order !== 'rout') men.push(s);
+    if (player && player.alive) men.push(player);
+    for (let i = 0; i < men.length; i++) {
+      const a = men[i];
+      for (let j = i + 1; j < men.length; j++) {
+        const b = men[j];
+        const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > 1.21 || d2 < 0.0001) continue;
+        const d = Math.sqrt(d2), push = (1.1 - d) * 0.5 / d;
+        a.pos.x -= dx * push; a.pos.z -= dz * push;
+        b.pos.x += dx * push; b.pos.z += dz * push;
       }
     }
 
