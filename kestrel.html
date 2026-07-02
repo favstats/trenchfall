@@ -5209,6 +5209,7 @@ window.KQA = {
   interact, descend, map() { mapOpen = true; mapCv.style.display = 'block'; player.schematic = true; drawMap(); },
   inter: () => INTER.map(i => ({ x: +i.x.toFixed(1), z: +i.z.toFixed(1), kind: i.kind, used: !!i.used })),
   seal: () => player.seal,
+  torch(v) { player.battery = 100; setTorch(v !== false); },
   portrait(arch) { // one creature, alone, facing the lens
     if (this._p) { scene.remove(this._p.mesh); const ix = entities.indexOf(this._p); if (ix >= 0) entities.splice(ix, 1); }
     let sp, guard = 0;
