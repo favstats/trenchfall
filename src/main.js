@@ -1624,6 +1624,46 @@ let fernMesh=null,bushMesh=null,scatterUnderbrush=null;
   };
   scatterUnderbrush();
 }
+/* ---------------- canopy shafts: the sun's fingers through the green roof ---------------- */
+let shaftMesh=null,scatterShafts=null;
+{
+  const tex=(()=>{const c=document.createElement('canvas');c.width=32;c.height=128;
+    const g=c.getContext('2d');
+    const grd=g.createLinearGradient(0,0,0,128);
+    grd.addColorStop(0,'rgba(255,244,210,0)');grd.addColorStop(.25,'rgba(255,244,210,.55)');
+    grd.addColorStop(.75,'rgba(255,240,200,.3)');grd.addColorStop(1,'rgba(255,238,196,0)');
+    g.fillStyle=grd;g.fillRect(0,0,32,128);
+    const img=g.getImageData(0,0,32,128),d=img.data;
+    for(let i=0;i<d.length;i+=4){if(d[i+3]>0)continue;d[i]=255;d[i+1]=244;d[i+2]=210;}
+    g.putImageData(img,0,0);
+    return new THREE.CanvasTexture(c);})();
+  const N=14;
+  const p1=new THREE.PlaneGeometry(2.2,14);
+  const p2=p1.clone();p2.rotateY(Math.PI/2);
+  shaftMesh=new THREE.InstancedMesh(mergeGeometries([p1,p2]),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:.16,side:THREE.DoubleSide,
+      blending:THREE.AdditiveBlending,depthWrite:false,fog:true}),N);
+  shaftMesh.frustumCulled=false;shaftMesh.renderOrder=2;
+  scene.add(shaftMesh);
+  scatterShafts=function(){
+    const M=new THREE.Matrix4(),Q=new THREE.Quaternion(),S=new THREE.Vector3(),P=new THREE.Vector3(),E=new THREE.Euler();
+    let si=0;
+    if((BIOME.broadBias||0)>0||(BIOME.lushK||0)>2){ // only where the roof is thick enough to leak
+      for(let i=0;i<N*4&&si<N;i++){
+        const x=srand(-half+20,half-20),z=srand(-half+20,half-20);
+        if(Math.hypot(x,z)<26)continue;
+        E.set(.2,srand(TAU),.32);Q.setFromEuler(E);   // leaning with the low sun
+        const sc=srand(.7,1.6);S.set(sc,1,sc);
+        P.set(x,heightAt(x,z)+6.4,z);
+        M.compose(P,Q,S);shaftMesh.setMatrixAt(si++,M);
+      }
+    }
+    shaftMesh.count=si;
+    shaftMesh.instanceMatrix.needsUpdate=true;
+    shaftMesh.computeBoundingSphere();
+  };
+  scatterShafts();
+}
 const _gM=new THREE.Matrix4(),_gZ=new THREE.Matrix4().makeScale(.0001,.0001,.0001);
 function snapGrass(x,z,radius){ // dug earth swallows the grass; piled earth lifts it
   if(!grassMesh)return;
@@ -5329,7 +5369,7 @@ function buildWorld(legSeed){
   buildSkirt();
   paintAll();tGeo.computeVertexNormals();
   mapDirty=true;roadCheck();
-  scatterPosts();scatterForest();scatterSetpieces();scatterRuins();scatterPonds();scatterGrass();scatterUnderbrush();scatterCity();
+  scatterPosts();scatterForest();scatterSetpieces();scatterRuins();scatterPonds();scatterGrass();scatterUnderbrush();scatterShafts();scatterCity();
   buildRiverMesh();
   scatterDeer();
   rebuildColGrid();
@@ -9884,7 +9924,7 @@ window.devAITest=function(){ // dev: prove a rifleman can walk around a wall to 
 };
 window.devFly=(x,z,h=26,tx,tz)=>{ // dev: hoist the lens over any coordinate
   tx=tx??x;tz=tz??z+1;
-  window.__fly={x:x+14,y:heightAt(x,z)+h,z:z+14,tx,ty:heightAt(tx,tz)+2,tz};
+  window.__fly={x:x+14,y:heightAt(x+14,z+14)+h,z:z+14,tx,ty:heightAt(tx,tz)+2,tz}; // stand on the ground you stand on
   return 'flying over '+x+','+z;
 };
 window.devFlyOff=()=>{window.__fly=null;};
