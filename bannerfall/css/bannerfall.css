@@ -73,6 +73,15 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
 @keyframes bloodDrip { 0% { opacity: .95; } 60% { transform: translateY(14px) scaleY(1.15); opacity: .8; }
   100% { transform: translateY(46px) scaleY(1.4); opacity: 0; } }
 
+/* campaign map */
+#wmap { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: rgba(10,6,2,.92); z-index: 5; pointer-events: auto; flex-direction: column; gap: 8px; }
+#wmap.show { display: flex; }
+#wmap canvas { max-width: min(1100px, 94vw); border: 1px solid rgba(220,180,120,.4); border-radius: 6px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.8), inset 0 0 90px rgba(0,0,0,.6); cursor: crosshair; }
+#wmTip { font-family: 'IM Fell English', serif; font-style: italic; font-size: 14px; color: #c8a878; }
+#wmGold { position: fixed; top: 18px; right: 22px; font-family: 'Cinzel', serif; font-size: 15px; color: #e8c878; }
+
 /* menu / end scroll */
 #menu, #endscreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at center, rgba(30,18,8,.55), rgba(12,6,2,.94)); z-index: 6;

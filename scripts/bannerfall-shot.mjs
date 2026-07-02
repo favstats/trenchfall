@@ -41,8 +41,11 @@ try {
   await sleep(1500);
   await page.screenshot({ path: `dist/shots/bannerfall-${TAG}-menu.png` });
 
-  // take the field — wide view of both lines advancing
+  // sandbox map → ride to a warband → take the field
   await page.evaluate(() => window.BF.test.start());
+  await sleep(800);
+  await page.screenshot({ path: `dist/shots/bannerfall-${TAG}-map.png` });
+  await page.evaluate(() => window.BF.test.fight());
   await sleep(2500);
   const s0 = await page.evaluate(() => window.BF.stats);
   console.log('[BF] field:', JSON.stringify(s0));
@@ -83,10 +86,12 @@ try {
   const foot = await page.evaluate(() => window.BF.test.buy('foot'));
   if (foot < 20) errs.push(`buying footmen did not grow the roster (${foot})`);
   await page.evaluate(() => window.BF.test.next());
+  await sleep(600);
+  await page.evaluate(() => window.BF.test.fight());
   await sleep(2000);
   const s3 = await page.evaluate(() => window.BF.stats);
   console.log('[BF] field2:', JSON.stringify(s3));
-  if (s3.battle !== 2 || s3.phase !== 'battle') errs.push(`field 2 did not start (battle=${s3.battle}, phase=${s3.phase})`);
+  if (s3.phase !== 'battle') errs.push(`second sandbox battle did not start (phase=${s3.phase})`);
   await page.screenshot({ path: `dist/shots/bannerfall-${TAG}-field2.png` });
 
   await browser.close();

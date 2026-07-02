@@ -44,9 +44,12 @@ export class Soldier {
     const G = geos();
     const F = FACTION[faction];
     this.faction = faction; this.type = type;
-    const tunic = new THREE.MeshLambertMaterial({ color: F.tunic });
+    // no two men alike: tunic shade, skin tone, height and helm all vary
+    const tc = new THREE.Color(F.tunic).offsetHSL((Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.1);
+    const sc = new THREE.Color(F.skin).offsetHSL(0, 0, (Math.random() - 0.5) * 0.16);
+    const tunic = new THREE.MeshLambertMaterial({ color: tc });
     const trim = new THREE.MeshLambertMaterial({ color: F.trim });
-    const skin = new THREE.MeshLambertMaterial({ color: F.skin });
+    const skin = new THREE.MeshLambertMaterial({ color: sc });
     const steel = new THREE.MeshLambertMaterial({ color: type === 'knight' ? STEEL : DARKSTEEL });
     this.mats = { tunic, trim, skin, steel };
 
@@ -64,7 +67,12 @@ export class Soldier {
     add('hips', G.hips, trim, 0, 0.95, 0);
     add('torso', G.torso, type === 'knight' ? steel : tunic, 0, 1.5, 0);
     add('head', G.head, skin, 0, 2.06, 0);
-    add('helm', G.helm, steel, 0, 2.12, 0);
+    // headgear lottery: kettle helm, bare hair, or hood — breaks up the line
+    const hv = Math.random();
+    if (type === 'knight' || hv < 0.5) add('helm', G.helm, steel, 0, 2.12, 0);
+    else if (hv < 0.8) add('helm', G.helm, new THREE.MeshLambertMaterial({ color: [0x3a2a18, 0x1c1410, 0x6a5638, 0x8a7248][(Math.random() * 4) | 0] }), 0, 2.13, 0); // hair
+    else add('helm', G.helm, trim, 0, 2.13, 0); // cloth hood
+    g.scale.setScalar(0.92 + Math.random() * 0.16);         // height variance
     add('legL', G.leg, trim, -0.16, 0.85, 0);
     add('legR', G.leg, trim, 0.16, 0.85, 0);
     const armMat = type === 'knight' ? steel : tunic;

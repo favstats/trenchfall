@@ -130,7 +130,7 @@ export class Player {
       if (this.keys.has('a')) mr -= 1;
     }
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw); // true right = fwd × up
 
     if (this.mounted) {
       // the horse: W builds gallop, steering leans wide at speed
