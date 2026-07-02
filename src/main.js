@@ -148,6 +148,14 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
       vec3 md=normalize(vec3(-.45,.40,-.6));
       cloudCol+=vec3(.45,.16,.09)*pow(max(dot(d,md),0.),10.)*.4;
       col=mix(col,cloudCol,cm*.9);
+      // silver lining: the glow rims the cloud edges, not their bellies
+      col+=vec3(.55,.26,.13)*pow(max(dot(d,md),0.),6.)*cm*(1.-cm)*2.0*(1.-nightF*.8);
+      // high cirrus: thin ice combed above the deck
+      if(d.y>.05){
+        float cw=fbm(d.xz/(d.y+.5)*3.6+vec2(time*.010,-time*.004));
+        float cir=smoothstep(.60,.92,cw)*smoothstep(.03,.3,d.y)*(1.-cm);
+        col+=vec3(.16,.14,.13)*cir*(1.-nightF*.75);
+      }
       // stars (occluded by clouds)
       vec3 sd=floor(d*260.);
       float s=hash(sd);
@@ -285,12 +293,17 @@ const gradePass=new ShaderPass({
   uniforms:{tDiffuse:{value:null},time:{value:0},heat:{value:0},horizonY:{value:.55},
     tint:{value:new THREE.Vector3(1,1,1)},
     px:{value:new THREE.Vector2(1/1280,1/720)},
-    sunPos:{value:new THREE.Vector2(.5,.8)},rayI:{value:0},rayCol:{value:new THREE.Vector3(1,.5,.3)}},
+    sunPos:{value:new THREE.Vector2(.5,.8)},rayI:{value:0},rayCol:{value:new THREE.Vector3(1,.5,.3)},
+    tDepth:{value:null},projInv:{value:null},camWorld:{value:null}, // depth-true air: borrowed from the GTAO g-buffer
+    sunDirW:{value:new THREE.Vector3(-.45,.40,-.6).normalize()},
+    fogCol:{value:null},nightF:{value:0},aerialK:{value:1}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;
     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time;uniform vec3 tint;
     uniform vec2 px;uniform vec2 sunPos;uniform float rayI;uniform vec3 rayCol;uniform float heat;
     uniform float horizonY;
+    uniform sampler2D tDepth;uniform mat4 projInv;uniform mat4 camWorld;
+    uniform vec3 sunDirW;uniform vec3 fogCol;uniform float nightF;uniform float aerialK;
     void main(){
       vec2 uv=vUv,cc=uv-.5;float rd=dot(cc,cc);
       // mirage: only the deep air at the horizon bends, and it boils slowly
@@ -309,6 +322,26 @@ const gradePass=new ShaderPass({
       vec3 n1=texture2D(tDiffuse,uv+vec2(px.x,0.)).rgb,n2=texture2D(tDiffuse,uv-vec2(px.x,0.)).rgb,
            n3=texture2D(tDiffuse,uv+vec2(0.,px.y)).rgb,n4=texture2D(tDiffuse,uv-vec2(0.,px.y)).rgb;
       col=clamp(col+(col*4.-n1-n2-n3-n4)*.14,0.,1.);
+      // depth-true air: aerial perspective, valley mist, and light that scatters toward the glow
+      float rawD=texture2D(tDepth,uv).x;
+      if(rawD<.9999&&aerialK>.001){
+        vec4 vp=projInv*vec4(uv*2.-1.,rawD*2.-1.,1.);vp.xyz/=vp.w;
+        float dist=length(vp.xyz);
+        vec3 wp=(camWorld*vec4(vp.xyz,1.)).xyz;
+        vec3 camP=camWorld[3].xyz;
+        float skyGuard=smoothstep(390.,290.,dist); // the dome writes depth at 400; the sky keeps its own air
+        // far things go blue-grey before they go to fog
+        float ap=(1.-exp(-dist*.012))*skyGuard;
+        col=mix(col,col*vec3(.84,.92,1.10)+vec3(.012,.018,.03),ap*.62*aerialK);
+        // cold air pools on low ground
+        float hf=exp(-max(wp.y+1.5,0.)*.10);
+        float vm2=(1.-exp(-dist*.02))*hf*skyGuard;
+        float sunAmt=pow(max(dot(normalize(wp-camP),sunDirW),0.),7.);
+        vec3 airCol=fogCol*(1.15+(1.-nightF)*.25)+rayCol*sunAmt*(.9-nightF*.35);
+        col=mix(col,airCol,clamp(vm2*.5*aerialK,0.,.5));
+        // in-scatter: everything distant blushes toward the light
+        col+=rayCol*sunAmt*ap*.3*aerialK;
+      }
       // screen-space god rays from the dying sun / blood moon
       if(rayI>0.001){
         vec2 d=(sunPos-uv)*(1.0/28.0);
@@ -358,6 +391,11 @@ composer.addPass(gradePass);
 addEventListener('resize',()=>{composer.setSize(innerWidth,innerHeight);
   gradePass.uniforms.px.value.set(1/innerWidth,1/innerHeight);});
 gradePass.uniforms.px.value.set(1/innerWidth,1/innerHeight);
+/* the air borrows the GTAO g-buffer's depth; matrices ride by reference */
+gradePass.uniforms.tDepth.value=gtaoPass.depthTexture;
+gradePass.uniforms.projInv.value=camera.projectionMatrixInverse;
+gradePass.uniforms.camWorld.value=camera.matrixWorld;
+gradePass.uniforms.fogCol.value=scene.fog.color;
 /* project the celestial glow (sky shader places it along md) into screen space */
 const _sunDir=new THREE.Vector3(-.45,.40,-.6).normalize();
 const _sunP=new THREE.Vector3();
@@ -368,6 +406,7 @@ function updateGodrays(nf,flash){
   gradePass.uniforms.rayI.value=on?(.46+.24*nf+flash*1.6):0;
   const rc=gradePass.uniforms.rayCol.value;
   rc.set(lerp(1,.45,nf),lerp(.42,.55,nf),lerp(.22,.9,nf)); // amber dusk → cold moonlight
+  gradePass.uniforms.nightF.value=nf;
 }
 
 /* ---------------- audio ---------------- */
@@ -1049,15 +1088,19 @@ function clothWave(mat,amp){ // vertex ripple for cloth-like planes
   };
 }
 const SnowU={value:0}; // how much the biome lays on upward faces
-function frostable(mat){ // snow settles where gravity says it should
+const WetU={value:0};  // how soaked the world is: rain darkens and polishes everything it touches
+function frostable(mat){ // snow settles where gravity says it should; rain soaks what it can reach
   mat.onBeforeCompile=s=>{
-    s.uniforms.uSnowK=SnowU;
-    s.fragmentShader='uniform float uSnowK;\n'+s.fragmentShader.replace('#include <color_fragment>',
+    s.uniforms.uSnowK=SnowU;s.uniforms.uWetK=WetU;
+    s.fragmentShader='uniform float uSnowK;uniform float uWetK;\n'+s.fragmentShader.replace('#include <color_fragment>',
       `#include <color_fragment>
        #ifndef FLAT_SHADED
        float snowUp=smoothstep(.45,.8,dot(normalize(vNormal),normalize((viewMatrix*vec4(0.,1.,0.,0.)).xyz)));
        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.85,.88,.95),uSnowK*snowUp);
-       #endif`);
+       diffuseColor.rgb*=1.-uWetK*.15;
+       #endif`).replace('#include <roughnessmap_fragment>',
+      `#include <roughnessmap_fragment>
+       roughnessFactor=mix(roughnessFactor,.18,uWetK);`);
   };
   return mat;
 }
@@ -10013,6 +10056,10 @@ function frame(now){
     m.material.opacity=.065+nf*.05+wxParam('cover',nf)*.04;
   }
   updateRain(dt,wxParam('rain',nf)*(BIOME.snow||BIOME.ash?0:1));  // the waste is too cold, the ashfall too dry
+  { // the ground soaks fast and dries slow
+    const wetT=Math.min(1,wxParam('rain',nf)*(BIOME.snow||BIOME.ash?0:1)*1.6);
+    WetU.value+=(wetT-WetU.value)*Math.min(1,dt*(wetT>WetU.value?.45:.05));
+  }
   updateSnow(dt,elapsed);
   updateLeaves(dt,elapsed);
   updatePrints(dt);
@@ -10037,8 +10084,10 @@ function frame(now){
   }
   depot.userData.lamp.intensity=20+nf*45+Math.sin(elapsed*23)*6*nf;
   depot.userData.flag.rotation.y=Math.sin(elapsed*1.7)*.3;
-  // shadow frustum follows the player → crisp shadows where you look
-  sun.position.set(player.x-70,80,player.z-40);
+  // shadow frustum leads the gaze: the ±80m window slides ahead along the look direction
+  camera.getWorldDirection(_dir);
+  const _slx=player.x+_dir.x*26,_slz=player.z+_dir.z*26;
+  sun.position.set(_slx-70,80,_slz-40);
   if(horizonBand){horizonBand.position.x=player.x;horizonBand.position.z=player.z;
     horizonBand.material.color.copy(scene.fog.color).multiplyScalar(.35);} // distant land wears the air's color, darker
   { // park the disc far along the light direction; night and fog swallow it
@@ -10058,7 +10107,7 @@ function frame(now){
     moonDisc.material.opacity=.85*mvis;
     moonHalo.material.opacity=.2*mvis*(hunting?1.6:1);
   }
-  sun.target.position.set(player.x,0,player.z);
+  sun.target.position.set(_slx,0,_slz);
   rim.intensity=.35+nf*.4;
   if(wxParam('storm',nf)>.5){
     stormT-=dt;
@@ -10117,6 +10166,7 @@ requestAnimationFrame(frame);
 /* expose for debugging / tests */
 window.G=G;window.PLAYER=player;window.ZOMBIES=zombies;window.TURRETS=turrets;window.TRUCK=truck;
 window.CAMERA=camera; // dev: screenshot QA zooms through this
+window.GRADE=gradePass; // dev: the air itself, tunable from the console
 window.spawnZombie=spawnZombie;window.damageZombie=damageZombie;window.modifyTerrain=modifyTerrain;window.heightAt=heightAt;
 window.startGame=startCampaign;window.placeTurret=placeTurret;window.damagePlayer=damagePlayer;
 window.CAMP=CAMP;window.startCampaign=startCampaign;window.beginLeg=beginLeg;window.arriveCamp=arriveCamp;
