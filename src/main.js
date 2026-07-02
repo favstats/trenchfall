@@ -3517,34 +3517,56 @@ function poseSkin(sl,zb,pitch,sway,px,py,pz,aL,aR,eL,eR,lL,lR,kL,kR,hX,hZ,jaw,co
   m.updateMatrixWorld(true);
   return B[3].matrixWorld;                                  // the head's world matrix, for the eyes to ride
 }
-/* ---- the borrowed dead: the mocap rig from the three.js skinning examples, dressed for this war.
-   Idle/Walk/Run weight-blended per the webgl_animation_skinning_blending demo; the procedural rig
-   still takes over for the grasp and the strike, which no mocap soldier ever learned. */
+/* ---- the real dead: ten corpse variants from the pack, each cloned to a pool slot,
+   calibrated off its grid berth to stand at origin, driven by its own shamble take.
+   The procedural rig still takes over for the grasp and the strike. */
 const GLBZ={ready:false,rigs:[]};
-try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
+const _zcal=new THREE.Vector3();
+try{
+new GLTFLoader().load('assets/models/zombies_pack.glb',gltf=>{
+  const roots=[];
+  gltf.scene.traverse(o=>{if(/^rig_CharRoot/.test(o.name||''))roots.push(o.name);});
+  const clip=gltf.animations[0];
+  if(!roots.length||!clip){console.warn('zombie pack unreadable; the procedural dead march on');return;}
   for(let i=0;i<SKIN_N;i++){
-    const rig=skClone(gltf.scene);
+    const inner=skClone(gltf.scene);
+    const pickName=roots[i%roots.length];
+    inner.traverse(o=>{
+      if(roots.includes(o.name))o.visible=(o.name===pickName);
+      if((o.name||'').startsWith('Line001'))o.visible=false; // the pack's stowaway wireframe
+    });
+    const chosen=inner.getObjectByName(pickName);
     const mats=[],bones=[];let head=null;
-    rig.traverse(o=>{
-      if(o.isBone)bones.push(o);
+    chosen.traverse(o=>{
+      if(o.isBone){bones.push(o);if(!head&&/head/i.test(o.name||''))head=o;}
       if(o.isMesh){
         o.material=o.material.clone();
-        o.material.roughness=.96;o.material.metalness=0;
-        o.material.color.set(0x8d8a76);
+        o.material.roughness=.9;o.material.metalness=.02;
         deathlit(o.material);
         mats.push(o.material);
         o.castShadow=true;o.frustumCulled=false;
       }
-      if(o.isBone&&/head/i.test(o.name)&&!head)head=o;
     });
-    rig.visible=false;
-    const mixer=new THREE.AnimationMixer(rig);
-    const act={};
-    for(const c of gltf.animations){act[c.name]=mixer.clipAction(c);act[c.name].play();act[c.name].setEffectiveWeight(0);}
-    scene.add(rig);
-    GLBZ.rigs.push({rig,mixer,act,mats,head,bones});
+    const mixer=new THREE.AnimationMixer(inner);
+    const act=mixer.clipAction(clip);act.play();
+    act.time=(i*1.37)%clip.duration;   // out of step with each other, like the dead are
+    mixer.update(.033);inner.updateMatrixWorld(true);
+    // calibrate: find this corpse's feet, height, and berth offset from its bones
+    const bb=new THREE.Box3();let hiY=-1e9,topBone=null;
+    for(const b of bones){b.getWorldPosition(_zcal);bb.expandByPoint(_zcal);
+      if(_zcal.y>hiY){hiY=_zcal.y;topBone=b;}}
+    if(!head)head=topBone;             // no named skull: the highest bone wears the eyes
+    const h=Math.max(.9,bb.max.y-bb.min.y);
+    const baseS=1.66/h;                // bone spans underreport the flesh a touch
+    inner.position.set(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2);
+    const rig=new THREE.Group();rig.add(inner);
+    rig.visible=false;scene.add(rig);
+    GLBZ.rigs.push({rig,mixer,walk:act,mats,head,bones,baseS,dur:clip.duration});
   }
-  // the same soldier, still breathing: six rigs for the riflemen
+  GLBZ.ready=true;
+},undefined,e=>console.warn('zombies_pack.glb missing; the procedural dead march on',e));
+new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
+  // the soldier, still breathing: six rigs for the riflemen
   for(let i=0;i<6;i++){
     const rig=skClone(gltf.scene);
     const mats=[];let hand=null;
@@ -3566,27 +3588,26 @@ try{new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
     scene.add(rig);
     ARIGS.push({rig,mixer,act,mats,a:null});
   }
-  GLBZ.ready=true;
 },undefined,e=>console.warn('Soldier.glb missing; the procedural rigs carry on',e));}
 catch(e){console.warn('no asset loading here; the procedural rigs carry on');}
+const _hq=new THREE.Quaternion(),_hv=new THREE.Vector3(),_hs=new THREE.Vector3(),_he=new THREE.Euler(),_hm2=new THREE.Matrix4(),_zGrade=new THREE.Color(),_WHITE1=new THREE.Color(1,1,1);
 function poseGlb(i,zb,dt,px,py,pz,pitch,sway,spd,colF,tint){
   const r=GLBZ.rigs[i];if(!r)return null;
   r.rig.visible=true;
-  r.rig.position.set(px,py-.04,pz);
-  r.rig.rotation.set(pitch*.3,(zb.face||0)+Math.PI,sway*.6);
-  {const w=zb.wide||1;r.rig.scale.set(zb.scale*w,zb.scale,zb.scale*w);}
-  const runK=clamp((spd-3.2)/1.8,0,1);
-  const walkK=(1-runK)*clamp(spd/1.1,0,1);
-  const idleK=Math.max(0,1-runK-walkK);
-  const tw={Idle:idleK,Walk:walkK,Run:runK};
-  for(const k in tw){const a=r.act[k];if(!a)continue;
-    const cur=a.getEffectiveWeight();a.setEffectiveWeight(cur+(tw[k]-cur)*Math.min(1,dt*6));}
-  if(r.act.Walk)r.act.Walk.setEffectiveTimeScale(clamp(spd/1.5,.5,1.7));
-  if(r.act.Run)r.act.Run.setEffectiveTimeScale(clamp(spd/4.4,.6,1.5));
+  r.rig.position.set(px,py-.02,pz);
+  r.rig.rotation.set(pitch*.22,(zb.face||0)+Math.PI,sway*.5);
+  {const w=zb.wide||1;const s=(zb.scale||1)*r.baseS;
+    r.rig.scale.set(s*w,s,s*Math.max(.92,w*.96));}
+  r.walk.setEffectiveTimeScale(clamp(.55+spd*.5,.5,2.6)); // the shamble keeps the zombie's pace
   r.mixer.update(dt);
-  for(const m of r.mats)m.color.set(colF).multiplyScalar(tint*1.05);
+  _zGrade.set(colF).lerp(_WHITE1,.7).multiplyScalar(tint); // grade toward the state color; keep the texture readable
+  for(const m of r.mats)m.color.copy(_zGrade);
   r.rig.updateMatrixWorld(true);
-  return r.head?r.head.matrixWorld:null;
+  if(!r.head)return null;
+  r.head.getWorldPosition(_hv);                 // the eyes ride the true skull, unit-scaled
+  _he.set(0,(zb.face||0),0);_hq.setFromEuler(_he);
+  _hm2.compose(_hv,_hq,_hs.setScalar(zb.scale||1));
+  return _hm2;
 }
 /* ---- wounds that stay: bone-attached splats, the decals example with the safety off ---- */
 const woundTex=(()=>{
@@ -3703,7 +3724,7 @@ function limbHide(up,lo,mi,M){
 const EYE_COL={walker:[7,.9,.45],runner:[8,5,2.4],crawler:[2.6,.5,.3],spitter:[1.6,7,.7],
   exploder:[8,1.4,.2],screamer:[5.5,1.2,7],brute:[9,.5,.3],colossus:[11,.4,.2]};
 const _EC=new THREE.Color(),_eyeFl=[0,0,0]; // scratch for the guttering glow
-function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1,hairC=null,shm=null){
+function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=false,gone=null,eL=.4,eR=.4,kL=.15,kR=.15,hX=0,hZ=0,jaw=.1,hairC=null,shm=null,glb=false){
   /* the skull rides its own pivot: pitch hX, roll hZ — the loll. a skinned rig hands us its head instead */
   if(shm)_HM.copy(shm);
   else{
@@ -3711,12 +3732,13 @@ function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=fal
     if(hX){_M2.makeRotationX(hX);_HM.multiply(_M2);}
     if(hZ){_M2.makeRotationZ(hZ);_HM.multiply(_M2);}
   }
-  if(hat)zHats.setMatrixAt(mi,_HM);
+  if(hat&&!glb)zHats.setMatrixAt(mi,_HM);
   else{_M3.copy(M).multiply(_MZ);zHats.setMatrixAt(mi,_M3);}
-  zDark.setMatrixAt(mi,_HM);                                   // the sockets never close
-  if(hairC&&!hat){zHair.setMatrixAt(mi,_HM);zHair.setColorAt(mi,_C.set(hairC).multiplyScalar(tint));}
+  if(glb){_M3.copy(M).multiply(_MZ);zDark.setMatrixAt(mi,_M3);} // the pack's skulls own their sockets
+  else zDark.setMatrixAt(mi,_HM);                               // the sockets never close
+  if(hairC&&!hat&&!glb){zHair.setMatrixAt(mi,_HM);zHair.setColorAt(mi,_C.set(hairC).multiplyScalar(tint));}
   else{_M3.copy(M).multiply(_MZ);zHair.setMatrixAt(mi,_M3);}
-  if(shm){ // the skinned rig wears the body; the instanced parts step aside
+  if(shm||glb){ // the skinned rig wears the body; the instanced parts step aside
     _M3.copy(M).multiply(_MZ);
     zMesh.setMatrixAt(mi,_M3);zHead.setMatrixAt(mi,_M3);zJaw.setMatrixAt(mi,_M3);
     limbHide(zArmL,zArmL2,mi,M);limbHide(zArmR,zArmR2,mi,M);
@@ -4131,13 +4153,14 @@ function updateZombies(dt,t){
       if(Math.sin(t*1.7+zb.phase*3)>.975)fl*=.12;
       _eyeFl[0]=e[0]*fl;_eyeFl[1]=e[1]*fl;_eyeFl[2]=e[2]*fl;
     }
-    let shm=null;
+    let shm=null,glbOn=false;
     if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb){
-      const useGlb=GLBZ.ready&&!zb.brute&&!crawl&&zb.reach<.45&&!(zb.swingT>0);
+      const useGlb=GLBZ.ready&&GLBZ.rigs[zb._skin]&&!zb.brute&&!crawl&&zb.reach<.45&&!(zb.swingT>0);
       if(useGlb){
         SKINS[zb._skin].mesh.visible=false;
         shm=poseGlb(zb._skin,zb,dt,_P.x,_P.y,_P.z,
           (zb.hunch||.22)+spz*.4,sway,zb.speed*spMul,colF,flash?1:zb.tint);
+        glbOn=true;
       }else{
         if(GLBZ.ready&&GLBZ.rigs[zb._skin])GLBZ.rigs[zb._skin].rig.visible=false;
         shm=poseSkin(SKINS[zb._skin],zb,
@@ -4147,7 +4170,7 @@ function updateZombies(dt,t){
     }
     writeZombie(mi,_M,colC,colF,
       aL,aR,lL,lR,false,flash?1:zb.tint,_eyeFl,zb.hat&&!zb.brute,zb.gone,
-      eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC,shm);
+      eLb,eRb,kL,kR,hX2,hZ2,jaw,zb.hairC,shm,glbOn);
     mi++;
   }
   zMesh.count=mi;zEyes.count=mi;zHats.count=mi;zHats.instanceMatrix.needsUpdate=true;
@@ -4960,7 +4983,7 @@ function updateAllies(dt,t){
     const gy=heightAt(a.x,a.z);
     a.mesh.position.set(a.x,gy+(stepping?Math.abs(Math.sin(a.walkPh||0))*.05:0),a.z);
     a.mesh.rotation.y=a.face;
-    if(GLBZ.ready&&a._rig==null) // a soldier's bones for a soldier
+    if(ARIGS.length&&a._rig==null) // a soldier's bones for a soldier
       for(let ri=0;ri<ARIGS.length;ri++)if(!ARIGS[ri].a){ARIGS[ri].a=a;a._rig=ri;break;}
     if(a._rig!=null&&ARIGS[a._rig]&&ARIGS[a._rig].a===a){
       a.mesh.visible=false;
