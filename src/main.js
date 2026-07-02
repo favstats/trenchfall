@@ -380,6 +380,9 @@ const gradePass=new ShaderPass({
       float l=dot(col,vec3(.299,.587,.114));
       col=mix(col,col*vec3(.86,1.02,1.12),(1.-smoothstep(.15,.55,l))*.38);
       col=mix(col,col*vec3(1.10,1.02,.88),smoothstep(.45,.95,l)*.32);
+      // war photos aren't saturated: pull the crayon out, sink the blacks a touch
+      col=mix(col,vec3(l),.12);
+      col=col*1.04-.012;
       // animated film grain (luma-weighted: heavier in shadows)
       float g=fract(sin(dot(uv+fract(time*7.),vec2(12.9898,78.233)))*43758.5453);
       col+=(g-.5)*.05*(1.-l*.6);
