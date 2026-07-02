@@ -10,6 +10,13 @@ await page.goto(`http://127.0.0.1:${port}/kestrel.html?seed=${seed}`, { waitUnti
 await page.waitForTimeout(9000); // let the rig pack arrive too
 await page.screenshot({ path: '/tmp/k-1-title.png', timeout: 120000 });
 
+// a REAL click must reach the boarding handler — KQA.lock() once hid the cover-swallows-click bug.
+// (headless never grants pointer lock, so the cover itself staying up here is expected)
+await page.mouse.click(640, 600);
+await page.waitForTimeout(600);
+const clickState = await page.evaluate(() => !!window.__clicked);
+console.log('REAL CLICK REACHED HANDLER:', clickState);
+
 const info = await page.evaluate(() => {
   KQA.lock(); KQA.god();
   return { rooms: KQA.rooms(), species: KQA.species(), ents: KQA.ents() };
@@ -52,6 +59,22 @@ const ex = (await page.evaluate(() => KQA.rooms())).find(r => r.kind === 'exit')
 await page.evaluate(r => KQA.tp(r.x + .5, r.z + 5.2, 0, -.15), ex);
 await page.waitForTimeout(500);
 await page.screenshot({ path: '/tmp/k-8-stairs.png', timeout: 120000 });
+// objective flow: hatch refuses, seal takes, hatch relents
+const inter = await page.evaluate(() => KQA.inter());
+const hatch = inter.find(i => i.kind === 'hatch'), seal = inter.find(i => i.kind === 'seal');
+await page.evaluate(h => KQA.tp(h.x, h.z + 1.6, 0, .3), hatch);
+await page.waitForTimeout(400);
+const denied = await page.evaluate(() => document.getElementById('prompt').textContent);
+await page.screenshot({ path: '/tmp/k-9-hatch-sealed.png', timeout: 120000 });
+await page.evaluate(s => KQA.tp(s.x, s.z + 1.2, 0, .3), seal);
+await page.waitForTimeout(350);
+await page.evaluate(() => KQA.interact());
+const held = await page.evaluate(() => KQA.seal());
+await page.evaluate(h => KQA.tp(h.x, h.z + 1.6, 0, .3), hatch);
+await page.waitForTimeout(400);
+const allowed = await page.evaluate(() => document.getElementById('prompt').textContent);
+console.log('HATCH BEFORE:', JSON.stringify(denied), '| SEAL TAKEN:', held, '| HATCH AFTER:', JSON.stringify(allowed));
+
 // map overlay
 await page.evaluate(() => KQA.map());
 await page.waitForTimeout(300);
