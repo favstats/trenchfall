@@ -2960,9 +2960,22 @@ function tryLock(){document.body.requestPointerLock&&document.body.requestPointe
 $('resume').addEventListener('click',tryLock);
 
 /* torch */
-const lampSpot=new THREE.SpotLight(0xfff2cf,0,75,.42,.72,1.8);
+const lampSpot=new THREE.SpotLight(0xffeec6,0,75,.38,.85,1.8);
 camera.add(lampSpot);
 lampSpot.position.set(.05,-.04,-1.3);
+lampSpot.castShadow=true;                       // the beam breaks on whatever walks into it
+lampSpot.shadow.mapSize.set(1024,1024);
+lampSpot.shadow.camera.near=.5;lampSpot.shadow.camera.far=60;
+lampSpot.shadow.bias=-.002;lampSpot.shadow.radius=4;
+lampSpot.map=(()=>{                             // torch cookie: hot core, dim mid, the bright rim ring real lamps throw
+  const c=document.createElement('canvas');c.width=c.height=256;
+  const g=c.getContext('2d');
+  const rg=g.createRadialGradient(128,128,8,128,128,128);
+  rg.addColorStop(0,'#ffffff');rg.addColorStop(.22,'#f2f0ea');rg.addColorStop(.5,'#8e8c85');
+  rg.addColorStop(.74,'#b9b6ad');rg.addColorStop(.88,'#4c4a45');rg.addColorStop(1,'#000');
+  g.fillStyle=rg;g.fillRect(0,0,256,256);
+  return new THREE.CanvasTexture(c);
+})();
 const lampTgt=new THREE.Object3D();camera.add(lampTgt);lampTgt.position.set(0,-.1,-4);
 lampSpot.target=lampTgt;
 let lampOn=true;
