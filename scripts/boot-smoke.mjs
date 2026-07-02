@@ -51,6 +51,9 @@ src=`const __glstub=()=>new Proxy(function(){},{get:(t,p)=>p===Symbol.toPrimitiv
 const EffectComposer=__glstub(),RenderPass=__glstub(),UnrealBloomPass=__glstub(),ShaderPass=__glstub(),OutputPass=__glstub(),GTAOPass=__glstub();
 `+src;
 src=src.replace(/new THREE\.WebGLRenderer\([\s\S]*?\}\)/,'(globalThis.__rstub())');
+// r180's PMREMGenerator reads real GL state the renderer stub can't fake — stub the baker whole
+src=src.replace(/new THREE\.PMREMGenerator\([^)]*\)/,
+  '({fromScene:()=>({texture:{},dispose(){}}),compileEquirectangularShader(){},dispose(){}})');
 src=`globalThis.__rstub=()=>{const fixed={domElement:{addEventListener(){},style:{}},shadowMap:{},
   capabilities:{getMaxAnisotropy:()=>8,isWebGL2:true},
   getPixelRatio:()=>1,getSize:(v)=>v?v.set(1280,720):{width:1280,height:720}};
