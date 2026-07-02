@@ -3538,7 +3538,7 @@ const HAIR_COL=[0x241c12,0x382a1a,0x4a4234,0x16140f,0x6a6258,0x52331f];
    weights across elbow/knee/spine, geometry shared, fresh bones per rig.
    Research note: ~100 cloned skinned meshes hit ~370 draw calls (forum case),
    so only the nearest SKIN_N wear a skeleton; the rest stay instanced. */
-const SKIN_N=22,SKIN_R=36; // a wider ring of real bodies: the swap to instanced happens out in the fog
+const SKIN_N=36,SKIN_R=46; // the whole combat load wears a real body: the swap to instanced happens past the fog line
 const SKINS=[];
 {
   const mk=(geo,tx,ty,tz)=>{const g2=geo.clone();g2.translate(tx,ty,tz);return g2;};
@@ -3703,8 +3703,9 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
     const mats=[];let hand=null;
     rig.traverse(o=>{
       if(o.isMesh){
+        if(/visor/i.test(o.name)){o.visible=false;return;} // the sci-fi visor goes: soldiers, not spacemen
         o.material=o.material.clone();
-        o.material.roughness=.92;
+        o.material.roughness=.95;o.material.metalness=0; // cloth and webbing, not plate
         o.material.color.set(DRAB[i]); // army drab over the armor plate, not parade white
         deathlit(o.material);
         mats.push(o.material);
