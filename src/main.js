@@ -7392,7 +7392,8 @@ function interact(){
     mpSend({type:'action',action:{kind:'interact'}});
     toast('REQUEST SENT');return;
   }
-  if(!BAST.on&&Math.hypot(player.x,player.z-9.5)<11){
+  if(!BAST.on&&Math.hypot(player.x,player.z-9.5)<11
+    &&!(CAMP.mode==='fall'&&aliveTrucks().some(t=>Math.hypot(player.x-t.x,player.z-roadZ(t.x))<4.4))){ // at the trucks during the fall, the driver outranks the ammo crate
     const want=player.carryCap-player.reserve;
     const take=Math.min(want,G.depotAmmo);
     if(take>0){G.depotAmmo-=take;player.reserve+=take;SFX.load();toast('RESTOCKED +'+take+' RDS');}
