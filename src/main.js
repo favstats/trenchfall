@@ -3278,6 +3278,28 @@ const vmKit=new THREE.Group();
 }
 vm.add(vmShovel,vmKit);
 vm.position.set(.32,-.3,-.55);
+/* first-person arms: the full FPS rig, gloved hands on the rifle, frozen at the hold.
+   Lives in its own group on the camera (outside vm's shared offset) so its mount is
+   tunable in isolation; shown only when a rifle is up, hidden for tools and the shovel. */
+let fpArms=null;const fpHandle={};
+try{new GLTFLoader().load('assets/models/sniper.glb',g=>{
+  const rig=g.scene;rig.updateMatrixWorld(true);
+  rig.traverse(o=>{if(o.isMesh||o.isSkinnedMesh){o.frustumCulled=false;o.castShadow=false;
+    if(o.material){o.material=o.material.clone();o.material.side=THREE.DoubleSide;}}});
+  if(g.animations.length){const mx=new THREE.AnimationMixer(rig);
+    mx.clipAction(g.animations[0]).play();mx.update(.2);} // t=.2 = the two-hand hold
+  const holder=new THREE.Group();holder.add(rig);
+  holder.scale.setScalar(fpHandle.s=.1);
+  holder.rotation.set(fpHandle.rx=-.06,fpHandle.ry=2.6,fpHandle.rz=0); // screenshot-tuned: rifle rests lower-right, barrel downrange
+  holder.position.set(fpHandle.px=.09,fpHandle.py=-.05,fpHandle.pz=-.33);
+  holder.visible=false;
+  camera.add(holder);fpArms=holder;
+  fpHandle.set=(k,v)=>{fpHandle[k]=v;
+    holder.scale.setScalar(fpHandle.s);
+    holder.rotation.set(fpHandle.rx,fpHandle.ry,fpHandle.rz);
+    holder.position.set(fpHandle.px,fpHandle.py,fpHandle.pz);};
+  window.FPARM=fpHandle;window.FPRIG=holder;
+},undefined,()=>{});}catch(e){}
 let vmKick=0,vmSwing=0,vmYawLag=0,lastYawVM=0;
 function curW(){return WEAPONS[player.wid];}
 function selectWeapon(i){
@@ -3297,8 +3319,11 @@ function toggleTool(t){
   }
   refreshVM();SFX.load();
 }
+const FP_SLOT=3; // the marksman carries the full FPS arms rig; other guns keep their viewmodels
 function refreshVM(){
-  for(let i=0;i<WEAPONS.length;i++)gunModels[i].visible=player.tool===null&&player.wid===i;
+  const armsUp=fpArms&&player.tool===null&&player.wid===FP_SLOT;
+  for(let i=0;i<WEAPONS.length;i++)gunModels[i].visible=player.tool===null&&player.wid===i&&!(i===FP_SLOT&&armsUp);
+  if(fpArms)fpArms.visible=!!armsUp;
   vmShovel.visible=player.tool==='shovel';
   vmKit.visible=player.tool==='build';
   ghost.visible=false;
@@ -3585,8 +3610,8 @@ function freeSkin(zb){
 }
 function assignSkins(){
   for(const sl of SKINS)
-    if(sl.zb&&(!sl.zb.alive||sl.zb.rise>0||sl.zb.sleeping||
-      Math.hypot(sl.zb.x-player.x,sl.zb.z-player.z)>SKIN_R+6))freeSkin(sl.zb);
+    if(sl.zb&&((!sl.zb.alive&&(sl.zb.deadT||0)>.9)||sl.zb.rise>0||sl.zb.sleeping||
+      Math.hypot(sl.zb.x-player.x,sl.zb.z-player.z)>SKIN_R+6))freeSkin(sl.zb); // the dead keep their body until it hits the ground
   let free=null;
   for(const zb of zombies){
     if(!zb.alive||zb.rise>0||zb.sleeping||zb._skin!=null)continue;
@@ -3663,6 +3688,7 @@ new GLTFLoader().load('assets/models/zombies_pack.glb',gltf=>{
     }
     for(const v of variants)v.root.visible=false;
     const rig=new THREE.Group();rig.add(inner);
+    rig.rotation.order='YXZ'; // yaw first, then the fall: bodies pitch over their feet
     rig.visible=false;scene.add(rig);
     GLBZ.rigs.push({rig,inner,mixer,walk:act,variants,cur:-1,v:null,dur:clip.duration});
   }
@@ -3686,10 +3712,38 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
       }
       if(o.isBone&&/RightHand$/.test(o.name)&&!hand)hand=o;
     });
-    if(hand)hand.add(buildHandRifle());
+    if(hand){ // hand bones carry odd scales: compensate so the rifle is rifle-sized
+      rig.updateMatrixWorld(true);
+      const ws=new THREE.Vector3();hand.getWorldScale(ws);
+      const rifle=buildHandRifle();
+      rifle.scale.setScalar(1.18/Math.max(1e-4,(ws.x+ws.y+ws.z)/3));
+      hand.add(rifle);
+    }
     const b={}; // the aim layer needs names: mixamo kept them
     rig.traverse(o=>{if(o.isBone)for(const n of['RightArm','RightForeArm','LeftArm','LeftForeArm','Spine2','Head'])
       if(new RegExp(n+'$').test(o.name)&&!b[n])b[n]=o;});
+    { // no two riflemen kitted alike: helmets, caps, packs, bedrolls on the bones
+      const ws=new THREE.Vector3();
+      const boneScale=bn=>{bn.getWorldScale(ws);return 1/Math.max(1e-4,(ws.x+ws.y+ws.z)/3);};
+      const kitMat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.9});
+      if(b.Head&&i%3!==2){ // most wear steel; every third goes bare or capped
+        const hm=new THREE.Group();
+        const dome=new THREE.Mesh(new THREE.SphereGeometry(.145,14,9,0,TAU,0,1.6),kitMat(i%2?0x4a4f3a:0x3e4436));
+        dome.scale.set(1,.78,1.12);
+        const brim=new THREE.Mesh(new THREE.CylinderGeometry(.165,.185,.02,16),kitMat(0x373b2c));
+        brim.position.y=-.035;
+        hm.add(dome,brim);hm.position.y=.09;hm.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+        hm.scale.setScalar(boneScale(b.Head));b.Head.add(hm);
+      }
+      if(b.Spine2&&i%2===0){ // half the squad humps a pack and bedroll
+        const pk=new THREE.Group();
+        const pack=new THREE.Mesh(new THREE.BoxGeometry(.26,.3,.14),kitMat(0x53523c));
+        const roll=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.3,10),kitMat(0x6b5f46));
+        roll.rotation.z=Math.PI/2;roll.position.y=.19;
+        pk.add(pack,roll);pk.position.set(0,.02,-.16);pk.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+        pk.scale.setScalar(boneScale(b.Spine2));b.Spine2.add(pk);
+      }
+    }
     rig.visible=false;
     const mixer=new THREE.AnimationMixer(rig);
     const act={};
@@ -3891,7 +3945,7 @@ function writeZombie(mi,M,colC,colF,aL,aR,lL,lR,hideEyes,tint=1,eye=null,hat=fal
     limb2To(zLegL,zLegL2,mi,M,-.14,.78,0,lL,kL,false);
     limb2To(zLegR,zLegR2,mi,M,.14,.78,0,lR,kR,false);
   }
-  if(hideEyes){_M3.copy(M).multiply(_MZ);zEyes.setMatrixAt(mi,_M3);}
+  if(hideEyes||glb){_M3.copy(M).multiply(_MZ);zEyes.setMatrixAt(mi,_M3);} // the pack's faces are painted on; no floating coals
   else{
     zEyes.setMatrixAt(mi,_HM);
     const e=eye||EYE_COL.walker;
@@ -4020,6 +4074,18 @@ function updateZombies(dt,t){
   for(const zb of zombies){
     if(!zb.alive){
       zb.deadT+=dt;
+      // a rigged body falls as itself: the pack rig pitches over its feet, then the instanced corpse takes the ground
+      if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb&&GLBZ.ready
+        &&GLBZ.rigs[zb._skin]&&GLBZ.rigs[zb._skin].rig.visible&&zb.deadT<=.9){
+        const R=GLBZ.rigs[zb._skin].rig;
+        const kf=clamp(zb.deadT/.5,0,1);
+        R.rotation.x=(zb.dieFwd?1.42:-1.5)*kf;
+        R.rotation.z=Math.sin(zb.phase*5)*.12*kf;
+        _E.set(0,zb.face||0,0);_Q.setFromEuler(_E);
+        _M.compose(_P.set(zb.x,-100,zb.z),_Q,_S.setScalar(.0001));
+        writeZombie(mi,_M,0,0,0,0,0,0,true); // the instanced corpse waits its turn
+        mi++;continue;
+      }
       const corpseLim=BAST.on?(zombies.length>85?9:28):14;
       const melt=clamp((corpseLim-zb.deadT)/1.4,0,1);
       const k=clamp(zb.deadT/.45,0,1);
@@ -8317,6 +8383,14 @@ function updatePlayer(dt,t){
   vm.rotation.y=vmYawLag;
   vm.rotation.x=vmKick*.16-vmSwing*1.1+vmYawLag*.15;
   vm.rotation.z=vmSwing*.5-vmYawLag*.5;
+  if(fpArms&&fpArms.visible){ // the hands breathe, kick, and sway with the rifle
+    const H=fpHandle,ax=player.ads?H.px*.35:H.px,ay=player.ads?H.py+.02:H.py,az=player.ads?H.pz+.04:H.pz;
+    fpArms.position.set(
+      lerp(fpArms.position.x,ax+Math.sin(player.bob*.5)*.01+vmYawLag*.4,1-Math.pow(.000001,dt)),
+      ay+Math.abs(Math.sin(player.bob))*.016-vmKick*.03,
+      az+vmKick*.08);
+    fpArms.rotation.set(H.rx+vmKick*.14-vmSwing*.6,H.ry+vmYawLag*.5,H.rz-vmYawLag*.4);
+  }
   updateRockets(dt);
   if(player.reloadT>0){
     player.reloadT-=dt;
