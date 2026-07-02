@@ -1529,13 +1529,13 @@ let grassMesh=null;
        float gsw=sin(uWindT*1.7+gwp.x*.4+gwp.z*.3)+.5*sin(uWindT*3.3+gwp.z*.9);
        transformed.xz+=gsw*uv.y*uv.y*vec2(.15,.10);`);
   };
-  const N=11500;
+  const N=17000;
   grassMesh=new THREE.InstancedMesh(gGeo,gMat,N);
   grassMesh.receiveShadow=false;   // shadow sampling on 9.5k alpha cards is pure GPU tax
   scene.add(grassMesh);
 }
 function scatterGrass(){
-  const N=11500;
+  const N=17000;
   const M=new THREE.Matrix4(),Q=new THREE.Quaternion(),S=new THREE.Vector3(),P=new THREE.Vector3(),E=new THREE.Euler();
   const C=new THREE.Color();
   grassData.length=0;
@@ -1547,15 +1547,15 @@ function scatterGrass(){
     if(isRoad(x,z)||Math.hypot(x,z)<11)continue;
     // grass grows where grass grows: clumped meadows and bald earth, not confetti
     const cl=smoothNoise((x+half)/cell*.13+31,(z+half)/cell*.13+17);
-    if(cl<.42&&srnd()>.22)continue;
+    if(cl<.34&&srnd()>.4)continue; // meadows spread wider, thin out instead of ending in a line
     const h=heightAt(x,z);
     E.set(0,srand(TAU),srand(-.1,.1));Q.setFromEuler(E);
     const sc=srand(.6,1.5)*tall;S.set(sc,sc*srand(.8,1.35),sc);
     P.set(x,h,z);M.compose(P,Q,S);
     grassMesh.setMatrixAt(gi,M);
     C.setHSL(srand(.21,.32)+BIOME.grassHue,
-      srand(.3,.45)*(BIOME.grassS??1),
-      Math.min(.78,srand(.12,.24)*(BIOME.grassL??1)));  // meadow green, steppe straw, frost
+      srand(.34,.5)*(BIOME.grassS??1),
+      Math.min(.82,srand(.22,.4)*(BIOME.grassL??1)));  // meadow green, steppe straw, frost — sunlit, not dark
     grassMesh.setColorAt(gi,C);
     grassData.push({x,z,h0:h,m:M.clone()});
     gi++;
