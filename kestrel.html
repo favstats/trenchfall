@@ -103,6 +103,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -680,6 +681,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .05, 160);
@@ -867,8 +870,8 @@ let exitRoom = ROOMS[1] || ROOMS[0];
 /* archetypes: the further down, the fewer rooms behave */
 {
   const pool = ['cargo', 'cargo', 'medbay', 'mess', 'lounge', 'engine'];
-  const weird = ['garden', 'archive', 'chapel', 'static', 'pool', 'dark'];
-  const nWeird = Math.min(4, Math.ceil(RUN.deck / 2) + (RUN.deck > 3 ? 1 : 0));
+  const weird = ['garden', 'archive', 'chapel', 'static', 'pool', 'dark', 'orrery', 'hands', 'antigrav'];
+  const nWeird = Math.min(5, 1 + Math.ceil(RUN.deck / 2) + (RUN.deck > 3 ? 1 : 0));
   for (const r of ROOMS) {
     if (r === startRoom) { r.kind = 'start'; continue; }
     if (r === exitRoom) { r.kind = 'exit'; continue; }
@@ -881,9 +884,11 @@ let exitRoom = ROOMS[1] || ROOMS[0];
   }
   const KIND_STYLE = { start: 'panels', exit: 'concrete', cargo: 'ribbed', medbay: 'hex',
     mess: 'concrete', lounge: 'slat', engine: 'ribbed', garden: 'slat', archive: 'slat',
-    chapel: 'concrete', static: 'concrete', pool: 'hex', dark: 'ribbed' };
+    chapel: 'concrete', static: 'concrete', pool: 'hex', dark: 'ribbed',
+    orrery: 'panels', hands: 'concrete', antigrav: 'slat' };
   const KIND_LIGHT = { medbay: 0xdfe8f0, pool: 0x9fd4e8, garden: 0xb9ffd0, chapel: 0xffb070,
-    archive: 0xffe8c0, static: 0xc0c8ff, cargo: 0xffd9a8 };
+    archive: 0xffe8c0, static: 0xc0c8ff, cargo: 0xffd9a8,
+    orrery: 0xffc890, hands: 0xd8ccff, antigrav: 0xa8ffe8 };
   for (const r of ROOMS) {
     r.lit = r.kind === 'start' || r.kind === 'exit' ? true
       : r.kind === 'dark' ? false
@@ -1541,6 +1546,9 @@ function dressRoom(r) {
       }
       corePulse = new THREE.PointLight(new THREE.Color(PAL.band), 10, 6, 2);
       corePulse.position.set(r.cx, 1.5, r.cz);
+      corePulse.castShadow = true;
+      corePulse.shadow.mapSize.set(512, 512);
+      corePulse.shadow.bias = -.01;
       scene.add(corePulse);
       break;
     }
@@ -1638,6 +1646,129 @@ function dressRoom(r) {
     case 'dark':
       if (rnd() < .5) mkCrate(...place(), rr(.7, 1), 'common');
       break;
+    case 'orrery': { // someone rebuilt their home system from memory, and it still turns
+      const rH = r.H || H, cy = Math.min(rH - .8, 1.9);
+      const brassO = std({ color: 0xb08a3e, metalness: .85, roughness: .35, envMapIntensity: .6 });
+      const sun = new THREE.Mesh(new THREE.SphereGeometry(.3, 24, 16),
+        new THREE.MeshStandardMaterial({ color: 0x0a0603, emissive: 0xffb050, emissiveIntensity: 2.6, roughness: 1 }));
+      sun.position.set(r.cx, cy, r.cz); scene.add(sun);
+      const sl = new THREE.PointLight(0xffb050, 8, 11, 2);
+      sl.position.set(r.cx, cy, r.cz); scene.add(sl); LIGHTS.push({ l: sl, base: 8, flick: false });
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(.03, .05, cy, 10), brassO);
+      post.position.set(r.cx, cy / 2, r.cz); scene.add(post);
+      blockBox(r.cx - .3, r.cz - .3, r.cx + .3, r.cz + .3);
+      const maxRad = Math.min(r.w, r.h) * CELL / 2 - 1.3;
+      const nP = 4 + (rnd() * 3 | 0), pivots = [];
+      for (let i = 0; i < nP; i++) {
+        const rad = Math.min(.75 + i * rr(.34, .5), maxRad);
+        const tilt = rr(-.3, .3);
+        const pivot = new THREE.Group();
+        pivot.position.set(r.cx, cy, r.cz);
+        pivot.rotation.x = tilt; pivot.rotation.y = rr(0, TAU);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, .011, 6, 64), brassO);
+        ring.rotation.x = Math.PI / 2; pivot.add(ring);
+        const burning = i === nP - 1 && rnd() < .6; // the outermost world is on fire, quietly
+        const planet = new THREE.Mesh(new THREE.SphereGeometry(rr(.05, .15), 18, 12),
+          burning ? new THREE.MeshStandardMaterial({ color: 0x140503, emissive: 0xff3818, emissiveIntensity: 1.8, roughness: 1 })
+          : std({ color: new THREE.Color().setHSL(rnd(), rr(.1, .35), rr(.2, .5)), roughness: rr(.5, .9) }));
+        planet.position.x = rad; pivot.add(planet);
+        if (rnd() < .25) { // one keeps its moon
+          const moon = new THREE.Mesh(new THREE.SphereGeometry(.025, 10, 8), brassO);
+          moon.position.set(rad + .16, .04, 0); pivot.add(moon);
+        }
+        scene.add(pivot);
+        pivots.push({ pivot, spd: rr(.05, .3) * (rnd() < .5 ? -1 : 1) });
+      }
+      ANIMS.push(dt => { for (const p of pivots) p.pivot.rotation.y += p.spd * dt; });
+      r.chime = true;
+      break;
+    }
+    case 'hands': { // the reaching room: they only move while you are in it
+      const nH = 7 + (rnd() * 6 | 0);
+      const pale = std({ color: 0xcfc4b2, roughness: .92, envMapIntensity: .08 });
+      r.hands = [];
+      for (let i = 0; i < nH; i++) {
+        const [hx2, hz2] = roomPoint(r, 1.0);
+        const g = new THREE.Group();
+        const hgt = rr(.65, 1.3);
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(.045, .075, hgt, 10), pale);
+        arm.position.y = hgt / 2; g.add(arm);
+        const palm = new THREE.Mesh(new THREE.BoxGeometry(.11, .1, .035), pale);
+        palm.position.set(0, hgt + .05, .01); palm.rotation.x = -.15; g.add(palm);
+        for (let f = 0; f < 4; f++) {
+          const fin = new THREE.Mesh(new THREE.BoxGeometry(.02, .085, .022), pale);
+          fin.position.set(-.038 + f * .025, hgt + .135, .012);
+          fin.rotation.x = rr(-.5, -.1);
+          g.add(fin);
+        }
+        const th = new THREE.Mesh(new THREE.BoxGeometry(.02, .06, .022), pale);
+        th.position.set(.062, hgt + .06, .01); th.rotation.z = -.7; g.add(th);
+        g.position.set(hx2, 0, hz2);
+        g.rotation.y = rr(0, TAU); g.rotation.z = rr(-.1, .1);
+        scene.add(g);
+        r.hands.push({ g, rest: g.rotation.y, ph: rr(0, TAU) });
+      }
+      ANIMS.push((dt, t) => {
+        const here = roomAt(camera.position.x, camera.position.z) === r;
+        for (const h of r.hands) {
+          const want = here
+            ? Math.atan2(camera.position.x - h.g.position.x, camera.position.z - h.g.position.z)
+            : h.rest;
+          let d = want - h.g.rotation.y;
+          d = ((d + Math.PI) % TAU + TAU) % TAU - Math.PI;
+          h.g.rotation.y += d * Math.min(1, dt * .8);
+          h.g.rotation.z = Math.sin(t * .4 + h.ph) * .045;
+        }
+      });
+      break;
+    }
+    case 'antigrav': { // the lounge that gave up on down
+      r.antigrav = true;
+      const rH = r.H || H;
+      const wood2 = std({ color: 0x6b4f30, map: woodTexK, roughness: .8 });
+      // a table and its chairs, dining on the ceiling
+      const [tx, tz] = roomPoint(r, 1.6);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.3, .06, .8), wood2);
+      top.position.set(tx, rH - .78, tz); scene.add(top);
+      for (const [lx, lz] of [[-.55, -.3], [.55, -.3], [-.55, .3], [.55, .3]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(.06, .7, .06), wood2);
+        leg.position.set(tx + lx, rH - .4, tz + lz); scene.add(leg);
+      }
+      for (const s of [-1, 1]) {
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(.42, .05, .42), wood2);
+        seat.position.set(tx + s * 1.05, rH - .5, tz + rr(-.2, .2));
+        seat.rotation.z = s * rr(.05, .18);
+        scene.add(seat);
+      }
+      // an upside-down floor lamp grows from the deck, lighting the ceiling picnic
+      const [lx2, lz2] = roomPoint(r, 1.2);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(.022, .03, 1.5, 8), darkMetal);
+      stem.position.set(lx2, .75, lz2); scene.add(stem);
+      const shade = new THREE.Mesh(new THREE.ConeGeometry(.16, .2, 12, 1, true),
+        std({ color: 0x8a7a5a, roughness: .9, side: THREE.DoubleSide }));
+      shade.position.set(lx2, 1.55, lz2); shade.rotation.x = Math.PI; scene.add(shade);
+      const ll = new THREE.PointLight(0xa8ffe8, 5, 7, 2);
+      ll.position.set(lx2, 1.8, lz2); scene.add(ll); LIGHTS.push({ l: ll, base: 5, flick: rnd() < .3 });
+      // loose things that never came back down
+      const drifters = [];
+      for (let i = 0; i < 7; i++) {
+        const m = rnd() < .5
+          ? new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .09, 8), std({ color: 0x9a948a, roughness: .8 }))
+          : new THREE.Mesh(new THREE.BoxGeometry(rr(.06, .16), rr(.04, .1), rr(.06, .14)), wood2);
+        const [dx2, dz2] = roomPoint(r, .8);
+        m.position.set(dx2, rr(.9, rH - .9), dz2);
+        m.rotation.set(rr(0, TAU), rr(0, TAU), rr(0, TAU));
+        scene.add(m);
+        drifters.push({ m, y0: m.position.y, ph: rr(0, TAU), rs: rr(.1, .5) });
+      }
+      ANIMS.push((dt, t) => {
+        for (const d of drifters) {
+          d.m.position.y = d.y0 + Math.sin(t * .35 + d.ph) * .22;
+          d.m.rotation.y += d.rs * dt; d.m.rotation.x += d.rs * .6 * dt;
+        }
+      });
+      break;
+    }
   }
   // graffiti finds its room
   if ((r.kind === 'dark' || rnd() < .3) && wallSpots.length) {
@@ -1854,7 +1985,7 @@ const BANKS = {
   belt2: ['audio/kenney/rpg/beltHandle1.ogg', 'audio/kenney/rpg/beltHandle2.ogg'],
   knife: ['audio/kenney/rpg/knifeSlice.ogg', 'audio/kenney/rpg/knifeSlice2.ogg', 'audio/kenney/rpg/chop.ogg'],
   draw: ['audio/kenney/rpg/drawKnife1.ogg', 'audio/kenney/rpg/drawKnife2.ogg', 'audio/kenney/rpg/drawKnife3.ogg'],
-  rifle: ['audio/guns/mosin.m4a'],
+  rifle: [1, 2, 3, 4, 5].map(i => `audio/guns/mosin_${i}.m4a`), // single shots, sliced from the CC0 recording
 };
 function audioInit() {
   if (AU.ctx) return;
@@ -1908,6 +2039,7 @@ function playBuf(buf, o = {}) {
   const g = C.createGain();
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(o.vol ?? 1, t + .008);
+  if (o.dur) g.gain.setTargetAtTime(0, t + o.dur - .05, .03); // truncated slice gets a soft release
   let node = g;
   if (o.filter) {
     const f = C.createBiquadFilter(); f.type = o.filter.type || 'lowpass';
@@ -1917,7 +2049,9 @@ function playBuf(buf, o = {}) {
   if (o.pan) { const p = C.createStereoPanner(); p.pan.value = o.pan; node.connect(p); node = p; }
   node.connect(AU.master);
   if (AU.verb && (o.verb ?? .1) > 0) { const s2 = C.createGain(); s2.gain.value = o.verb ?? .1; node.connect(s2); s2.connect(AU.verb); }
-  src.connect(g); src.start(t);
+  src.connect(g);
+  if (o.dur) src.start(t, o.offset || 0, o.dur + .15);
+  else src.start(t, o.offset || 0);
   return true;
 }
 function playBank(bank, o) {
@@ -1974,11 +2108,12 @@ function gunshot(o) {
   s.connect(f); f.connect(g3); g3.connect(out); s.start(t); s.stop(t + .4);
 }
 const SFX = {
-  shot() { playBank('rifle', { vol: .55, pitch: 1, verb: .3 }) || gunshot({ body: .7, crack: .8, pitch: 1, vol: .8 }); gunshot({ body: .5, crack: .25, pitch: 1, vol: .35 }); },
-  smg() { playBank('rifle', { vol: .34, pitch: 1.5, verb: .2 }) || gunshot({ body: .45, crack: .6, pitch: 1.3, vol: .8 }); gunshot({ body: .3, crack: .2, pitch: 1.3, vol: .3 }); },
-  shotgun() { playBank('rifle', { vol: .55, pitch: .62, verb: .35 }) || gunshot({ body: 1.3, crack: 1.1, pitch: .6, boom: .6 }); gunshot({ body: .9, crack: .25, pitch: .6, boom: .5, vol: .4 }); },
-  dmr() { playBank('rifle', { vol: .6, pitch: .8, verb: .35 }) || gunshot({ body: 1.1, crack: 1, pitch: .78, boom: .5 }); gunshot({ body: .8, crack: .2, pitch: .78, boom: .4, vol: .4 }); },
-  lmg() { playBank('rifle', { vol: .38, pitch: 1.15, verb: .25 }) || gunshot({ body: .7, crack: .8, pitch: .95, vol: .85 }); gunshot({ body: .5, crack: .2, pitch: .95, vol: .3 }); },
+  /* one slice = one shot. rapid guns take only the crack; slow guns keep the tail. */
+  shot() { playBank('rifle', { vol: .6, pitch: 1, verb: .3 }) || gunshot({ body: .7, crack: .8, pitch: 1, vol: .8 }); },
+  smg() { playBank('rifle', { vol: .42, pitch: 1.12, pitchVar: .03, verb: .12, dur: .3 }) || gunshot({ body: .45, crack: .6, pitch: 1.3, vol: .8 }); },
+  shotgun() { (playBank('rifle', { vol: .58, pitch: .7, verb: .4 }) || gunshot({ body: 1.3, crack: 1.1, pitch: .6, boom: .6 })); sTone('sine', 95, 36, .28, .28); },
+  dmr() { playBank('rifle', { vol: .62, pitch: .85, verb: .45 }) || gunshot({ body: 1.1, crack: 1, pitch: .78, boom: .5 }); },
+  lmg() { playBank('rifle', { vol: .46, pitch: .95, pitchVar: .04, verb: .18, dur: .45 }) || gunshot({ body: .7, crack: .8, pitch: .95, vol: .85 }); },
   flame() { sNoise(.16, 'bandpass', 700, 400, .16); },
   slash() { playBank('knife', { vol: .35, pitch: 1.05 }) || (sNoise(.09, 'highpass', 2600, 760, .13), sTone('sine', 560, 320, .055, .045)); },
   draw() { playBank('draw', { vol: .2, pitch: 1 }); },
@@ -2234,6 +2369,18 @@ const gunModels = [];
   }
 }
 vm.position.set(.32, -.3, -.55);
+/* tritium: every gun gets one live sight dot — a firefly in the dark decks */
+{
+  const tritium = new THREE.MeshStandardMaterial({ color: 0, emissive: 0x8dffc4, emissiveIntensity: 3.4, roughness: 1 });
+  for (const g of gunModels) {
+    let best = null;
+    g.traverse(o => { if (o.isMesh && (!best || o.position.z < best.position.z)) best = o; });
+    if (!best || best.position.z > -.2) continue; // melee/odd builds keep their dark irons
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.006, 8, 6), tritium);
+    dot.position.set(0, .012, 0);
+    best.add(dot);
+  }
+}
 
 /* ------------------------------------------------- muzzle, tracers, parts */
 const muzzle = new THREE.PointLight(0xffb050, 0, 14);
@@ -2419,6 +2566,10 @@ function updateShells(dt) {
 }
 /* torch: your one honest friend, and it snitches on you */
 const torch = new THREE.SpotLight(0xfff2dc, 0, 26, .5, .55, 1.6);
+torch.castShadow = true;
+torch.shadow.mapSize.set(1024, 1024);
+torch.shadow.camera.near = .2; torch.shadow.camera.far = 26;
+torch.shadow.bias = -.004;
 camera.add(torch);
 const torchTarget = new THREE.Object3D();
 torchTarget.position.set(0, 0, -3);
@@ -2687,7 +2838,8 @@ function makeSpecies(hostile) {
     : new THREE.Color().setHSL((hue + rr(.3, .7)) % 1, .7, .62);
   // six designed silhouettes; the seed stretches them inside their bounds
   const arch = hostile ? rpick(['stalker', 'stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike']) : 'wisp';
-  const rigged = false;
+  // some hostiles wear the crew outright: rigged, animated bodies
+  const rigged = hostile && rnd() < .28;
   const A = {
     stalker:    { size: rr(1.0, 1.5), speed: rr(1.6, 2.4), hyF: 1.25, rF: .5, loco: 'walk', hpM: 1 },
     widow:      { size: rr(.95, 1.45), speed: rr(2.2, 3.2), hyF: .85, rF: .65, loco: 'skitter', hpM: .8 },
@@ -2729,7 +2881,7 @@ function makeZombieSpecies() {
   const size = brute ? rr(1.1, 1.28) : rr(.88, 1.08);
   return {
     name: rpick(['TRENCHFALL WALKER', 'TRENCHFALL DEAD', 'TRENCHFALL RUNNER', 'TRENCHFALL CORPSE']),
-    hostile: true, rigged: false, zombie: true, arch: 'zombie', body: 'zombie',
+    hostile: true, rigged: true, zombie: true, arch: 'zombie', body: 'zombie',
     size, col, eyeCol, rough: .96, metal: 0, eyes: 2, pattern: 'cloth',
     loco: fast ? 'rush' : 'walk',
     quirk: brute ? 'none' : rpick(['none', 'none', 'pack', 'feigner']),
@@ -3189,7 +3341,6 @@ function buildCutoutCreature(sp) {
   return g;
 }
 function buildCreature(sp) {
-  return buildCutoutCreature(sp);
   if (!sp._hide) sp._hide = creatureSkinTex(sp);
   const g = new THREE.Group();
   const u = sp.size;
@@ -3848,6 +3999,7 @@ function buildRigBody(sp, v) {
 function spawnRigged(sp, x, z, v) {
   const b = buildRigBody(sp, v);
   b.mesh.position.set(x, 0, z);
+  enableShadows(b.mesh);
   scene.add(b.mesh);
   const e = {
     sp, x, z, y: 0, vx: 0, vz: 0,
@@ -3871,6 +4023,7 @@ function spawnEnt(sp, x, z, friendly) {
 function spawnEntBody(sp, x, z, friendly) {
   const mesh = buildCreature(sp);
   mesh.position.set(x, 0, z);
+  enableShadows(mesh);
   scene.add(mesh);
   const e = {
     sp, x, z, y: 0, vx: 0, vz: 0,
@@ -3909,7 +4062,7 @@ const WEARER_SP = {
 };
 const WEARER_SEEDS = []; // drawn from the seed NOW, so async loading cannot bend fate
 {
-  const n = 0;
+  const n = RUN.deck >= 2 ? 1 + (RUN.deck > 3 ? 1 : 0) : 0;
   const lairs = ROOMS.filter(r => r !== startRoom);
   for (let i = 0; i < n && lairs.length; i++) {
     const r = rpick(lairs);
@@ -3953,6 +4106,7 @@ new GLTFLoader().load('assets/models/zombies_pack.glb', gl => {
     const mesh = new THREE.Group();
     mesh.add(rig);
     mesh.position.set(w.x, 0, w.z);
+    enableShadows(mesh);
     scene.add(mesh);
     mesh.userData = { legs: [], arms: [], heads: [], fins: [] };
     entities.push({
@@ -3965,6 +4119,58 @@ new GLTFLoader().load('assets/models/zombies_pack.glb', gl => {
   }
 }, undefined, () => {
   for (const p of PENDING_RIG.splice(0)) spawnEntBody(p.sp, p.x, p.z, false);
+});
+/* the crew that still drills: a soldier who never noticed dying */
+const SOLDIER_SP = {
+  name: 'IT STILL RUNS THE DRILL', hostile: true, size: 1,
+  col: new THREE.Color(.32, .3, .26), eyeCol: new THREE.Color(1, .16, .08),
+  rough: .9, metal: 0, eyes: 2, body: 'biped',
+  loco: 'walk', quirk: 'none', attack: 'claw',
+  speed: rr(1.5, 2.0) * (1 + RUN.deck * .04),
+  hp: 85 * (1 + RUN.deck * .12), dmg: 13 + RUN.deck * 1.5,
+  voice: { kind: 'breath', wave: 'sawtooth', pitch: rr(55, 95), syl: 2, len: rr(.25, .5), gliss: rr(.4, .8), dual: 1.3 },
+  ichor: [.7, .1, .05],
+};
+const SOLDIER_SEEDS = [];
+{
+  const n = RUN.deck >= 2 ? 1 : 0;
+  const lairs = ROOMS.filter(r => r !== startRoom);
+  if (n && lairs.length) {
+    const r = rpick(lairs);
+    SOLDIER_SEEDS.push({ x: r.cx + rr(-r.w * 1.8, r.w * 1.8), z: r.cz + rr(-r.h * 1.8, r.h * 1.8),
+      v: rnd() * 100 | 0, s: rr(.96, 1.06) });
+  }
+}
+if (SOLDIER_SEEDS.length) new GLTFLoader().load('assets/models/Soldier.glb', gl => {
+  for (const w of SOLDIER_SEEDS) {
+    const rig = skClone(gl.scene);
+    const mats = [];
+    rig.traverse(o => {
+      if (!o.isMesh) return;
+      o.material = o.material.clone();
+      if (o.material.color) o.material.color.multiplyScalar(.42); // fatigues gone grave-grey
+      o.material.roughness = .92; o.material.metalness = 0; o.material.envMapIntensity = .08;
+      mats.push(o.material);
+    });
+    rig.scale.setScalar(w.s);
+    centerVisibleRig(rig);
+    const mixer = new THREE.AnimationMixer(rig);
+    const clip = gl.animations.find(a => /walk/i.test(a.name)) || gl.animations[0];
+    if (clip) { const act = mixer.clipAction(clip); act.play(); act.time = (w.v % 7) * .3; }
+    const mesh = new THREE.Group();
+    mesh.add(rig);
+    mesh.position.set(w.x, 0, w.z);
+    enableShadows(mesh);
+    scene.add(mesh);
+    mesh.userData = { legs: [], arms: [], heads: [], fins: [] };
+    entities.push({
+      sp: SOLDIER_SP, x: w.x, z: w.z, y: 0, vx: 0, vz: 0,
+      hp: SOLDIER_SP.hp, hy: 1.15, r: .45,
+      mesh, t: w.v * .1, state: 'idle', atkCd: 0, voiceT: rand(4, 12),
+      burn: 0, los: false, losT: 0, friendly: false, dead: false, dieT: 0,
+      mixer, rigMats: mats,
+    });
+  }
 });
 function seenByPlayer(e) {
   const dx = e.x - camera.position.x, dz = e.z - camera.position.z;
@@ -4464,7 +4670,7 @@ function drawMap() {
     } else {
       const r = ROOMS[map[c]];
       x.fillStyle = r.kind === 'exit' ? '#3f6f5a' : r.kind === 'start' ? '#3a4452' :
-        ['garden', 'archive', 'chapel', 'static', 'pool', 'dark'].includes(r.kind) ? '#54364a' : '#3c4046';
+        ['garden', 'archive', 'chapel', 'static', 'pool', 'dark', 'orrery', 'hands', 'antigrav'].includes(r.kind) ? '#54364a' : '#3c4046';
       x.fillRect(gx * S + 2, gy * S + 2, S - 4, S - 4);
     }
   }
@@ -4694,6 +4900,9 @@ const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
   type: THREE.HalfFloatType, samples: 4 });
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+gtao.blendIntensity = .9;
+composer.addPass(gtao);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .32, .5, 1.0);
 composer.addPass(bloom);
 composer.addPass(new FilmPass(.14));
@@ -4703,8 +4912,21 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
+  gtao.setSize(innerWidth, innerHeight);
 });
 scene.add(new THREE.HemisphereLight(0xbfc8d8, 0x33291e, PAL.hemi * .72));
+
+/* every solid thing owns its shadow; glass, glow and smoke own nothing */
+function enableShadows(root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (m && (m.transparent || m.blending === THREE.AdditiveBlending)) return;
+    o.castShadow = true; o.receiveShadow = true;
+  });
+}
+enableShadows(scene);
+vm.traverse(o => { o.castShadow = false; o.receiveShadow = false; });
 
 /* drifting dust — the torch finds it, the dark hides it */
 {
@@ -4836,9 +5058,12 @@ function frame() {
         const r2 = ROOMS[map[pc]];
         if (!r2.visited) {
           r2.visited = true;
-          if (['garden', 'archive', 'chapel', 'static', 'pool', 'dark'].includes(r2.kind)) {
+          if (['garden', 'archive', 'chapel', 'static', 'pool', 'dark', 'orrery', 'hands', 'antigrav'].includes(r2.kind)) {
             SFX.clank(rand(-.5, .5));
-            toast(pick(['THIS ROOM IS NOT ON THE MANIFEST', 'THE AIR IS DIFFERENT HERE',
+            toast(r2.kind === 'orrery' ? 'SOMEONE REBUILT HOME FROM MEMORY'
+              : r2.kind === 'hands' ? 'DO NOT SHAKE ANY OF THEM'
+              : r2.kind === 'antigrav' ? 'THIS ROOM GAVE UP ON DOWN'
+              : pick(['THIS ROOM IS NOT ON THE MANIFEST', 'THE AIR IS DIFFERENT HERE',
               'SOMEONE LOVED THIS ROOM ONCE', 'THE FLOOR REMEMBERS FEET']));
           }
         }
@@ -4856,6 +5081,9 @@ function frame() {
     // pool drips, static rooms
     const room = roomAt(camera.position.x, camera.position.z);
     if (room && room.kind === 'pool' && Math.random() < dt * .8) SFX.drip(rand(-1, 1));
+    if (room && room.kind === 'orrery' && Math.random() < dt * .7) playBank('tick', { vol: .1, pitch: rand(.85, 1.1), verb: .4 });
+    if (room && room.kind === 'hands' && Math.random() < dt * .2) sNoise(.6, 'bandpass', rand(500, 1000), 260, .022);
+    gravMul = room && room.antigrav ? .3 : (gravMul === .3 ? 1 : gravMul);
     if (room && room.static) { staticT -= dt; if (staticT <= 0) { staticT = .07; rollStatic(); sNoise(.08, 'highpass', 4000, 3000, .012); } }
     // low health heartbeat
     if (player.hp < 30) { heartT -= dt; if (heartT <= 0) { heartT = .9; SFX.heartbeat(); } }

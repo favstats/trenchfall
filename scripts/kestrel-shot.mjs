@@ -28,7 +28,7 @@ await page.waitForTimeout(400);
 await page.screenshot({ path: '/tmp/k-2-start.png', timeout: 120000 });
 
 // visit each weird room kind present
-const weird = info.rooms.filter(r => ['garden', 'archive', 'chapel', 'static', 'pool', 'dark', 'engine', 'exit'].includes(r.kind)).slice(0, 4);
+const weird = info.rooms.filter(r => ['orrery', 'hands', 'antigrav', 'garden', 'archive', 'chapel', 'static', 'pool', 'dark', 'engine', 'exit'].includes(r.kind)).slice(0, 5);
 for (let i = 0; i < weird.length; i++) {
   await page.evaluate(r => KQA.tp(r.x, r.z + 3.5, 0, 0), weird[i]);
   await page.waitForTimeout(500);
