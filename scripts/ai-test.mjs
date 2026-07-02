@@ -17,7 +17,7 @@ await retry(()=>page.$eval('#wandBtn',el=>el.click()));
 await page.waitForTimeout(4000);
 await retry(()=>page.evaluate(()=>{window.__aiR=null;window.devAITest().then(r=>window.__aiR=r);}));
 let r=null;
-for(let i=0;i<240&&!r;i++){
+for(let i=0;i<480&&!r;i++){ // sim runs ~0.2x real under SwiftShader — give the 50-sim-sec budget room
   await page.waitForTimeout(1000);
   try{r=await page.evaluate(()=>window.__aiR);}catch(e){console.log('poll failed:',e.message.split('\n')[0]);}
 }

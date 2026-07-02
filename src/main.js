@@ -5366,11 +5366,12 @@ function genRouteOptions(){
 
 /* ---- events: the road asks questions ---- */
 function sup(k,d){CAMP.supplies[k]=Math.max(0,CAMP.supplies[k]+d);}
+let survName=''; // the name the man on the road gives — the recruit must answer to it
 const EVENTS=[
  {id:'survivor',w:3,title:'A FIGURE ON THE ROAD',who:()=>'the scout\'s glass picks out a living face',
-  txt:()=>'A man stands in the middle of the road with his hands up and his ribs showing. He says his name is '+spick(C_FIRST)+'. He says he hasn\'t eaten in four days. He is between you and the light, and the trucks are slowing, and everyone is looking at you.',
+  txt:()=>'A man stands in the middle of the road with his hands up and his ribs showing. He says his name is '+(survName=spick(C_FIRST))+'. He says he hasn\'t eaten in four days. He is between you and the light, and the trucks are slowing, and everyone is looking at you.',
   ch:[{l:'Take him aboard',s:'-2 food · a new rifle when he recovers',
-      do:()=>{sup('food',-2);CAMP.mercy++;const c=mkComp(null,Math.random()<.25?spick(SECRETS):null);c.name=c.name;CAMP.comps.push(c);
+      do:()=>{sup('food',-2);CAMP.mercy++;const c=mkComp(null,Math.random()<.25?spick(SECRETS):null);if(survName)c.name=survName+c.name.slice(c.name.indexOf(' '));CAMP.comps.push(c);
         toastQ(c.name+' rides with '+TRUCK_NAMES[c.truck]+' now.');spawnAlly();}},
      {l:'Food and directions, nothing more',s:'-1 food · morale holds',
       do:()=>{sup('food',-1);CAMP.mercy++;toastQ('He eats like an animal and doesn\'t say thank you. You don\'t blame him.');}},
