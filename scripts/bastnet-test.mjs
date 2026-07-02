@@ -84,12 +84,14 @@ await page.waitForSelector('#startBtn',{timeout:60000});
 await page.waitForTimeout(3000);
 await page.$eval('#sboxBtn',el=>el.click());
 await page.waitForTimeout(1000);
-const setOut=await page.evaluate(()=>{ // the menu's wandBtn also says SET OUT — stay inside the toolbox
-  const box=[...document.querySelectorAll('div')].find(d=>d.textContent.trim().startsWith('THE TOOLBOX'));
-  const b=box&&[...box.querySelectorAll('.mItem')].find(d=>d.textContent==='SET OUT');
+const setOut=await page.evaluate(()=>{ // the sandbox CARD button is also labeled CUSTOM GAME — find the panel by its START button
+  const box=[...document.querySelectorAll('div')].find(d=>
+    d.textContent.trim().startsWith('CUSTOM GAME')&&
+    [...d.querySelectorAll('.mItem')].some(x=>x.textContent==='START'));
+  const b=box&&[...box.querySelectorAll('.mItem')].find(d=>d.textContent==='START');
   if(b){b.click();return true;}return false;
 });
-if(!setOut)errors.push('TOOLBOX HAS NO SET OUT');
+if(!setOut)errors.push('CUSTOM GAME HAS NO START');
 await page.waitForTimeout(8000);
 const sbox=await page.evaluate(()=>({wander:window.WANDER.on,
   scrap:window.G.scrap,owned:window.PLAYER.owned.filter(Boolean).length,

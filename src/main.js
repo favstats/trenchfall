@@ -3495,7 +3495,7 @@ const HAIR_COL=[0x241c12,0x382a1a,0x4a4234,0x16140f,0x6a6258,0x52331f];
    weights across elbow/knee/spine, geometry shared, fresh bones per rig.
    Research note: ~100 cloned skinned meshes hit ~370 draw calls (forum case),
    so only the nearest SKIN_N wear a skeleton; the rest stay instanced. */
-const SKIN_N=18,SKIN_R=30;
+const SKIN_N=22,SKIN_R=36; // a wider ring of real bodies: the swap to instanced happens out in the fog
 const SKINS=[];
 {
   const mk=(geo,tx,ty,tz)=>{const g2=geo.clone();g2.translate(tx,ty,tz);return g2;};
@@ -3615,39 +3615,40 @@ new GLTFLoader().load('assets/models/zombies_pack.glb',gltf=>{
   if(!roots.length||!clip){console.warn('zombie pack unreadable; the procedural dead march on');return;}
   for(let i=0;i<SKIN_N;i++){
     const inner=skClone(gltf.scene);
-    const pickName=roots[i%roots.length];
-    inner.traverse(o=>{
-      if(roots.includes(o.name))o.visible=(o.name===pickName);
-      if((o.name||'').startsWith('Line001'))o.visible=false; // the pack's stowaway wireframe
-    });
-    const chosen=inner.getObjectByName(pickName);
-    const mats=[],bones=[];let head=null;
-    chosen.traverse(o=>{
-      if(o.isBone){bones.push(o);if(!head&&/head/i.test(o.name||''))head=o;}
-      if(o.isMesh){
-        o.material=o.material.clone();
-        o.material.roughness=.9;o.material.metalness=.02;
-        deathlit(o.material);
-        mats.push(o.material);
-        o.castShadow=true;o.frustumCulled=false;
-      }
-    });
+    inner.traverse(o=>{if((o.name||'').startsWith('Line001'))o.visible=false;}); // the pack's stowaway wireframe
     const mixer=new THREE.AnimationMixer(inner);
     const act=mixer.clipAction(clip);act.play();
     act.time=(i*1.37)%clip.duration;   // out of step with each other, like the dead are
     mixer.update(.033);inner.updateMatrixWorld(true);
-    // calibrate: find this corpse's feet, height, and berth offset from its bones
-    const bb=new THREE.Box3();let hiY=-1e9,topBone=null;
-    for(const b of bones){b.getWorldPosition(_zcal);bb.expandByPoint(_zcal);
-      if(_zcal.y>hiY){hiY=_zcal.y;topBone=b;}}
-    if(!head)head=topBone;             // no named skull: the highest bone wears the eyes
-    const h=Math.max(.9,bb.max.y-bb.min.y);
-    const baseS=1.66/h;                // bone spans underreport the flesh a touch
-    inner.position.set(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2);
+    // every slot can dress as ANY corpse: calibrate all ten variants of this clone
+    const variants=[];
+    for(const rn of roots){
+      const root=inner.getObjectByName(rn);if(!root)continue;
+      const mats=[],bones=[];let head=null;
+      root.traverse(o=>{
+        if(o.isBone){bones.push(o);if(!head&&/head/i.test(o.name||''))head=o;}
+        if(o.isMesh){
+          o.material=o.material.clone();
+          o.material.roughness=.9;o.material.metalness=.02;
+          deathlit(o.material);
+          mats.push(o.material);
+          o.castShadow=true;o.frustumCulled=false;
+        }
+      });
+      const bb=new THREE.Box3();let hiY=-1e9,topBone=null;
+      for(const b of bones){b.getWorldPosition(_zcal);bb.expandByPoint(_zcal);
+        if(_zcal.y>hiY){hiY=_zcal.y;topBone=b;}}
+      if(!head)head=topBone;           // no named skull: the highest bone wears the eyes
+      const h=Math.max(.9,bb.max.y-bb.min.y);
+      variants.push({root,head,bones,mats,baseS:1.66/h,
+        off:new THREE.Vector3(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2)});
+    }
+    for(const v of variants)v.root.visible=false;
     const rig=new THREE.Group();rig.add(inner);
     rig.visible=false;scene.add(rig);
-    GLBZ.rigs.push({rig,mixer,walk:act,mats,head,bones,baseS,dur:clip.duration});
+    GLBZ.rigs.push({rig,inner,mixer,walk:act,variants,cur:-1,v:null,dur:clip.duration});
   }
+  GLBZ.nvar=roots.length;
   GLBZ.ready=true;
 },undefined,e=>console.warn('zombies_pack.glb missing; the procedural dead march on',e));
 new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
@@ -3677,19 +3678,26 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
 catch(e){console.warn('no asset loading here; the procedural rigs carry on');}
 const _hq=new THREE.Quaternion(),_hv=new THREE.Vector3(),_hs=new THREE.Vector3(),_he=new THREE.Euler(),_hm2=new THREE.Matrix4(),_zGrade=new THREE.Color(),_WHITE1=new THREE.Color(1,1,1);
 function poseGlb(i,zb,dt,px,py,pz,pitch,sway,spd,colF,tint){
-  const r=GLBZ.rigs[i];if(!r)return null;
+  const r=GLBZ.rigs[i];if(!r||!r.variants.length)return null;
+  if(zb._var==null)zb._var=(Math.random()*r.variants.length)|0; // the corpse keeps its face for life
+  if(r.cur!==zb._var){
+    r.cur=zb._var;r.v=r.variants[zb._var%r.variants.length];
+    for(const v2 of r.variants)v2.root.visible=(v2===r.v);
+    r.inner.position.copy(r.v.off);
+  }
+  const v=r.v;
   r.rig.visible=true;
   r.rig.position.set(px,py-.02,pz);
-  r.rig.rotation.set(pitch*.22,(zb.face||0)+Math.PI,sway*.5);
-  {const w=zb.wide||1;const s=(zb.scale||1)*r.baseS;
+  r.rig.rotation.set(pitch*.22,(zb.face||0),sway*.5);
+  {const w=zb.wide||1;const s=(zb.scale||1)*v.baseS;
     r.rig.scale.set(s*w,s,s*Math.max(.92,w*.96));}
   r.walk.setEffectiveTimeScale(clamp(.55+spd*.5,.5,2.6)); // the shamble keeps the zombie's pace
   r.mixer.update(dt);
   _zGrade.set(colF).lerp(_WHITE1,.7).multiplyScalar(tint); // grade toward the state color; keep the texture readable
-  for(const m of r.mats)m.color.copy(_zGrade);
+  for(const m of v.mats)m.color.copy(_zGrade);
   r.rig.updateMatrixWorld(true);
-  if(!r.head)return null;
-  r.head.getWorldPosition(_hv);                 // the eyes ride the true skull, unit-scaled
+  if(!v.head)return null;
+  v.head.getWorldPosition(_hv);                 // the eyes ride the true skull, unit-scaled
   _he.set(0,(zb.face||0),0);_hq.setFromEuler(_he);
   _hm2.compose(_hv,_hq,_hs.setScalar(zb.scale||1));
   return _hm2;
@@ -3717,7 +3725,7 @@ const _wv=new THREE.Vector3(),_wv2=new THREE.Vector3();
 function addWound(zb,hp){
   const i=zb._skin;if(i==null)return;
   const glb=GLBZ.ready&&GLBZ.rigs[i]&&GLBZ.rigs[i].rig.visible;
-  const bones=glb?GLBZ.rigs[i].bones:(SKINS[i]?SKINS[i].bones:null);
+  const bones=glb?(GLBZ.rigs[i].v&&GLBZ.rigs[i].v.bones):(SKINS[i]?SKINS[i].bones:null);
   if(!bones||!bones.length)return;
   let best=null,bd=1e9;
   for(const b of bones){
@@ -4240,11 +4248,11 @@ function updateZombies(dt,t){
     }
     let shm=null,glbOn=false;
     if(zb._skin!=null&&SKINS[zb._skin]&&SKINS[zb._skin].zb===zb){
-      const useGlb=GLBZ.ready&&GLBZ.rigs[zb._skin]&&!zb.brute&&!crawl&&zb.reach<.45&&!(zb.swingT>0);
+      const useGlb=GLBZ.ready&&GLBZ.rigs[zb._skin]&&!zb.brute&&!crawl; // the pack keeps the body through the strike
       if(useGlb){
         SKINS[zb._skin].mesh.visible=false;
         shm=poseGlb(zb._skin,zb,dt,_P.x,_P.y,_P.z,
-          (zb.hunch||.22)+spz*.4,sway,zb.speed*spMul,colF,flash?1:zb.tint);
+          (zb.hunch||.22)+spz*.4+swPitch,sway,zb.speed*spMul,colF,flash?1:zb.tint);
         glbOn=true;
       }else{
         if(GLBZ.ready&&GLBZ.rigs[zb._skin])GLBZ.rigs[zb._skin].rig.visible=false;
@@ -7187,7 +7195,7 @@ $('bastBtn').addEventListener('click',()=>startBastion(false));
 $('contB').addEventListener('click',()=>startBastion(true));
 try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
   if(bsv&&bsv.runSeed){$('contB').style.display='';
-    $('contBms').textContent='night '+bsv.wave+' held · '+bsv.crew.length+' still on the wall';}
+    $('contBms').textContent='wave '+bsv.wave+' · '+bsv.crew.length+' crew alive';}
 }catch(e){}
 (function paintCards(){ // each mode wears a postcard of its own weather
   const paint=(id,fn)=>{const cv=document.getElementById(id);if(!cv)return;
@@ -7267,12 +7275,12 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
 }
 (function sandboxUI(){ // the toolbox: pick your country, pick your rules
   const OPTS=[
-    {key:'biome',label:'COUNTRY',vals:null},   // filled from BIOMES at open
-    {key:'time',label:'HOUR',vals:['CYCLE','DAWN','DUSK','NIGHT']},
-    {key:'dead',label:'THE DEAD',vals:['NONE','SPARSE','NORMAL','THE TIDE']},
-    {key:'god',label:'MORTALITY',vals:['MORTAL','UNKILLABLE']},
-    {key:'ammo',label:'AMMUNITION',vals:['COUNTED','BOTTOMLESS']},
-    {key:'arsenal',label:'ARSENAL',vals:['EARNED','EVERYTHING']},
+    {key:'biome',label:'MAP',vals:null},   // filled from BIOMES at open
+    {key:'time',label:'TIME OF DAY',vals:['CYCLE','DAWN','DUSK','NIGHT']},
+    {key:'dead',label:'ZOMBIES',vals:['NONE','LOW','NORMAL','HORDE']},
+    {key:'god',label:'GOD MODE',vals:['OFF','ON']},
+    {key:'ammo',label:'INFINITE AMMO',vals:['OFF','ON']},
+    {key:'arsenal',label:'ALL WEAPONS',vals:['OFF','ON']},
   ];
   let el=null,state={};
   try{state=JSON.parse(localStorage.getItem('tlr_sbox'))||{};}catch(e){}
@@ -7284,7 +7292,7 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
     const box=document.createElement('div');
     box.style.cssText='background:rgba(16,18,11,.96);border:1px solid rgba(201,189,146,.4);'+
       'border-left:3px solid #e8742c;padding:22px 30px;min-width:380px;color:#c9bd92;letter-spacing:.08em';
-    box.innerHTML='<div style="font-family:\'Saira Stencil One\';font-size:22px;letter-spacing:.2em;color:#e6dcb8;margin-bottom:12px">THE TOOLBOX</div>';
+    box.innerHTML='<div style="font-family:\'Saira Stencil One\';font-size:22px;letter-spacing:.2em;color:#e6dcb8;margin-bottom:12px">CUSTOM GAME</div>';
     for(const o of OPTS){
       const row=document.createElement('div');
       row.style.cssText='display:flex;justify-content:space-between;gap:24px;padding:6px 0;cursor:pointer;font-size:14px';
@@ -7304,7 +7312,7 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
     bar.style.cssText='display:flex;gap:18px;justify-content:center;margin-top:16px';
     const mk=(t,fn)=>{const d=document.createElement('div');d.className='mItem';d.textContent=t;
       d.style.fontSize='16px';d.addEventListener('click',fn);bar.appendChild(d);};
-    mk('SET OUT',()=>{
+    mk('START',()=>{
       el.style.display='none';
       Object.assign(SBOX,{on:true,
         biomeIdx:state.biome>0?state.biome-1:null,
@@ -7332,24 +7340,24 @@ try{const bsv=JSON.parse(localStorage.getItem('tlr_bastion_run'));
 { // the cards keep score
   try{
     const bb=+localStorage.getItem('tlr_best_bast')||0;
-    if(bb&&$('bastBest'))$('bastBest').textContent='horde hold · four forts · best: night '+bb;
+    if(bb&&$('bastBest'))$('bastBest').textContent='defend the fort · endless waves · best: wave '+bb;
     const bw=+localStorage.getItem('tlr_best_wand')||0,we=document.getElementById('wandBest');
-    if(bw&&we)we.textContent='open country · the walker\'s map · farthest: region '+bw;
+    if(bw&&we)we.textContent='explore region to region · best: region '+bw;
     const bc=+localStorage.getItem('tlr_best_camp')||0,ce=document.getElementById('campBest');
-    if(bc&&ce)ce.textContent='convoy campaign · permadeath · verdun reached '+bc+(bc===1?' time':' times');
+    if(bc&&ce)ce.textContent='9-mission convoy campaign · completed '+bc+(bc===1?' time':' times');
   }catch(e){}
 }
 $('wandBtn').addEventListener('click',()=>startWander(false));
 $('contW').addEventListener('click',()=>startWander(true));
 try{const wsv=JSON.parse(localStorage.getItem('tlr_wander'));
   if(wsv&&wsv.runSeed){$('contW').style.display='';
-    $('contWms').textContent='region '+wsv.region+' · '+Math.floor(wsv.t/60)+' minutes walked · the country remembers';}
+    $('contWms').textContent='region '+wsv.region+' · '+Math.floor(wsv.t/60)+' min played';}
 }catch(e){}
 for(const it of document.querySelectorAll('.mItem'))
   it.addEventListener('mouseenter',()=>{if(AU.ctx&&!AU.muted)sTone('sine',1450,1430,.04,.02);});
 try{
   const sv=JSON.parse(localStorage.getItem('tlr_save'));
-  if(sv&&sv.leg)$('contBtn').innerHTML='CONTINUE THE ROAD<span class="ms">leg '+sv.leg+' of 9 · '+(sv.comps?sv.comps.filter(c=>c.alive).length:'?')+' souls still walking</span>';
+  if(sv&&sv.leg)$('contBtn').innerHTML='CONTINUE<span class="ms">mission '+sv.leg+' of 9 · '+(sv.comps?sv.comps.filter(c=>c.alive).length:'?')+' squad members alive</span>';
 }catch(e){}
 $('contBtn').addEventListener('click',continueCampaign);
 if(localStorage.getItem('tlr_save'))$('contBtn').style.display='inline-block';

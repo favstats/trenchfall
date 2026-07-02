@@ -12,7 +12,7 @@
 <canvas id="gl"></canvas>
 <div id="lboxT" class="lbox"></div><div id="lboxB" class="lbox"></div>
 <div id="dlg"><div class="n"></div><div class="r"></div><div class="q"></div><div id="dlgC"></div></div>
-<div id="inv" class="ov"><h1 class="stencil" style="font-size:38px">THE PACK</h1>
+<div id="inv" class="ov"><h1 class="stencil" style="font-size:38px">INVENTORY</h1>
 <div class="tag2">everything you carry · I to close</div><div class="wrap"><div id="invGrid"></div><div id="invDetail"></div></div></div>
 <div id="l3"><div class="n"></div><div class="r"></div><div class="q"></div><div class="h">CLICK TO CONTINUE</div></div>
 <div id="vignette"></div>
@@ -59,51 +59,51 @@
 </div>
 
 <div id="start" class="ov show">
-  <div id="bootTag">HOLD THE WALL · WALK THE ROAD WEST</div>
+  <div id="bootTag">ZOMBIE SURVIVAL FPS</div>
   <h1 class="stencil" id="bootTitle">TRENCHFALL</h1>
-  <div class="tag2" id="bootSub">every road is different · the dead remember every one</div>
+  <div class="tag2" id="bootSub">procedurally generated worlds · campaign, horde, and open-world modes</div>
   <div id="menu" class="cards">
     <div class="card">
       <canvas class="cardArt" id="artCamp" width="280" height="120"></canvas>
-      <div class="cardTitle">THE ROAD WEST</div>
-      <div class="cardSub" id="campBest">convoy campaign · permadeath · every road different</div>
-      <div class="mItem" id="startBtn">NEW CAMPAIGN</div>
-      <div class="mItem" id="contBtn" style="display:none">CONTINUE THE ROAD</div>
+      <div class="cardTitle">CAMPAIGN</div>
+      <div class="cardSub" id="campBest">9-mission convoy campaign · permadeath</div>
+      <div class="mItem" id="startBtn">NEW GAME</div>
+      <div class="mItem" id="contBtn" style="display:none">CONTINUE</div>
     </div>
     <div class="card">
       <canvas class="cardArt" id="artBast" width="280" height="120"></canvas>
-      <div class="cardTitle">THE BASTION</div>
-      <div class="cardSub" id="bastBest">horde hold · four forts · the long night</div>
-      <div class="mItem" id="bastBtn">STAND TO</div>
-      <div class="mItem" id="contB" style="display:none">CONTINUE THE WALL<span class="ms" id="contBms"></span></div>
-      <div class="mItem" id="coopBtn">CO-OP WALL<span class="ms">2-4 players · one host · shared cache</span></div>
-      <div class="paceRow" id="paceRow">PACE
-        <span class="paceOpt" data-pace="nights" title="assaults with a breath between">NIGHTS</span>
-        <span class="paceOpt" data-pace="relent" title="the next wave rises on a timer, quiet or not">THE TIDE</span>
+      <div class="cardTitle">HORDE MODE</div>
+      <div class="cardSub" id="bastBest">defend the fort · endless waves · 4 fort layouts</div>
+      <div class="mItem" id="bastBtn">PLAY</div>
+      <div class="mItem" id="contB" style="display:none">CONTINUE<span class="ms" id="contBms"></span></div>
+      <div class="mItem" id="coopBtn">CO-OP<span class="ms">2-4 players online</span></div>
+      <div class="paceRow" id="paceRow">DIFFICULTY
+        <span class="paceOpt" data-pace="nights" title="waves with a break between">STANDARD</span>
+        <span class="paceOpt" data-pace="relent" title="the next wave starts on a timer">RELENTLESS</span>
       </div>
     </div>
     <div class="card">
       <canvas class="cardArt" id="artWand" width="280" height="120"></canvas>
-      <div class="cardTitle">WANDER</div>
-      <div class="cardSub" id="wandBest">open country · the walker's map · no road home</div>
-      <div class="mItem" id="wandBtn">SET OUT</div>
-      <div class="mItem" id="contW" style="display:none">CONTINUE THE WANDER<span class="ms" id="contWms"></span></div>
+      <div class="cardTitle">OPEN WORLD</div>
+      <div class="cardSub" id="wandBest">explore region to region · quests, allies, loot</div>
+      <div class="mItem" id="wandBtn">PLAY</div>
+      <div class="mItem" id="contW" style="display:none">CONTINUE<span class="ms" id="contWms"></span></div>
     </div>
     <div class="card">
       <canvas class="cardArt" id="artSbox" width="280" height="120"></canvas>
       <div class="cardTitle">SANDBOX</div>
-      <div class="cardSub">your country, your rules · nothing is remembered</div>
-      <div class="mItem" id="sboxBtn">OPEN THE TOOLBOX</div>
+      <div class="cardSub">custom game · all weapons · no saves</div>
+      <div class="mItem" id="sboxBtn">CUSTOM GAME</div>
     </div>
   </div>
   <div class="underCards">
     <div class="mItem" id="mHow">HOW TO PLAY</div>
-    <div class="mItem" onclick="location.href='skirmish.html'" style="opacity:.75">SKIRMISH · the classic depot defense</div>
+    <div class="mItem" onclick="location.href='skirmish.html'" style="opacity:.75">SKIRMISH · classic mode</div>
   </div>
   <div id="howBox" style="display:none">
     <div class="ctl">
       <span><b>WASD</b> + mouse</span><span>move &amp; aim · <b>SHIFT</b> sprint · <b>RMB</b> aim</span>
-      <span><b>1 - 6</b> / <b>I</b></span><span>weapons / the pack</span>
+      <span><b>1 - 6</b> / <b>I</b></span><span>weapons / inventory</span>
       <span><b>Q</b> / <b>T</b></span><span>shovel · build kit</span>
       <span><b>G V X H Z</b></span><span>frag · molotov · mine · medkit · flare</span>
       <span><b>R</b> / <b>E</b> / <b>CTRL</b></span><span>reload / interact / crouch (steadier aim)</span>
