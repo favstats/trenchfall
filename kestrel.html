@@ -4,8 +4,8 @@
   A seed-built roguelike horror. Every deck, room, anomaly, and SPECIES is
   generated from the run's seed — share ?seed=N and someone else boards the
   exact same ship and meets the exact same creatures (Library of Babel, but
-  it's a haunted salvage hull). Textures are painted onto <canvas> at load,
-  meshes are primitives, creature voices are synthesized from the seed.
+  it's a haunted salvage hull). Textures and creature cutouts are painted onto
+  <canvas> at load, creature voices are synthesized from the seed.
   Foley uses the repo's CC0 sample packs (audio/kenney, audio/guns), with
   full synth fallback if they're missing.
 
@@ -116,7 +116,7 @@ if (!RUN) RUN = {
   owned: [true, false, false, false, false, false, true, false],
   mags: [30, 0, 0, 0, 0, 0, 0, 0],
   reserve: [60, 0, 0, 0, 0, 0, 0, 0],
-  idols: 0, kills: 0,
+  idols: 0, kills: 0, hunger: 0,
 };
 sessionStorage.removeItem('kestrelRun'); // dying mid-deck must not resume
 const BEST = +(localStorage.getItem('kestrelBest') || 0);
@@ -1329,6 +1329,31 @@ function mkHatch(x, z, fake) {
   INTER.push({ x, z, kind: fake ? 'fakehatch' : 'hatch', label: 'DESCEND', mesh: g });
   return g;
 }
+let sealRoom = null;
+function roomPoint(r, d = 1.4) {
+  for (let i = 0; i < 20; i++) {
+    const x = r.cx + rr(-(r.w * CELL / 2 - d), r.w * CELL / 2 - d);
+    const z = r.cz + rr(-(r.h * CELL / 2 - d), r.h * CELL / 2 - d);
+    if (clearOfDoors(x, z, d) && floorY(x, z) >= 0) return [x, z];
+  }
+  return [r.cx, r.cz];
+}
+function mkDeckSeal(x, z) {
+  const g = new THREE.Group(); g.position.set(x, .02, z);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(.42, .48, .08, 18), darkMetal);
+  base.position.y = .04; g.add(base);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.35, .018, 6, 28), accentGlow);
+  ring.rotation.x = Math.PI / 2; ring.position.y = .12; g.add(ring);
+  const shard = new THREE.Mesh(new THREE.OctahedronGeometry(.18, 0),
+    new THREE.MeshStandardMaterial({ color: 0x0a0d10, emissive: PAL.accent, emissiveIntensity: 2.6, roughness: 1 }));
+  shard.position.y = .34; g.add(shard);
+  const p = new THREE.PointLight(PAL.accent, 4, 5, 2);
+  p.position.set(x, .8, z); scene.add(p); LIGHTS.push({ l: p, base: 4 });
+  ANIMS.push((dt, t) => { ring.rotation.z += dt * .7; shard.rotation.y = t * .9; shard.position.y = .34 + Math.sin(t * 2.2) * .035; });
+  scene.add(g);
+  INTER.push({ x, z, kind: 'seal', label: 'TAKE DECK SEAL', mesh: g, used: false });
+  return g;
+}
 function mkWindowOn(room) {
   // find a perimeter edge facing solid hull
   for (const c of room.cells) {
@@ -1609,6 +1634,15 @@ function dressRoom(r) {
   }
 }
 for (const r of ROOMS) dressRoom(r);
+/* classic roguelike floor promise: the exit exists, but the deck makes you earn it */
+{
+  const candidates = ROOMS
+    .filter(r => r !== startRoom && r !== exitRoom)
+    .sort((a, b) => (Math.abs(b.gx - startRoom.gx) + Math.abs(b.gy - startRoom.gy))
+      - (Math.abs(a.gx - startRoom.gx) + Math.abs(a.gy - startRoom.gy)));
+  sealRoom = candidates[0] || exitRoom;
+  mkDeckSeal(...roomPoint(sealRoom, 1.2));
+}
 /* one lying hatch, somewhere it shouldn't be */
 if (RUN.deck >= 3 && rnd() < .3) {
   const liars = ROOMS.filter(r => r.kind === 'dark' || r.kind === 'static' || r.kind === 'chapel');
@@ -2009,7 +2043,7 @@ const player = {
   hp: RUN.hp, battery: RUN.battery,
   fireCd: 0, reloadT: 0, fireHeld: false, ads: false,
   y: 0, vy: 0, grounded: true, bob: 0, sprint: false,
-  heat: 0, idols: RUN.idols, schematic: false, dead: false,
+  heat: 0, idols: RUN.idols, schematic: false, seal: false, dead: false,
 };
 let vmKick = 0, vmSwing = 0, vmYawLag = 0, lastYawVM = 0, camShake = 0;
 const _dir = new THREE.Vector3(), _org = new THREE.Vector3();
@@ -2489,6 +2523,7 @@ function fireWeapon() {
     player.fireCd = w.rate; vmKick = 2.2; camShake = Math.max(camShake, .35);
     fireRocket(); muzzle.intensity = 60;
     SFX.dmr();
+    addHunger(6, null, true);
     startReload();
     updateHUD();
     return;
@@ -2497,6 +2532,7 @@ function fireWeapon() {
   if (w.melee) {
     player.fireCd = w.rate; vmSwing = 1.15; vmKick = w.kick;
     SFX.slash();
+    addHunger(.25, null, true);
     camera.getWorldDirection(_dir);
     _org.copy(camera.position);
     const eh = rayEnts(_org, _dir, w.range, 0)[0];
@@ -2510,6 +2546,7 @@ function fireWeapon() {
     player.mags[player.wid]--;
     player.fireCd = w.rate;
     player.heat = Math.min(10, player.heat + .06);
+    addHunger(.18, null, true);
     camera.getWorldDirection(_dir);
     const p = muzzleWorld();
     for (let i = 0; i < 5; i++) {
@@ -2537,6 +2574,7 @@ function fireWeapon() {
   player.fireCd = w.rate;
   vmKick = w.kick;
   player.heat = Math.min(10, player.heat + (w.sfx === 'smg' ? .35 : .7));
+  addHunger(w.sfx === 'smg' || w.sfx === 'lmg' ? .45 : w.sfx === 'shotgun' ? 2.2 : 1.15, null, true);
   if (w.kick > 1.4) camShake = Math.max(camShake, .2);
   camera.getWorldDirection(_dir);
   _org.copy(camera.position);
@@ -2610,9 +2648,9 @@ function roomAt(x, z) {
 }
 
 /* ==================================== FAUNA: species written by the seed
-   Nothing here is hand-authored. Body plan, gait, temperament, attack,
-   death habit, and voice are all drawn from the run's seed — share the
-   seed and you share the zoo. */
+   Body plans are authored silhouettes with seed-stretched proportions,
+   temperament, attack, death habit, and voice. Share the seed and you
+   share the zoo. */
 const SYL = ['ka', 'ver', 'osh', 'mund', 'tel', 'gri', 'hollow', 'sib', 'rax', 'une',
   'mor', 'quel', 'eth', 'vask', 'null', 'pale', 'iri', 'dun', 'sere', 'okt'];
 function nameGen() {
@@ -2625,16 +2663,18 @@ function nameGen() {
 }
 function makeSpecies(hostile) {
   // horror palette: dark bodies, one burning note — not a cartoon
-  const hue = rnd(), sat = rr(.04, hostile ? .3 : .6), lit = rr(.05, hostile ? .2 : .5);
+  const hue = rnd(), sat = rr(.035, hostile ? .18 : .32), lit = hostile ? rr(.045, .105) : rr(.22, .38);
   const col = new THREE.Color().setHSL(hue, sat, lit);
-  const eyeCol = new THREE.Color().setHSL((hue + rr(.3, .7)) % 1, .9, .6);
+  const eyeCol = hostile
+    ? new THREE.Color(rpick([0x9f2f24, 0xb46a2b, 0x87996b, 0x8f7654, 0x7a9094]))
+    : new THREE.Color().setHSL((hue + rr(.3, .7)) % 1, .7, .62);
   // six designed silhouettes; the seed stretches them inside their bounds
   const arch = hostile ? rpick(['stalker', 'stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike']) : 'wisp';
-  const rigged = hostile && rnd() < .3;
+  const rigged = false;
   const A = {
     stalker:    { size: rr(1.0, 1.5), speed: rr(1.6, 2.4), hyF: 1.25, rF: .5, loco: 'walk', hpM: 1 },
-    widow:      { size: rr(.8, 1.35), speed: rr(2.2, 3.2), hyF: .8, rF: .6, loco: 'skitter', hpM: .8 },
-    centipede:  { size: rr(.8, 1.25), speed: rr(1.8, 2.8), hyF: .45, rF: .55, loco: 'walk', hpM: .9 },
+    widow:      { size: rr(.95, 1.45), speed: rr(2.2, 3.2), hyF: .85, rF: .65, loco: 'skitter', hpM: .8 },
+    centipede:  { size: rr(1.05, 1.45), speed: rr(1.8, 2.8), hyF: .58, rF: .72, loco: 'walk', hpM: 1.05 },
     marionette: { size: rr(.95, 1.2), speed: rr(1.2, 1.8), hyF: 1.1, rF: .45, loco: 'drift', hpM: 1 },
     brute:      { size: rr(1.0, 1.35), speed: rr(.9, 1.4), hyF: 1.0, rF: .75, loco: 'walk', hpM: 2.2 },
     shrike:     { size: rr(.9, 1.3), speed: rr(2.4, 3.4), hyF: 1.05, rF: .45, loco: 'hop', hpM: .7 },
@@ -2644,7 +2684,7 @@ function makeSpecies(hostile) {
   return {
     name: nameGen(), size, hostile, rigged, arch, body: arch,
     col, eyeCol,
-    rough: rr(.35, .95), metal: rnd() < .2 ? rr(.3, .6) : 0,
+    rough: hostile ? rr(.82, .98) : rr(.72, .92), metal: 0,
     eyes: hostile ? 1 + (rnd() * 5 | 0) : 2,
     loco: rigged ? 'walk' : A.loco,
     quirk: hostile ? rpick(['none', 'none', 'freezeWatched', 'lightShy', 'statue', 'splitter', 'feigner']) : 'none',
@@ -2663,6 +2703,44 @@ function makeSpecies(hostile) {
     },
     ichor: [col.r * 2 + .2, col.g * 2 + .1, col.b * 2 + .1],
   };
+}
+function makeZombieSpecies() {
+  const fast = rnd() < .28;
+  const brute = !fast && rnd() < .18;
+  const col = new THREE.Color(rpick([0x514a3d, 0x403b33, 0x5b5040, 0x453a34]));
+  const eyeCol = new THREE.Color(rpick([0x9f2418, 0xb34723, 0x7f8a55]));
+  const size = brute ? rr(1.1, 1.28) : rr(.88, 1.08);
+  return {
+    name: rpick(['TRENCHFALL WALKER', 'TRENCHFALL DEAD', 'TRENCHFALL RUNNER', 'TRENCHFALL CORPSE']),
+    hostile: true, rigged: false, zombie: true, arch: 'zombie', body: 'zombie',
+    size, col, eyeCol, rough: .96, metal: 0, eyes: 2, pattern: 'cloth',
+    loco: fast ? 'rush' : 'walk',
+    quirk: brute ? 'none' : rpick(['none', 'none', 'pack', 'feigner']),
+    attack: 'claw',
+    speed: (fast ? rr(2.05, 2.75) : brute ? rr(.9, 1.25) : rr(1.25, 1.85)) * (RUN.deck > 4 ? 1.14 : 1),
+    hp: (brute ? 115 : fast ? 48 : 62) * (1 + RUN.deck * .1),
+    dmg: (brute ? 22 : fast ? 11 : 14) + RUN.deck,
+    hyF: 1.08, rF: brute ? .6 : .46,
+    voice: { kind: 'breath', wave: 'sawtooth', pitch: brute ? rr(42, 70) : rr(68, 120),
+      syl: brute ? 1 : 2, len: rr(.22, .5), gliss: rr(.35, .8), dual: brute ? rr(1.25, 1.55) : 0 },
+    ichor: [.65, .08, .035],
+    zClass: brute ? 'brute' : fast ? 'runner' : 'walker',
+  };
+}
+function makeFriendSpecies(role) {
+  const sp = makeSpecies(false);
+  const spec = {
+    lampkeeper: { arch: 'lampkeeper', name: 'LAMPKEEPER', col: 0x4c5148, eye: 0xffe3a0, size: rr(.9, 1.08) },
+    barterer: { arch: 'barterer', name: 'THE BARTERER', col: 0x3d3930, eye: 0x9fd4e8, size: rr(.94, 1.12) },
+    gifter: { arch: 'gifter', name: 'MEDICANT', col: 0x4d514c, eye: 0xff6b5d, size: rr(.94, 1.12) },
+    warden: { arch: 'warden', name: 'DECK WARDEN', col: 0x6b6758, eye: 0x6affc2, size: rr(.9, 1.08) },
+  }[role];
+  sp.name = spec.name;
+  sp.arch = spec.arch; sp.body = spec.arch; sp.friendRole = role;
+  sp.size = spec.size; sp.col = new THREE.Color(spec.col); sp.eyeCol = new THREE.Color(spec.eye);
+  sp.rough = .9; sp.metal = 0; sp.loco = 'drift'; sp.quirk = 'none';
+  sp.voice.pitch = rr(180, 460); sp.voice.kind = role === 'warden' ? 'tonal' : 'click';
+  return sp;
 }
 /* every species grows its own hide */
 function creatureSkinTex(sp) {
@@ -2732,27 +2810,433 @@ function creatureSkinTex(sp) {
   const t = tex(c, true);
   return t;
 }
+function creatureCutoutSpec(sp) {
+  const A = {
+    zombie: [1.08, 2.16], stalker: [1.26, 2.82], widow: [2.12, 1.42], centipede: [1.32, 2.36],
+    marionette: [1.14, 2.68], brute: [2.02, 1.9], shrike: [1.22, 2.42],
+    lampkeeper: [1.22, 2.05], barterer: [1.18, 1.92], gifter: [1.52, 1.42], warden: [1.15, 2.28],
+  }[sp.arch] || [1.0, 1.8];
+  return { w: A[0] * sp.size, h: A[1] * sp.size };
+}
+function cutoutRGBA(col, a = 1) {
+  const c = col && col.isColor ? col : new THREE.Color(col || 0xffffff);
+  return `rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},${a})`;
+}
+function creatureCutoutTex(sp) {
+  const W = 768, H = 1024, [c, x] = cv(W, H);
+  const base = sp.col.clone();
+  const ink = sp.hostile ? new THREE.Color(0x070809) : base.clone().multiplyScalar(.55);
+  const cloth = sp.hostile ? new THREE.Color(0x171613) : base.clone().offsetHSL(.02, .08, .07);
+  const boneC = new THREE.Color(0x7e7466);
+  const metalC = new THREE.Color(0x2c302d).lerp(base, .18);
+  const eye = sp.eyeCol || new THREE.Color(0xff6a2a);
+  const sx = v => v * W, sy = v => v * H;
+  x.clearRect(0, 0, W, H);
+  x.lineCap = 'round';
+  x.lineJoin = 'round';
+  function grad(x0, y0, x1, y1, a, b) {
+    const g = x.createLinearGradient(sx(x0), sy(y0), sx(x1), sy(y1));
+    g.addColorStop(0, a); g.addColorStop(1, b);
+    return g;
+  }
+  function trace(cmds) {
+    x.beginPath();
+    for (const p of cmds) {
+      if (p[0] === 'M') x.moveTo(sx(p[1]), sy(p[2]));
+      else if (p[0] === 'L') x.lineTo(sx(p[1]), sy(p[2]));
+      else if (p[0] === 'C') x.bezierCurveTo(sx(p[1]), sy(p[2]), sx(p[3]), sy(p[4]), sx(p[5]), sy(p[6]));
+      else if (p[0] === 'Q') x.quadraticCurveTo(sx(p[1]), sy(p[2]), sx(p[3]), sy(p[4]));
+      else if (p[0] === 'Z') x.closePath();
+    }
+  }
+  function fill(cmds, paint, stroke = 'rgba(0,0,0,.9)', lw = 5) {
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,.72)';
+    x.shadowBlur = 18;
+    x.shadowOffsetY = 10;
+    trace(cmds);
+    x.fillStyle = paint;
+    x.fill();
+    x.restore();
+    if (stroke && lw) {
+      trace(cmds);
+      x.strokeStyle = stroke;
+      x.lineWidth = lw;
+      x.stroke();
+    }
+  }
+  function stroke(cmds, paint, lw = 12, shadow = true) {
+    x.save();
+    if (shadow) { x.shadowColor = 'rgba(0,0,0,.65)'; x.shadowBlur = 12; x.shadowOffsetY = 5; }
+    trace(cmds);
+    x.strokeStyle = paint; x.lineWidth = lw; x.stroke();
+    x.restore();
+  }
+  function ellipse(cx, cy, rx, ry, paint, strokeCol = 'rgba(0,0,0,.82)', lw = 5, rot = 0) {
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,.62)'; x.shadowBlur = 14; x.shadowOffsetY = 7;
+    x.beginPath(); x.ellipse(sx(cx), sy(cy), sx(rx), sy(ry), rot, 0, TAU); x.fillStyle = paint; x.fill();
+    x.restore();
+    if (strokeCol && lw) { x.beginPath(); x.ellipse(sx(cx), sy(cy), sx(rx), sy(ry), rot, 0, TAU);
+      x.strokeStyle = strokeCol; x.lineWidth = lw; x.stroke(); }
+  }
+  function glow(cx, cy, rx, ry, col = eye, a = 1) {
+    const g = x.createRadialGradient(sx(cx), sy(cy), 1, sx(cx), sy(cy), sx(Math.max(rx, ry)));
+    g.addColorStop(0, cutoutRGBA(col, a));
+    g.addColorStop(.35, cutoutRGBA(col, a * .75));
+    g.addColorStop(1, cutoutRGBA(col, 0));
+    x.fillStyle = g;
+    x.beginPath(); x.ellipse(sx(cx), sy(cy), sx(rx), sy(ry), 0, 0, TAU); x.fill();
+  }
+  function eyeDot(cx, cy, r = .018) {
+    const gm = sp.hostile ? 2.15 : 4.6;
+    glow(cx, cy, r * gm, r * gm, eye, sp.hostile ? .42 : .82);
+    ellipse(cx, cy, r * (sp.hostile ? .72 : 1), r * (sp.hostile ? .48 : .82),
+      cutoutRGBA(eye, sp.hostile ? .82 : 1), null, 0);
+    if (!sp.hostile) ellipse(cx, cy, r * .38, r * .3, 'rgba(255,255,255,.85)', null, 0);
+  }
+  function wire(x0, y0, x1, y1, sag = .05, paint = 'rgba(105,82,55,.78)', lw = 3) {
+    stroke([['M', x0, y0], ['C', (x0 + x1) / 2, y0 + sag, (x0 + x1) / 2, y1 - sag, x1, y1]], paint, lw, false);
+  }
+  function staple(cx, cy, s = .022, rot = 0, paint = 'rgba(160,135,93,.72)') {
+    x.save();
+    x.translate(sx(cx), sy(cy)); x.rotate(rot);
+    x.strokeStyle = paint; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(-sx(s), -sy(s * .4)); x.lineTo(sx(s), sy(s * .4)); x.stroke();
+    x.restore();
+  }
+  function tooth(cx, cy, s, rot = 0, paint = bone) {
+    x.save();
+    x.translate(sx(cx), sy(cy)); x.rotate(rot);
+    x.beginPath(); x.moveTo(0, -sy(s)); x.lineTo(sx(s * .55), sy(s)); x.lineTo(-sx(s * .55), sy(s)); x.closePath();
+    x.fillStyle = paint; x.fill();
+    x.restore();
+  }
+  function sigil(cx, cy, s, paint = cutoutRGBA(eye, .5)) {
+    stroke([['M', cx - s, cy], ['L', cx + s, cy]], paint, 4, false);
+    stroke([['M', cx, cy - s], ['L', cx, cy + s]], paint, 4, false);
+    x.beginPath(); x.arc(sx(cx), sy(cy), sx(s * .75), 0, TAU);
+    x.strokeStyle = paint; x.lineWidth = 2; x.stroke();
+  }
+  const black = cutoutRGBA(ink, .98), black2 = cutoutRGBA(ink.clone().offsetHSL(0, 0, .06), .96);
+  const clothG = grad(.48, .1, .52, .92, cutoutRGBA(cloth.clone().offsetHSL(0, 0, .08), .97), cutoutRGBA(cloth.clone().multiplyScalar(.5), .98));
+  const metal = cutoutRGBA(metalC, .95), bone = cutoutRGBA(boneC, .95);
+  if (sp.arch === 'zombie') {
+    stroke([['M', .38, .88], ['C', .37, .72, .41, .58, .44, .47]], black, 24);
+    stroke([['M', .58, .89], ['C', .56, .72, .52, .6, .55, .47]], black, 24);
+    fill([['M', .34, .34], ['C', .28, .48, .31, .72, .38, .9], ['L', .49, .94],
+      ['L', .53, .65], ['L', .62, .94], ['L', .72, .88], ['C', .68, .62, .67, .43, .61, .34],
+      ['C', .53, .28, .42, .28, .34, .34], ['Z']], clothG);
+    stroke([['M', .36, .42], ['C', .45, .5, .54, .56, .66, .62]], 'rgba(112,98,76,.72)', 10, false);
+    stroke([['M', .65, .46], ['C', .78, .48, .84, .55, .9, .64]], black, 20);
+    stroke([['M', .35, .45], ['C', .22, .48, .18, .6, .15, .73]], black, 18);
+    ellipse(.51, .25, .12, .11, bone, 'rgba(0,0,0,.85)', 5, -.25);
+    fill([['M', .39, .2], ['C', .45, .12, .58, .11, .65, .2], ['L', .63, .26],
+      ['C', .55, .22, .46, .22, .38, .27], ['Z']], metal);
+    ellipse(.5, .28, .055, .038, 'rgba(5,6,6,.95)', null, 0, -.1);
+    stroke([['M', .47, .32], ['C', .41, .43, .36, .5, .31, .59]], 'rgba(5,6,6,.88)', 9);
+    eyeDot(.48, .27, .018);
+    fill([['M', .58, .46], ['L', .72, .53], ['L', .69, .68], ['L', .55, .62], ['Z']], cutoutRGBA(metalC.clone().multiplyScalar(.8), .9), null, 0);
+    wire(.52, .32, .67, .78, .12, 'rgba(23,19,14,.78)', 6);
+    wire(.43, .39, .24, .74, .08, 'rgba(112,88,58,.42)', 3);
+    for (let i = 0; i < 7; i++) staple(.42 + rr(-.05, .09), .45 + i * .055, .012, rr(-.7, .7));
+    sigil(.59, .55, .034, 'rgba(125,31,22,.42)');
+    tooth(.5, .325, .013, Math.PI, bone);
+  } else if (sp.arch === 'stalker') {
+    stroke([['M', .32, .86], ['C', .27, .66, .31, .5, .42, .36], ['C', .49, .27, .52, .18, .5, .1]], black, 20);
+    stroke([['M', .68, .86], ['C', .72, .63, .68, .48, .58, .35], ['C', .53, .25, .51, .17, .5, .1]], black, 20);
+    fill([['M', .46, .21], ['C', .34, .33, .35, .59, .43, .82], ['L', .49, .92],
+      ['L', .55, .82], ['C', .67, .53, .64, .3, .54, .2], ['Z']], grad(.5, .2, .5, .9, black2, black));
+    for (let i = 0; i < 5; i++) {
+      ellipse(.5, .32 + i * .075, .075 - i * .005, .032, cutoutRGBA(base.clone().offsetHSL(0, 0, .08), .95), 'rgba(0,0,0,.7)', 3);
+    }
+    stroke([['M', .4, .36], ['C', .24, .48, .2, .67, .16, .86]], black, 18);
+    stroke([['M', .6, .36], ['C', .78, .51, .79, .69, .84, .87]], black, 18);
+    stroke([['M', .16, .86], ['L', .11, .93]], metal, 5);
+    stroke([['M', .84, .87], ['L', .9, .94]], metal, 5);
+    ellipse(.5, .15, .13, .09, grad(.5, .06, .5, .23, black2, black), 'rgba(0,0,0,.9)', 6);
+    eyeDot(.46, .145, .018); eyeDot(.5, .13, .022); eyeDot(.55, .15, .018);
+    wire(.43, .2, .23, .66, .12, 'rgba(96,72,48,.5)', 4);
+    wire(.57, .2, .76, .66, .12, 'rgba(96,72,48,.5)', 4);
+    for (let i = 0; i < 8; i++) {
+      const yy = .28 + i * .065;
+      tooth(.42 + (i % 2) * .16, yy, .014, i % 2 ? -1.1 : 1.1, cutoutRGBA(boneC, .65));
+      staple(.5 + rr(-.06, .06), yy + .018, .014, rr(-.8, .8));
+    }
+    ellipse(.5, .72, .055, .028, 'rgba(0,0,0,.9)', null, 0);
+  } else if (sp.arch === 'widow') {
+    for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const y = .53 + (i - 1.5) * .05;
+      stroke([['M', .5 + sd * .08, y], ['C', .5 + sd * .23, y - .18, .5 + sd * .37, y + .18, .5 + sd * .47, .88]], black, 13 - i);
+    }
+    ellipse(.55, .52, .22, .18, grad(.5, .32, .58, .7, black2, black), 'rgba(0,0,0,.86)', 6, -.12);
+    ellipse(.36, .5, .13, .1, metal, 'rgba(0,0,0,.86)', 5);
+    const widowMark = new THREE.Color(0x8d2b20).lerp(eye, .25);
+    fill([['M', .5, .45], ['L', .535, .54], ['L', .5, .62], ['L', .465, .54], ['Z']],
+      cutoutRGBA(widowMark, .52), null, 0);
+    for (let i = 0; i < 6; i++) eyeDot(.29 + i * .028, .48 + (i % 2) * .02, .011);
+    for (let i = 0; i < 5; i++) {
+      wire(.37 + i * .045, .41, .22 + i * .14, .78, .08, 'rgba(122,102,72,.28)', 2);
+      ellipse(.46 + rr(-.06, .08), .57 + rr(-.06, .08), .012, .018, 'rgba(151,133,92,.28)', null, 0);
+    }
+    stroke([['M', .43, .5], ['C', .5, .54, .58, .52, .66, .48]], 'rgba(120,78,45,.38)', 4, false);
+  } else if (sp.arch === 'centipede') {
+    fill([['M', .5, .12], ['C', .31, .22, .32, .7, .43, .94], ['L', .5, .99],
+      ['L', .58, .94], ['C', .69, .69, .68, .22, .5, .12], ['Z']],
+      grad(.5, .08, .5, .98, black2, black), 'rgba(0,0,0,.9)', 6);
+    for (let i = 0; i < 12; i++) {
+      const cy = .2 + i * .058;
+      const rx = .145 - i * .004;
+      ellipse(.5, cy, rx, .033, i % 3 === 0 ? metal : cutoutRGBA(base.clone().offsetHSL(0, 0, .07), .72),
+        'rgba(0,0,0,.45)', 2);
+      if (i < 10) for (const sd of [-1, 1]) {
+        const x0 = .5 + sd * (rx * .82);
+        const x1 = .5 + sd * (.29 + (i % 2) * .035);
+        stroke([['M', x0, cy + .012], ['C', x1, cy + .035, x1 + sd * .06, cy + .095, x1 + sd * .02, cy + .15]],
+          black, 5.5 - Math.min(2, i * .12));
+        if (i % 3 === 1) tooth(x1 + sd * .02, cy + .155, .011, sd * .55, bone);
+      }
+      if (i % 2 === 0) staple(.5 + rr(-.035, .035), cy, .012, rr(-.6, .6));
+    }
+    ellipse(.5, .145, .17, .105, metal, 'rgba(0,0,0,.9)', 6);
+    fill([['M', .39, .11], ['C', .3, .08, .24, .13, .21, .2], ['C', .31, .18, .37, .18, .44, .21], ['Z']],
+      black, 'rgba(0,0,0,.7)', 3);
+    fill([['M', .61, .11], ['C', .7, .08, .76, .13, .79, .2], ['C', .69, .18, .63, .18, .56, .21], ['Z']],
+      black, 'rgba(0,0,0,.7)', 3);
+    for (let i = 0; i < 4; i++) eyeDot(.455 + i * .03, .14 + (i % 2) * .018, .011);
+    for (let i = 0; i < 7; i++) tooth(.43 + i * .024, .205, .012, (i - 3) * .08, bone);
+    wire(.42, .24, .36, .82, .12, 'rgba(91,69,48,.38)', 2);
+    wire(.58, .24, .65, .82, .12, 'rgba(91,69,48,.38)', 2);
+  } else if (sp.arch === 'marionette') {
+    stroke([['M', .5, .02], ['L', .5, .25]], 'rgba(118,94,62,.9)', 4);
+    stroke([['M', .4, .08], ['C', .43, .28, .43, .47, .35, .8]], 'rgba(118,94,62,.85)', 3);
+    stroke([['M', .6, .08], ['C', .57, .28, .57, .47, .65, .8]], 'rgba(118,94,62,.85)', 3);
+    fill([['M', .42, .35], ['C', .34, .52, .38, .75, .45, .9], ['L', .5, .82],
+      ['L', .56, .91], ['C', .65, .71, .65, .51, .58, .35], ['Z']], grad(.5, .28, .5, .9, black2, black));
+    stroke([['M', .42, .42], ['C', .25, .52, .24, .66, .19, .78]], black, 17);
+    stroke([['M', .58, .42], ['C', .75, .52, .74, .66, .81, .79]], black, 17);
+    stroke([['M', .45, .82], ['C', .38, .88, .34, .93, .3, .98]], black, 16);
+    stroke([['M', .55, .82], ['C', .61, .89, .66, .93, .69, .98]], black, 16);
+    ellipse(.5, .25, .105, .12, bone, 'rgba(0,0,0,.85)', 5, .2);
+    eyeDot(.47, .245, .016); eyeDot(.54, .26, .016);
+    stroke([['M', .45, .28], ['C', .48, .32, .51, .31, .56, .29]], 'rgba(25,20,16,.8)', 4, false);
+    for (let i = 0; i < 8; i++) staple(.44 + rr(-.06, .12), .39 + i * .055, .011, rr(-.8, .8));
+    wire(.34, .33, .2, .1, -.04, 'rgba(118,94,62,.55)', 3);
+    wire(.66, .34, .82, .12, -.04, 'rgba(118,94,62,.55)', 3);
+    ellipse(.5, .56, .055, .09, 'rgba(2,2,2,.72)', 'rgba(79,61,43,.45)', 3);
+  } else if (sp.arch === 'brute') {
+    ellipse(.5, .52, .34, .28, grad(.5, .22, .5, .8, black2, black), 'rgba(0,0,0,.9)', 8);
+    for (let i = 0; i < 5; i++) ellipse(.32 + i * .09, .32 - Math.abs(i - 2) * .025, .055, .03, metal, null, 0);
+    ellipse(.5, .45, .17, .12, metal, 'rgba(0,0,0,.8)', 5);
+    eyeDot(.46, .44, .018); eyeDot(.54, .44, .018);
+    stroke([['M', .27, .55], ['C', .17, .67, .16, .8, .2, .92]], black, 36);
+    stroke([['M', .73, .55], ['C', .83, .67, .84, .8, .8, .92]], black, 36);
+    stroke([['M', .4, .72], ['C', .36, .84, .35, .9, .34, .98]], black, 22);
+    stroke([['M', .6, .72], ['C', .64, .84, .65, .9, .66, .98]], black, 22);
+    stroke([['M', .43, .49], ['C', .39, .57, .35, .61, .3, .64]], bone, 7);
+    stroke([['M', .57, .49], ['C', .61, .57, .65, .61, .7, .64]], bone, 7);
+    stroke([['M', .25, .42], ['C', .38, .55, .56, .6, .76, .48]], 'rgba(126,101,64,.58)', 9, false);
+    for (let i = 0; i < 8; i++) tooth(.41 + i * .025, .55 + Math.sin(i) * .01, .012, Math.PI, cutoutRGBA(boneC, .78));
+    for (let i = 0; i < 6; i++) staple(.34 + i * .055, .32 + Math.abs(i - 2.5) * .018, .014, rr(-.6, .6));
+    sigil(.5, .67, .04, 'rgba(135,66,28,.32)');
+  } else if (sp.arch === 'shrike') {
+    stroke([['M', .43, .62], ['C', .36, .78, .35, .9, .32, .98]], black, 18);
+    stroke([['M', .57, .62], ['C', .64, .78, .65, .9, .68, .98]], black, 18);
+    fill([['M', .38, .34], ['C', .33, .52, .39, .71, .49, .78], ['C', .62, .65, .65, .46, .55, .32], ['Z']], grad(.5, .25, .5, .8, black2, black));
+    stroke([['M', .38, .4], ['C', .21, .48, .18, .62, .14, .82]], black, 15);
+    stroke([['M', .62, .4], ['C', .79, .48, .82, .62, .86, .82]], black, 15);
+    stroke([['M', .5, .34], ['C', .48, .24, .49, .17, .53, .1]], black, 17);
+    ellipse(.54, .11, .08, .06, metal, 'rgba(0,0,0,.86)', 5, -.12);
+    fill([['M', .59, .1], ['L', .82, .13], ['L', .59, .18], ['Z']], bone, 'rgba(0,0,0,.7)', 3);
+    eyeDot(.55, .1, .014);
+    for (let i = 0; i < 5; i++) {
+      stroke([['M', .43 + i * .035, .45], ['C', .34 + i * .02, .56, .35 + i * .02, .69, .3 + i * .03, .83]],
+        'rgba(15,15,13,.86)', 4, false);
+    }
+    stroke([['M', .5, .74], ['C', .52, .84, .48, .91, .5, .99]], 'rgba(30,24,18,.9)', 9);
+    tooth(.77, .13, .015, Math.PI / 2, cutoutRGBA(boneC, .72));
+  } else if (sp.arch === 'lampkeeper') {
+    fill([['M', .42, .3], ['C', .32, .48, .35, .76, .44, .93], ['L', .57, .93],
+      ['C', .66, .76, .68, .48, .58, .3], ['Z']], grad(.5, .25, .5, .95, cutoutRGBA(cloth, .95), cutoutRGBA(cloth.clone().multiplyScalar(.45), .98)));
+    ellipse(.5, .25, .11, .08, black, 'rgba(0,0,0,.8)', 5);
+    glow(.5, .28, .08, .045, eye, .9);
+    stroke([['M', .61, .45], ['C', .72, .52, .76, .64, .76, .76]], bone, 9);
+    glow(.76, .72, .14, .16, eye, .95);
+    ellipse(.76, .72, .08, .12, 'rgba(255,238,180,.85)', 'rgba(88,74,44,.85)', 4);
+    stroke([['M', .69, .6], ['L', .83, .6]], 'rgba(88,74,44,.9)', 4, false);
+    stroke([['M', .7, .83], ['L', .82, .83]], 'rgba(88,74,44,.9)', 4, false);
+    wire(.62, .51, .76, .58, .03, 'rgba(92,72,42,.62)', 4);
+    for (let i = 0; i < 5; i++) stroke([['M', .72 + i * .02, .63], ['L', .72 + i * .02, .8]],
+      'rgba(60,48,32,.65)', 2, false);
+    sigil(.5, .48, .032, 'rgba(255,230,160,.34)');
+    for (let i = 0; i < 4; i++) staple(.46 + rr(-.04, .08), .55 + i * .07, .01, rr(-.4, .4), 'rgba(190,170,118,.45)');
+  } else if (sp.arch === 'barterer') {
+    fill([['M', .37, .27], ['C', .24, .5, .28, .78, .4, .94], ['L', .59, .94],
+      ['C', .73, .74, .73, .48, .61, .27], ['C', .54, .21, .44, .21, .37, .27], ['Z']], grad(.5, .23, .5, .95, cutoutRGBA(cloth, .98), cutoutRGBA(cloth.clone().multiplyScalar(.45), .98)));
+    ellipse(.5, .29, .12, .08, black, 'rgba(0,0,0,.82)', 5);
+    glow(.5, .31, .055, .025, eye, .75);
+    ellipse(.27, .62, .08, .13, bone, 'rgba(0,0,0,.75)', 4, -.2);
+    ellipse(.73, .62, .08, .13, bone, 'rgba(0,0,0,.75)', 4, .2);
+    stroke([['M', .66, .5], ['C', .79, .66, .8, .83, .76, .98]], bone, 7);
+    eyeDot(.33, .74, .012); eyeDot(.68, .72, .012);
+    wire(.37, .42, .25, .8, .08, 'rgba(75,58,39,.72)', 4);
+    wire(.63, .42, .76, .78, .08, 'rgba(75,58,39,.72)', 4);
+    for (let i = 0; i < 6; i++) {
+      const px = .3 + i * .075;
+      ellipse(px, .77 + (i % 2) * .035, .018, .025, i % 2 ? cutoutRGBA(eye, .5) : 'rgba(119,98,64,.58)', null, 0);
+    }
+    stroke([['M', .43, .49], ['C', .48, .53, .53, .53, .59, .49]], 'rgba(0,0,0,.55)', 4, false);
+  } else if (sp.arch === 'gifter') {
+    ellipse(.5, .5, .26, .16, grad(.5, .35, .5, .66, cutoutRGBA(cloth, .96), cutoutRGBA(cloth.clone().multiplyScalar(.55), .98)), 'rgba(0,0,0,.82)', 6);
+    stroke([['M', .24, .52], ['L', .09, .67]], bone, 9);
+    stroke([['M', .76, .52], ['L', .91, .67]], bone, 9);
+    stroke([['M', .3, .68], ['L', .21, .82]], bone, 6);
+    stroke([['M', .7, .68], ['L', .79, .82]], bone, 6);
+    glow(.5, .5, .12, .08, eye, .5);
+    stroke([['M', .45, .5], ['L', .55, .5]], cutoutRGBA(eye, .95), 10, false);
+    stroke([['M', .5, .45], ['L', .5, .55]], cutoutRGBA(eye, .95), 10, false);
+    for (let i = 0; i < 5; i++) {
+      const px = .28 + i * .11;
+      ellipse(px, .62 + (i % 2) * .035, .026, .055, i === 2 ? cutoutRGBA(eye, .45) : 'rgba(147,132,96,.5)', 'rgba(0,0,0,.35)', 2);
+      wire(px, .57, .5, .5, .03, 'rgba(78,61,42,.38)', 2);
+    }
+    sigil(.5, .5, .038, 'rgba(255,90,78,.52)');
+  } else if (sp.arch === 'warden') {
+    fill([['M', .43, .24], ['C', .34, .43, .35, .77, .43, .96], ['L', .58, .96],
+      ['C', .66, .75, .66, .42, .57, .24], ['Z']], grad(.5, .2, .5, .95, cutoutRGBA(cloth, .98), cutoutRGBA(cloth.clone().multiplyScalar(.48), .98)));
+    ellipse(.5, .2, .1, .11, metal, 'rgba(0,0,0,.85)', 5);
+    eyeDot(.47, .2, .014); eyeDot(.53, .2, .014);
+    glow(.5, .2, .18, .18, eye, .28);
+    stroke([['M', .69, .22], ['L', .71, .96]], bone, 8);
+    glow(.71, .22, .095, .095, eye, .7);
+    ellipse(.71, .22, .055, .055, 'rgba(0,0,0,.08)', cutoutRGBA(eye, .9), 5);
+    for (let i = 0; i < 5; i++) sigil(.47 + (i % 2) * .06, .39 + i * .08, .018, 'rgba(106,255,194,.28)');
+    stroke([['M', .39, .5], ['C', .45, .56, .54, .56, .61, .5]], 'rgba(40,34,24,.5)', 4, false);
+    for (let i = 0; i < 6; i++) staple(.5 + rr(-.05, .05), .58 + i * .055, .011, rr(-.6, .6), 'rgba(158,142,100,.45)');
+  } else {
+    ellipse(.5, .55, .18, .26, grad(.5, .25, .5, .82, cutoutRGBA(cloth, .92), cutoutRGBA(base.clone().multiplyScalar(.5), .94)), 'rgba(0,0,0,.82)', 5);
+    glow(.5, .45, .1, .1, eye, .7);
+  }
+  x.globalCompositeOperation = 'source-atop';
+  scratches(x, W, H, sp.hostile ? 80 : 45, 42);
+  speckle(x, W, H, sp.hostile ? 1400 : 750, sp.hostile ? .08 : .055);
+  for (let i = 0; i < 32; i++) {
+    x.strokeStyle = `rgba(220,190,150,${rr(.05, .16)})`;
+    x.lineWidth = rr(.6, 1.8);
+    x.beginPath();
+    const px = rr(.22, .78), py = rr(.22, .9);
+    x.moveTo(sx(px), sy(py));
+    x.lineTo(sx(px + rr(-.04, .04)), sy(py + rr(.03, .1)));
+    x.stroke();
+  }
+  x.globalCompositeOperation = 'source-atop';
+  const vign = x.createRadialGradient(sx(.5), sy(.48), 40, sx(.5), sy(.5), sx(.48));
+  vign.addColorStop(0, 'rgba(255,255,255,0)');
+  vign.addColorStop(1, 'rgba(0,0,0,.34)');
+  x.fillStyle = vign; x.fillRect(0, 0, W, H);
+  x.globalCompositeOperation = 'source-over';
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+function buildCutoutCreature(sp) {
+  if (!sp._cutout) sp._cutout = creatureCutoutTex(sp);
+  const spec = creatureCutoutSpec(sp);
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ map: sp._cutout, transparent: true, alphaTest: .035,
+    side: THREE.DoubleSide, depthWrite: true, toneMapped: false });
+  const body = new THREE.Mesh(new THREE.PlaneGeometry(spec.w, spec.h), mat);
+  body.position.y = spec.h * .5;
+  body.renderOrder = 4;
+  g.add(body);
+  const shTex = (() => {
+    const [c, x] = cv(256, 128);
+    const rg = x.createRadialGradient(128, 64, 5, 128, 64, 118);
+    rg.addColorStop(0, 'rgba(0,0,0,.55)');
+    rg.addColorStop(.55, 'rgba(0,0,0,.22)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = rg; x.fillRect(0, 0, 256, 128);
+    return new THREE.CanvasTexture(c);
+  })();
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(spec.w * .86, Math.max(.45, spec.w * .32)),
+    new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false, toneMapped: false }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = .018;
+  shadow.renderOrder = 1;
+  g.add(shadow);
+  const refs = { arch: sp.arch, u: sp.size, cutout: true, body, shadow, mat,
+    baseY: body.position.y, baseSX: 1, baseSY: 1, fins: [], mats: [mat], eyeM: mat };
+  g.userData = refs;
+  return g;
+}
 function buildCreature(sp) {
+  return buildCutoutCreature(sp);
   if (!sp._hide) sp._hide = creatureSkinTex(sp);
   const g = new THREE.Group();
   const u = sp.size;
   // material discipline: textured hide, glossy chitin, ONE emissive focal note
-  const hide = new THREE.MeshStandardMaterial({ color: 0xc9c9c9, map: sp._hide,
-    bumpMap: sp._hide, bumpScale: .06, roughness: sp.rough, metalness: sp.metal * .4,
-    emissive: sp.col.clone().multiplyScalar(.07) });
+  const hide = new THREE.MeshStandardMaterial({ color: 0xd6d0c8, map: sp._hide,
+    bumpMap: sp._hide, bumpScale: .055, roughness: Math.max(.78, sp.rough), metalness: 0,
+    envMapIntensity: sp.hostile ? .12 : .25, emissive: sp.col.clone().multiplyScalar(sp.hostile ? .025 : .045) });
   const chitin = new THREE.MeshStandardMaterial({ color: sp.col.clone().multiplyScalar(.22),
-    roughness: .16, metalness: .5 });
+    roughness: .68, metalness: .04, envMapIntensity: .16 });
   const focal = new THREE.MeshStandardMaterial({ color: 0, emissive: sp.eyeCol, emissiveIntensity: 3.2, roughness: 1 });
+  const helper = new THREE.MeshStandardMaterial({ color: sp.col, roughness: .88, metalness: .02, envMapIntensity: .18 });
+  const bone = new THREE.MeshStandardMaterial({ color: 0x756f60, roughness: .92, metalness: 0, envMapIntensity: .12 });
+  const cloth = new THREE.MeshStandardMaterial({ color: sp.hostile ? 0x1f1d19 : sp.col.clone().multiplyScalar(.72),
+    roughness: .98, metalness: 0, envMapIntensity: .05, side: THREE.DoubleSide });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x0b0c0d, roughness: .93, metalness: 0, envMapIntensity: .04 });
+  const stitch = new THREE.MeshStandardMaterial({ color: 0x9b8568, roughness: .95, metalness: 0, envMapIntensity: .06, side: THREE.DoubleSide });
   const refs = { arch: sp.arch, u, legs: [], arms: [], segs: [], fins: [], heads: [],
     mats: [hide, chitin], eyeM: focal, head: null, sway: null, neckG: null };
-  const sph = (r, mat, sx = 1, sy = 1, sz = 1) => {
-    const m2 = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), mat);
-    m2.scale.set(sx, sy, sz);
+  const smooth = m2 => {
+    if (m2.geometry) m2.geometry.computeVertexNormals();
+    if (m2.material) m2.material.flatShading = false;
     return m2;
+  };
+  const sph = (r, mat, sx = 1, sy = 1, sz = 1) => {
+    const m2 = new THREE.Mesh(new THREE.SphereGeometry(r, 30, 18), mat);
+    m2.scale.set(sx, sy, sz);
+    return smooth(m2);
+  };
+  const cap = (r, len, mat, sx = 1, sy = 1, sz = 1) => {
+    const geo = THREE.CapsuleGeometry
+      ? new THREE.CapsuleGeometry(r, len, 8, 18)
+      : new THREE.CylinderGeometry(r, r, len + r * 2, 18);
+    const m2 = new THREE.Mesh(geo, mat);
+    m2.scale.set(sx, sy, sz);
+    return smooth(m2);
+  };
+  const cyl = (r0, r1, len, mat, sg = 18) => {
+    const m2 = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, sg), mat);
+    return smooth(m2);
+  };
+  const cone = (r, len, mat, sg = 16) => {
+    const m2 = new THREE.Mesh(new THREE.ConeGeometry(r, len, sg), mat);
+    return smooth(m2);
+  };
+  const vec = (x, y, z) => new THREE.Vector3(x, y, z);
+  const tube = (pts, r, mat, sg = 10, ts = 24) => {
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => vec(p[0], p[1], p[2])));
+    return smooth(new THREE.Mesh(new THREE.TubeGeometry(curve, ts, r, sg, false), mat));
+  };
+  const rag = (w, h, mat) => {
+    const s = new THREE.Shape();
+    s.moveTo(-w * .5, h * .5);
+    s.lineTo(w * .48, h * .46);
+    s.lineTo(w * .38, -h * .36);
+    s.lineTo(w * .14, -h * .5);
+    s.lineTo(-w * .04, -h * .38);
+    s.lineTo(-w * .24, -h * .53);
+    s.lineTo(-w * .46, -h * .32);
+    s.lineTo(-w * .5, h * .5);
+    return smooth(new THREE.Mesh(new THREE.ShapeGeometry(s), mat));
   };
   const seg2 = (len, r0, r1, mat) => { // pivot at the top, bone hangs down
     const gr = new THREE.Group();
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), mat);
+    const c = cyl(r0, r1, len, mat, 18);
     c.position.y = -len / 2;
     gr.add(c);
     return gr;
@@ -2789,10 +3273,24 @@ function buildCreature(sp) {
       g.add(v);
     }
     const shY = hipY + .8 * u, shZ = .22 * u;
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(.6 * u, .13 * u, .17 * u), chitin);
+    const spine = tube([
+      [0, hipY + .1 * u, -.04 * u],
+      [.03 * u, hipY + .42 * u, .05 * u],
+      [-.02 * u, hipY + .7 * u, shZ],
+      [0, shY + .06 * u, shZ + .12 * u],
+    ], .026 * u, chitin, 10, 28);
+    g.add(spine);
+    const bar = cap(.065 * u, .47 * u, chitin, 1, .85, 1.05);
+    bar.rotation.z = Math.PI / 2;
     bar.position.set(0, shY, shZ); g.add(bar);
+    for (let i = -2; i <= 2; i++) {
+      const strip = rag(.04 * u, (.72 + Math.abs(i) * .06) * u, cloth);
+      strip.position.set(i * .055 * u, hipY + .47 * u, .17 * u);
+      strip.rotation.set(.18, i * .05, i * .08);
+      g.add(strip);
+    }
     for (let i = 0; i < 3; i++) { // ribs remember being a cage
-      const rib = new THREE.Mesh(new THREE.TorusGeometry((.16 + i * .015) * u, .013 * u, 6, 12, Math.PI), chitin);
+      const rib = smooth(new THREE.Mesh(new THREE.TorusGeometry((.16 + i * .015) * u, .013 * u, 8, 28, Math.PI), chitin));
       rib.position.set(0, hipY + (.25 + i * .16) * u, .04 * u);
       rib.rotation.x = Math.PI / 2 + .25; rib.rotation.z = Math.PI;
       g.add(rib);
@@ -2801,9 +3299,13 @@ function buildCreature(sp) {
     head.position.set(0, shY - .04 * u, shZ + .24 * u);
     head.rotation.x = .55;
     g.add(head); refs.head = head;
+    const mask = sph(.072 * u, rubber, 1.25, .56, .34);
+    mask.position.set(0, shY - .05 * u, shZ + .33 * u);
+    mask.rotation.x = .55;
+    g.add(mask);
     eyesOn(0, shY - .02 * u, shZ + .33 * u, Math.min(3, sp.eyes), .022 * u);
     const claws = () => { const c2 = new THREE.Group();
-      for (let i = -1; i <= 1; i++) { const cl = new THREE.Mesh(new THREE.ConeGeometry(.016 * u, .14 * u, 5), chitin);
+      for (let i = -1; i <= 1; i++) { const cl = cone(.016 * u, .14 * u, chitin, 12);
         cl.position.x = i * .03 * u; cl.rotation.x = Math.PI; c2.add(cl); } return c2; };
     limb(refs.arms, -.32 * u, shY, shZ, .55 * u, .7 * u, .045 * u, hide, .22, -.3, .12, claws());
     limb(refs.arms, .32 * u, shY, shZ, .55 * u, .7 * u, .045 * u, hide, .22, -.3, -.12, claws());
@@ -2818,10 +3320,22 @@ function buildCreature(sp) {
     const mark = sph(.12 * u, focal, 1, .4, 1.4); // the hourglass burns
     mark.position.set(0, bodyY + .1 * u, -.64 * u);
     g.add(mark);
+    for (let i = 0; i < 4; i++) {
+      const band = smooth(new THREE.Mesh(new THREE.TorusGeometry((.18 + i * .025) * u, .01 * u, 8, 28, Math.PI * .92), chitin));
+      band.position.set(0, bodyY + (.05 + i * .035) * u, (-.14 - i * .13) * u);
+      band.rotation.set(Math.PI / 2 + .35, 0, Math.PI);
+      g.add(band);
+    }
+    for (const sd of [-1, 1]) {
+      const strand = tube([[sd * .1 * u, bodyY + .2 * u, -.46 * u],
+        [sd * .42 * u, bodyY + .62 * u, -.18 * u],
+        [sd * .76 * u, bodyY + .18 * u, .18 * u]], .006 * u, stitch, 6, 18);
+      g.add(strand);
+    }
     eyesOn(0, bodyY + .05 * u, .35 * u, Math.max(4, sp.eyes + 2), .018 * u);
     for (const sd of [-1, 1]) for (let i = 0; i < 4; i++) {
       const zofs = (i - 1.5) * .22 * u;
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(.018 * u, .2 * u, 5), chitin);
+      const tip = cone(.018 * u, .2 * u, chitin, 12);
       tip.rotation.x = Math.PI;
       const E = limb(refs.legs, sd * .16 * u, bodyY + .08 * u, zofs, .75 * u, 1.0 * u, .032 * u, chitin,
         0, 0, sd * -1.15, tip);
@@ -2830,32 +3344,43 @@ function buildCreature(sp) {
     }
   } else if (sp.arch === 'centipede') {
     const n = 8 + (rnd() * 5 | 0);
+    const bodyY = .44 * u;
     for (let i = 0; i < n; i++) {
       const r2 = (.2 - i * .009) * u;
-      const m2 = sph(Math.max(.06 * u, r2), i % 3 === 2 ? chitin : hide, 1, .85, 1.15);
-      m2.position.set(0, .3 * u, -i * .3 * u);
+      const m2 = sph(Math.max(.07 * u, r2), i % 3 === 2 ? chitin : hide, 1.18, .72, 1.32);
+      m2.position.set(0, bodyY, -i * .29 * u);
       g.add(m2);
       refs.segs.push({ mesh: m2, i });
+      const plate = sph(Math.max(.04 * u, r2 * .45), chitin, 1.7, .23, .92);
+      plate.position.set(0, bodyY + .13 * u, -i * .29 * u);
+      plate.rotation.x = -.12;
+      g.add(plate);
+      if (i % 2 === 0) {
+        const belly = rag(.12 * u, .08 * u, stitch);
+        belly.position.set(0, bodyY - .1 * u, -i * .29 * u + .05 * u);
+        belly.rotation.x = Math.PI / 2;
+        g.add(belly);
+      }
       if (i < n - 1) for (const sd of [-1, 1]) {
-        const E = limb(refs.legs, sd * .14 * u, .3 * u, -i * .3 * u, .22 * u, .2 * u, .018 * u, hide, 0, -.4, sd * -1.25);
+        const E = limb(refs.legs, sd * .16 * u, bodyY, -i * .29 * u, .24 * u, .24 * u, .017 * u, chitin, 0, -.4, sd * -1.28);
         E.segI = i;
       }
     }
-    const head = sph(.24 * u, chitin, 1.05, .9, 1); head.position.set(0, .32 * u, .26 * u);
+    const head = sph(.24 * u, chitin, 1.08, .8, 1.1); head.position.set(0, bodyY + .02 * u, .28 * u);
     g.add(head); refs.head = head;
     for (const sd of [-1, 1]) { // mandibles + antennae
-      const md = new THREE.Mesh(new THREE.TorusGeometry(.1 * u, .02 * u, 6, 10, Math.PI * .8), chitin);
-      md.position.set(sd * .1 * u, .28 * u, .42 * u);
+      const md = smooth(new THREE.Mesh(new THREE.TorusGeometry(.1 * u, .02 * u, 8, 24, Math.PI * .8), chitin));
+      md.position.set(sd * .1 * u, bodyY - .04 * u, .46 * u);
       md.rotation.set(Math.PI / 2, 0, sd * .8);
       g.add(md);
       const ant = seg2(.5 * u, .012 * u, .004 * u, hide);
-      ant.position.set(sd * .08 * u, .42 * u, .38 * u);
+      ant.position.set(sd * .08 * u, bodyY + .14 * u, .4 * u);
       ant.rotation.set(-2.2, 0, sd * .5);
       g.add(ant); refs.fins.push(ant);
     }
-    eyesOn(0, .36 * u, .48 * u, Math.min(2, sp.eyes), .025 * u);
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(.05 * u, .3 * u, 6), chitin);
-    spike.position.set(0, .3 * u, -(n - 1) * .3 * u - .15 * u);
+    eyesOn(0, bodyY + .06 * u, .5 * u, Math.min(2, sp.eyes), .025 * u);
+    const spike = cone(.05 * u, .3 * u, chitin, 14);
+    spike.position.set(0, bodyY, -(n - 1) * .29 * u - .15 * u);
     spike.rotation.x = -Math.PI / 2;
     g.add(spike);
   } else if (sp.arch === 'marionette') {
@@ -2863,19 +3388,30 @@ function buildCreature(sp) {
     const sw = new THREE.Group(); g.add(sw); refs.sway = sw;
     const add = m2 => { sw.add(m2); return m2; };
     const torso = add(sph(.19 * u, hide, 1, 1.55, .7)); torso.position.y = 1.22 * u;
+    for (let i = -1; i <= 1; i++) {
+      const jacket = add(rag(.13 * u, (.62 + Math.abs(i) * .08) * u, cloth));
+      jacket.position.set(i * .11 * u, 1.08 * u, .14 * u);
+      jacket.rotation.set(.08, i * .08, i * .04);
+    }
+    for (const sd of [-1, 1]) {
+      const stringer = add(tube([[sd * .18 * u, 2.2 * u, 0], [sd * .15 * u, 1.62 * u, .02 * u], [sd * .22 * u, 1.28 * u, 0]], .004 * u, stitch, 5, 14));
+      refs.fins.push(stringer);
+    }
     const head = add(sph(.115 * u, hide, 1, 1.2, 1));
     head.position.y = 1.62 * u; head.rotation.z = 1.15;
     refs.head = head;
+    const noose = add(smooth(new THREE.Mesh(new THREE.TorusGeometry(.075 * u, .006 * u, 6, 20), stitch)));
+    noose.position.set(0, 1.5 * u, .02 * u);
+    noose.rotation.x = Math.PI / 2;
     const e1 = add(sph(.02 * u, focal)); e1.position.set(-.04 * u, 1.64 * u, .1 * u);
     const e2b = add(sph(.02 * u, focal)); e2b.position.set(.05 * u, 1.6 * u, .1 * u);
-    const thread = add(new THREE.Mesh(new THREE.CylinderGeometry(.005, .005, 1.5, 4),
-      new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 1 })));
+    const thread = add(cyl(.005, .005, 1.5, new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 1 }), 8));
     thread.position.y = 1.72 * u + .75;
     const mkHand = () => sph(.05 * u, hide, 1, 1.3, .8);
     const armL = limb(refs.arms, -.21 * u, 1.45 * u, 0, .48 * u, .48 * u, .03 * u, hide, .04, .02, .06, mkHand());
     const armR = limb(refs.arms, .21 * u, 1.45 * u, 0, .48 * u, .48 * u, .03 * u, hide, .04, .02, -.06, mkHand());
     sw.add(armL.hip); sw.add(armR.hip);
-    const mkToe = () => { const t2 = new THREE.Mesh(new THREE.ConeGeometry(.03 * u, .12 * u, 5), hide);
+    const mkToe = () => { const t2 = cone(.03 * u, .12 * u, hide, 12);
       t2.rotation.x = Math.PI; return t2; };
     const legL = limb(refs.legs, -.09 * u, 1.0 * u, 0, .48 * u, .42 * u, .04 * u, hide, .06, .05, 0, mkToe());
     const legR = limb(refs.legs, .09 * u, 1.0 * u, 0, .48 * u, .42 * u, .04 * u, hide, -.04, .08, 0, mkToe());
@@ -2883,8 +3419,13 @@ function buildCreature(sp) {
   } else if (sp.arch === 'brute') {
     const shY = 1.25 * u;
     const hull = sph(.5 * u, hide, 1.15, .95, 1.3); hull.position.set(0, shY, -.05 * u); g.add(hull);
+    const harnessA = tube([[-.42 * u, shY + .2 * u, .48 * u], [-.12 * u, shY + .12 * u, .18 * u],
+      [.18 * u, shY, -.18 * u], [.38 * u, shY - .14 * u, -.52 * u]], .022 * u, stitch, 8, 20);
+    const harnessB = tube([[.42 * u, shY + .18 * u, .42 * u], [.1 * u, shY + .08 * u, .16 * u],
+      [-.18 * u, shY, -.2 * u], [-.38 * u, shY - .14 * u, -.5 * u]], .022 * u, stitch, 8, 20);
+    g.add(harnessA, harnessB);
     for (let i = 0; i < 4; i++) { // dorsal plates
-      const pl = new THREE.Mesh(new THREE.BoxGeometry(.34 * u, .07 * u, .2 * u), chitin);
+      const pl = sph(.14 * u, chitin, 1.45, .28, .82);
       pl.position.set(0, shY + (.42 - i * .07) * u, (-.4 + i * .22) * u);
       pl.rotation.x = -.35 + i * .12;
       g.add(pl);
@@ -2892,8 +3433,14 @@ function buildCreature(sp) {
     const head = sph(.17 * u, hide, 1.1, .85, 1);
     head.position.set(0, shY - .18 * u, .52 * u);
     g.add(head); refs.head = head;
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(.3 * u, .06 * u, .12 * u), chitin);
+    const brow = sph(.09 * u, chitin, 1.75, .32, .75);
     brow.position.set(0, shY - .08 * u, .56 * u); g.add(brow);
+    for (const sd of [-1, 1]) {
+      const tusk = cone(.025 * u, .22 * u, bone, 14);
+      tusk.position.set(sd * .1 * u, shY - .23 * u, .68 * u);
+      tusk.rotation.set(Math.PI / 2 + .28, 0, sd * .2);
+      g.add(tusk);
+    }
     eyesOn(0, shY - .15 * u, .66 * u, Math.min(2, sp.eyes), .02 * u);
     const mkFist = () => sph(.17 * u, chitin, 1, .8, 1.1);
     limb(refs.arms, -.5 * u, shY + .1 * u, .22 * u, .75 * u, .62 * u, .12 * u, hide, .5, -.12, .12, mkFist());
@@ -2901,54 +3448,225 @@ function buildCreature(sp) {
     limb(refs.legs, -.24 * u, .72 * u, -.42 * u, .4 * u, .34 * u, .06 * u, hide, .2, -.4);
     limb(refs.legs, .24 * u, .72 * u, -.42 * u, .4 * u, .34 * u, .06 * u, hide, .2, -.4);
   } else if (sp.arch === 'shrike') {
-    const hipY = 1.05 * u;
-    const body = sph(.22 * u, hide, 1, .9, 1.6); body.position.set(0, hipY + .18 * u, -.05 * u); g.add(body);
+    const hipY = .86 * u;
+    const body = sph(.28 * u, hide, .86, .92, 1.45); body.position.set(0, hipY + .16 * u, -.05 * u); g.add(body);
     for (const sd of [-1, 1]) { // folded blade-arms
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(.035 * u, .09 * u, .62 * u), chitin);
-      blade.position.set(sd * .2 * u, hipY + .25 * u, -.2 * u);
-      blade.rotation.y = sd * .12; blade.rotation.x = -.1;
+      const blade = cyl(.05 * u, .016 * u, .72 * u, chitin, 14);
+      blade.position.set(sd * .23 * u, hipY + .18 * u, -.2 * u);
+      blade.rotation.y = sd * .18; blade.rotation.x = Math.PI / 2 - .18;
       g.add(blade);
+      const wingSkin = rag(.18 * u, .58 * u, cloth);
+      wingSkin.position.set(sd * .28 * u, hipY + .06 * u, -.18 * u);
+      wingSkin.rotation.set(.24, sd * .55, sd * .12);
+      g.add(wingSkin);
     }
     const neckG = new THREE.Group();
-    neckG.position.set(0, hipY + .3 * u, .25 * u);
+    neckG.position.set(0, hipY + .24 * u, .26 * u);
     g.add(neckG); refs.neckG = neckG; refs.neckZ = neckG.position.z;
-    for (let i = 0; i < 3; i++) {
-      const v = sph(.07 * u, hide);
-      v.position.set(0, (.12 + i * .13) * u, (i * .1) * u);
+    for (let i = 0; i < 2; i++) {
+      const v = sph(.055 * u, hide, .9, 1, 1.05);
+      v.position.set(0, (.08 + i * .1) * u, (i * .1) * u);
       neckG.add(v);
     }
-    const head = sph(.09 * u, hide, 1, 1, 1.3);
-    head.position.set(0, .5 * u, .34 * u);
+    const head = sph(.12 * u, hide, .9, .9, 1.18);
+    head.position.set(0, .28 * u, .34 * u);
     neckG.add(head); refs.head = head;
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(.028 * u, .34 * u, 6), chitin);
-    beak.position.set(0, .48 * u, .55 * u);
+    const beak = cone(.035 * u, .42 * u, chitin, 16);
+    beak.position.set(0, .27 * u, .62 * u);
     beak.rotation.x = Math.PI / 2;
     neckG.add(beak);
-    const eye = sph(.02 * u, focal); eye.position.set(0, .53 * u, .42 * u); neckG.add(eye);
-    limb(refs.legs, -.13 * u, hipY, 0, .6 * u, .55 * u, .04 * u, hide, .55, -1.05);
-    limb(refs.legs, .13 * u, hipY, 0, .6 * u, .55 * u, .04 * u, hide, .55, -1.05);
+    const eye = sph(.022 * u, focal); eye.position.set(0, .31 * u, .43 * u); neckG.add(eye);
+    const talons = () => { const gr = new THREE.Group();
+      for (let i = -1; i <= 1; i++) {
+        const t2 = cone(.018 * u, .16 * u, chitin, 12);
+        t2.position.set(i * .035 * u, 0, .03 * u);
+        t2.rotation.x = Math.PI / 2 + i * .08;
+        gr.add(t2);
+      }
+      return gr;
+    };
+    limb(refs.legs, -.16 * u, hipY, 0, .58 * u, .62 * u, .045 * u, hide, .68, -1.18, 0, talons());
+    limb(refs.legs, .16 * u, hipY, 0, .58 * u, .62 * u, .045 * u, hide, .68, -1.18, 0, talons());
+  } else if (sp.arch === 'zombie') {
+    // fallback if the Trenchfall zombie pack fails to load: still a dead soldier, not a blob
+    const isBrute = sp.zClass === 'brute', isRunner = sp.zClass === 'runner';
+    const coat = sph(.26 * u, helper, isBrute ? 1.08 : .82, isRunner ? 1.7 : 1.55, .46);
+    coat.position.y = 1.0 * u; coat.rotation.x = .12; g.add(coat);
+    for (const sd of [-1, 1]) {
+      const flap = rag((isBrute ? .18 : .13) * u, (isRunner ? .68 : .56) * u, cloth);
+      flap.position.set(sd * .11 * u, .79 * u, .25 * u);
+      flap.rotation.set(.16, sd * .08, sd * .08);
+      g.add(flap);
+      const boot = sph(.075 * u, rubber, 1.15, .65, 1.35);
+      boot.position.set(sd * .12 * u, .13 * u, .08 * u);
+      boot.rotation.y = sd * .1;
+      g.add(boot);
+    }
+    const chest = sph(.1 * u, bone, 1.9, .45, .55);
+    chest.position.set(0, 1.13 * u, .22 * u); chest.rotation.z = -.08; g.add(chest);
+    const head = sph(.12 * u, bone, .85, 1.12, .9);
+    head.position.set(.035 * u, 1.58 * u, .08 * u); head.rotation.z = -.42; g.add(head); refs.head = head;
+    const helmet = cyl(.16 * u, .135 * u, .08 * u, chitin, 20);
+    helmet.position.set(.035 * u, 1.68 * u, .07 * u); helmet.rotation.z = -.42; g.add(helmet);
+    const mask = sph(.055 * u, rubber, 1.05, .75, .55);
+    mask.position.set(.015 * u, 1.54 * u, .18 * u); mask.rotation.z = -.36; g.add(mask);
+    const hose = tube([[.0 * u, 1.5 * u, .2 * u], [-.08 * u, 1.32 * u, .25 * u], [-.16 * u, 1.08 * u, .21 * u]], .012 * u, rubber, 8, 18);
+    g.add(hose);
+    eyesOn(.02 * u, 1.58 * u, .17 * u, 1, .02 * u);
+    const strap = cap(.018 * u, .4 * u, chitin, 1, 1, .65);
+    strap.position.set(-.12 * u, 1.06 * u, .25 * u); strap.rotation.z = -.45; g.add(strap);
+    const pack = sph(.14 * u, chitin, .9, 1.15, .5);
+    pack.position.set(0, 1.02 * u, -.22 * u); g.add(pack);
+    limb(refs.arms, -.24 * u, 1.34 * u, .04 * u, .42 * u, .52 * u, .038 * u, bone, .22, -.1, .08);
+    limb(refs.arms, .24 * u, 1.31 * u, .03 * u, .48 * u, .55 * u, .04 * u, bone, -.08, .2, -.08);
+    limb(refs.legs, -.11 * u, .74 * u, 0, .48 * u, .5 * u, .05 * u, helper, .25, -.55);
+    limb(refs.legs, .12 * u, .72 * u, 0, .52 * u, .45 * u, .05 * u, helper, -.05, -.4);
+  } else if (sp.arch === 'lampkeeper') {
+    const cage = new THREE.Group(); g.add(cage); refs.sway = cage;
+    const robe = sph(.17 * u, cloth, .72, 1.7, .5);
+    robe.position.set(0, .72 * u, -.22 * u); g.add(robe);
+    const hood = sph(.1 * u, cloth, 1.05, .9, .82);
+    hood.position.set(0, 1.22 * u, -.18 * u); g.add(hood);
+    const face = sph(.035 * u, focal, 1.3, .42, .35);
+    face.position.set(0, 1.2 * u, -.1 * u); g.add(face); refs.beacon = face;
+    const core = sph(.14 * u, focal, 1, 1.3, 1); core.position.y = .82 * u; cage.add(core); refs.beacon = core;
+    for (const sd of [-1, 1]) {
+      const arm = tube([[sd * .12 * u, 1.03 * u, -.12 * u], [sd * .18 * u, .88 * u, -.02 * u],
+        [sd * .18 * u, .82 * u, .18 * u]], .018 * u, bone, 8, 16);
+      g.add(arm);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU;
+      const rail = cyl(.012 * u, .012 * u, .78 * u, bone, 12);
+      rail.position.set(Math.cos(a) * .19 * u, .82 * u, Math.sin(a) * .19 * u); cage.add(rail);
+    }
+    for (const y of [.43, 1.21]) {
+      const ring = smooth(new THREE.Mesh(new THREE.TorusGeometry(.2 * u, .018 * u, 8, 28), bone));
+      ring.rotation.x = Math.PI / 2; ring.position.y = y * u; cage.add(ring);
+    }
+    const handle = smooth(new THREE.Mesh(new THREE.TorusGeometry(.18 * u, .014 * u, 8, 28, Math.PI), bone));
+    handle.position.y = 1.25 * u; handle.rotation.z = Math.PI; cage.add(handle);
+    for (let i = 0; i < 3; i++) {
+      const fin = cap(.025 * u, .3 * u, helper, .7, 1, 1.2);
+      const a = i / 3 * TAU; fin.position.set(Math.cos(a) * .27 * u, .62 * u, Math.sin(a) * .27 * u);
+      fin.rotation.y = a; cage.add(fin); refs.fins.push(fin);
+    }
+  } else if (sp.arch === 'barterer') {
+    const cloak = smooth(new THREE.Mesh(new THREE.ConeGeometry(.34 * u, .9 * u, 28), helper));
+    cloak.position.y = .7 * u; cloak.rotation.y = .22; g.add(cloak);
+    const split = rag(.11 * u, .55 * u, cloth);
+    split.position.set(.02 * u, .56 * u, .22 * u);
+    split.rotation.x = .08;
+    g.add(split);
+    const hood = sph(.17 * u, helper, 1.05, .85, .9); hood.position.set(0, 1.2 * u, .02 * u); g.add(hood);
+    const face = sph(.06 * u, focal, 1, .55, .35); face.position.set(0, 1.17 * u, .12 * u); g.add(face); refs.beacon = face;
+    for (const sd of [-1, 1]) {
+      const pack = sph(.12 * u, bone, .75, 1.05, .9);
+      pack.position.set(sd * .28 * u, .78 * u, -.08 * u); pack.rotation.z = sd * .18; g.add(pack);
+      const hand = sph(.035 * u, bone, .8, .65, 1.2);
+      hand.position.set(sd * .18 * u, .7 * u, .24 * u); g.add(hand);
+      const tag = cap(.014 * u, .13 * u, focal, .75, 1, .35);
+      tag.position.set(sd * .31 * u, .52 * u, .09 * u); g.add(tag); refs.fins.push(tag);
+    }
+    const cane = tube([[.24 * u, .95 * u, .18 * u], [.3 * u, .55 * u, .18 * u], [.26 * u, .12 * u, .12 * u]], .014 * u, bone, 8, 18);
+    g.add(cane);
+  } else if (sp.arch === 'gifter') {
+    const pod = sph(.28 * u, helper, 1.25, .72, .9); pod.position.y = .9 * u; g.add(pod);
+    const topShell = sph(.18 * u, cloth, 1.35, .22, .78);
+    topShell.position.set(0, 1.05 * u, -.02 * u); g.add(topShell);
+    const crossA = cap(.028 * u, .23 * u, focal, 1, 1, .45);
+    crossA.rotation.z = Math.PI / 2;
+    crossA.position.set(0, .91 * u, .25 * u); g.add(crossA);
+    const crossB = cap(.028 * u, .23 * u, focal, 1, 1, .45);
+    crossB.position.set(0, .91 * u, .25 * u); g.add(crossB); refs.beacon = crossA;
+    for (const sd of [-1, 1]) {
+      const wing = cap(.025 * u, .58 * u, bone, 1, .65, 1.4);
+      wing.position.set(sd * .43 * u, .9 * u, -.02 * u); wing.rotation.z = sd * .16; g.add(wing); refs.fins.push(wing);
+      const skid = cyl(.012 * u, .012 * u, .46 * u, bone, 12);
+      skid.position.set(sd * .2 * u, .42 * u, 0); skid.rotation.x = Math.PI / 2; g.add(skid);
+      const vial = cyl(.022 * u, .022 * u, .22 * u, focal, 14);
+      vial.position.set(sd * .24 * u, .7 * u, .23 * u); vial.rotation.z = sd * .08; g.add(vial);
+    }
+  } else if (sp.arch === 'warden') {
+    const torso = sph(.2 * u, bone, .8, 1.6, .55); torso.position.y = 1.0 * u; g.add(torso);
+    const tabard = rag(.28 * u, .86 * u, cloth);
+    tabard.position.set(0, .92 * u, .16 * u);
+    tabard.rotation.x = .08; g.add(tabard);
+    const mask = sph(.12 * u, helper, .82, 1.1, .75); mask.position.set(0, 1.5 * u, .06 * u); g.add(mask); refs.head = mask;
+    eyesOn(0, 1.5 * u, .15 * u, 2, .017 * u);
+    const staff = cyl(.018 * u, .018 * u, 1.4 * u, bone, 14);
+    staff.position.set(.34 * u, .84 * u, .08 * u); staff.rotation.z = -.1; g.add(staff);
+    const compass = smooth(new THREE.Mesh(new THREE.TorusGeometry(.11 * u, .012 * u, 8, 24), focal));
+    compass.position.set(.34 * u, 1.46 * u, .08 * u); g.add(compass); refs.fins.push(compass); refs.beacon = compass;
+    const halo = smooth(new THREE.Mesh(new THREE.TorusGeometry(.16 * u, .007 * u, 6, 30), stitch));
+    halo.position.set(0, 1.56 * u, .02 * u); halo.rotation.x = Math.PI / 2; g.add(halo);
+    limb(refs.arms, -.19 * u, 1.18 * u, 0, .36 * u, .34 * u, .028 * u, bone, .05, -.05, .08);
+    limb(refs.arms, .18 * u, 1.18 * u, 0, .34 * u, .32 * u, .028 * u, bone, -.25, -.05, -.12);
+    limb(refs.legs, -.08 * u, .72 * u, 0, .38 * u, .32 * u, .04 * u, bone, .1, -.25);
+    limb(refs.legs, .08 * u, .72 * u, 0, .38 * u, .32 * u, .04 * u, bone, -.08, -.2);
   } else { // wisp: the gentle lantern
     const prof = [];
     for (let i = 0; i <= 8; i++) {
       const t = i / 8;
       prof.push(new THREE.Vector2(Math.max(.01, Math.sin(t * Math.PI) * .26 * u * (1 - t * .35)), t * .8 * u));
     }
-    const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 12), hide);
+    const body = smooth(new THREE.Mesh(new THREE.LatheGeometry(prof, 30), hide));
     body.position.y = .5 * u; g.add(body);
     const glow = sph(.1 * u, focal); glow.position.y = .85 * u; g.add(glow);
     for (let i = 0; i < 3; i++) {
-      const fin = new THREE.Mesh(new THREE.ConeGeometry(.07 * u, .4 * u, 6), hide);
+      const fin = cone(.07 * u, .4 * u, hide, 14);
       const a = i / 3 * TAU;
       fin.position.set(Math.cos(a) * .24 * u, .8 * u, Math.sin(a) * .24 * u);
       fin.rotation.z = Math.PI / 2 + a;
       g.add(fin); refs.fins.push(fin);
     }
   }
+  g.traverse(o => {
+    if (!o.isMesh) return;
+    if (o.geometry) o.geometry.computeVertexNormals();
+    if (Array.isArray(o.material)) o.material.forEach(m => { if (m) m.flatShading = false; });
+    else if (o.material) o.material.flatShading = false;
+  });
   g.userData = refs;
   return g;
 }
+function faceCutout(e) {
+  e.mesh.rotation.y = Math.atan2(camera.position.x - e.x, camera.position.z - e.z);
+}
+function animCutout(e, refs, dt) {
+  const sp2 = Math.hypot(e.vx, e.vz);
+  const k = clamp(sp2 / Math.max(.5, e.sp.speed || 1), 0, 1);
+  const ph = e.t * (refs.arch === 'widow' || refs.arch === 'centipede' ? 7 : refs.arch === 'brute' ? 2.2 : 3.5);
+  const bob = {
+    zombie: Math.sin(ph) * .035 * k,
+    stalker: Math.sin(e.t * 1.2) * .035 + Math.sin(ph) * .025 * k,
+    widow: Math.sin(ph * 1.3) * .025 * (.3 + k),
+    centipede: Math.sin(ph) * .018 * (.4 + k),
+    marionette: Math.sin(e.t * .85) * .06,
+    brute: Math.abs(Math.sin(ph)) * .028 * k,
+    shrike: Math.abs(Math.sin(ph * 1.3)) * .08 * k,
+    lampkeeper: Math.sin(e.t * 1.4) * .06,
+    barterer: Math.sin(e.t * 1.1) * .018,
+    gifter: Math.sin(e.t * 1.8) * .07,
+    warden: Math.sin(e.t * .9) * .018,
+  }[refs.arch] || Math.sin(e.t * 1.4) * .03;
+  refs.body.position.y = refs.baseY + bob;
+  refs.body.rotation.z = Math.sin(e.t * (refs.arch === 'marionette' ? .8 : 1.5)) *
+    (refs.arch === 'marionette' ? .06 : refs.arch === 'stalker' ? .025 : .018);
+  refs.body.scale.x = refs.baseSX * (1 + Math.sin(ph) * (refs.arch === 'centipede' ? .035 : .018) * (.3 + k));
+  refs.body.scale.y = refs.baseSY * (1 + Math.cos(ph * .7) * .012 * (.3 + k));
+  if (refs.shadow) {
+    const s = 1 + k * .15 + Math.abs(bob) * .2;
+    refs.shadow.scale.set(s, s, 1);
+  }
+  if (refs.mat) {
+    if (e.burn > 0) refs.mat.color.setRGB(1.55, .9, .55);
+    else refs.mat.color.lerp(new THREE.Color(1, 1, 1), Math.min(1, dt * 8));
+  }
+}
 /* per-archetype gaits: motion is most of the design */
 function animCreature(e, refs, dt) {
+  if (refs.cutout) { animCutout(e, refs, dt); return; }
   const sp2 = Math.hypot(e.vx, e.vz);
   const k = clamp(sp2 / Math.max(.5, e.sp.speed), 0, 1);
   e.ph = (e.ph || 0) + dt * (2 + sp2 * (refs.arch === 'widow' ? 4.5 : 3));
@@ -3002,6 +3720,16 @@ function animCreature(e, refs, dt) {
       }
       if (refs.neckG) refs.neckG.position.z = refs.neckZ + Math.sin(ph * 2.8) * .07 * (.3 + k);
       break;
+    case 'zombie':
+      for (const L of refs.legs) {
+        L.hip.rotation.x = L.restH + Math.sin(ph * .85 + L.i * Math.PI) * .34 * k;
+        L.knee.rotation.x = L.restK + Math.max(0, Math.sin(ph * .85 + L.i * Math.PI + .7)) * .36 * k;
+      }
+      for (const A2 of refs.arms)
+        A2.hip.rotation.x = A2.restH + Math.sin(ph * .65 + A2.i * Math.PI) * .18 * k + .08;
+      if (refs.head) refs.head.rotation.z = -.35 + Math.sin(e.t * .9) * .08;
+      e.mesh.rotation.z = Math.sin(ph * .42) * .035 * k;
+      break;
     default:
       refs.fins.forEach((f, i) => { f.rotation.y = Math.sin(e.t * 2 + i) * .4; });
   }
@@ -3010,11 +3738,53 @@ function animCreature(e, refs, dt) {
 const SPECIES = [];
 {
   const n = 2 + Math.min(3, Math.ceil(RUN.deck / 2));
-  for (let i = 0; i < n; i++) SPECIES.push(makeSpecies(true));
+  SPECIES.push(makeZombieSpecies());
+  for (let i = 1; i < n; i++) SPECIES.push(makeSpecies(true));
 }
 const entities = [];
 const RIG = { pack: null, roots: [] };
 const PENDING_RIG = [];
+const _rigBox = new THREE.Box3(), _meshBox = new THREE.Box3();
+function visibleInTree(o) {
+  for (let p = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+function centerVisibleRig(rig) {
+  _rigBox.makeEmpty();
+  rig.updateMatrixWorld(true);
+  rig.traverse(o => {
+    if (!o.isMesh || !o.geometry || !visibleInTree(o)) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    _meshBox.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    _rigBox.union(_meshBox);
+  });
+  if (!_rigBox.isEmpty()) {
+    rig.position.x -= (_rigBox.min.x + _rigBox.max.x) / 2;
+    rig.position.z -= (_rigBox.min.z + _rigBox.max.z) / 2;
+    rig.position.y -= _rigBox.min.y;
+  }
+}
+function addZombieKit(mesh, sp, v) {
+  const cloth = new THREE.MeshStandardMaterial({ color: 0x3b382f, roughness: .94, metalness: 0, envMapIntensity: .08 });
+  const dull = new THREE.MeshStandardMaterial({ color: 0x625d51, roughness: .9, metalness: .02, envMapIntensity: .1 });
+  const glow = new THREE.MeshStandardMaterial({ color: 0, emissive: sp.eyeCol, emissiveIntensity: 2.6, roughness: 1 });
+  if (v % 3 !== 1) {
+    const helmet = new THREE.Mesh(new THREE.CylinderGeometry(.18 * sp.size, .22 * sp.size, .11 * sp.size, 14), dull);
+    helmet.position.set(.03 * sp.size, 1.64 * sp.size, .02 * sp.size);
+    helmet.rotation.set(.08, .04, -.22);
+    mesh.add(helmet);
+  }
+  const strap = new THREE.Mesh(new THREE.BoxGeometry(.09 * sp.size, .7 * sp.size, .035 * sp.size), cloth);
+  strap.position.set(-.18 * sp.size, 1.1 * sp.size, .26 * sp.size);
+  strap.rotation.z = -.45;
+  mesh.add(strap);
+  if (v % 2 === 0) {
+    const tag = new THREE.Mesh(new THREE.BoxGeometry(.1 * sp.size, .035 * sp.size, .018 * sp.size), glow);
+    tag.position.set(.21 * sp.size, 1.18 * sp.size, .3 * sp.size);
+    tag.rotation.z = .2;
+    mesh.add(tag);
+  }
+}
 function buildRigBody(sp, v) {
   const rig = skClone(RIG.pack.scene);
   const pickName = RIG.roots[v % RIG.roots.length];
@@ -3026,12 +3796,27 @@ function buildRigBody(sp, v) {
   rig.getObjectByName(pickName).traverse(o => {
     if (o.isMesh) {
       o.material = o.material.clone();
-      // pull the crew-flesh toward the species' colour: alien, not costume
-      o.material.color.copy(new THREE.Color(1, 1, 1)).lerp(sp.col, .6);
+      if (o.geometry) o.geometry.computeVertexNormals();
+      o.material.flatShading = false;
+      if (sp.zombie) {
+        const corpseCols = [0x6a6258, 0x554d42, 0x484337];
+        const corpse = new THREE.Color(corpseCols[v % corpseCols.length]);
+        if (o.material.color) o.material.color.copy(corpse).lerp(sp.col, .35).multiplyScalar(.75);
+        o.material.roughness = .96;
+        o.material.metalness = 0;
+        o.material.envMapIntensity = .08;
+      } else {
+        // pull the crew-flesh toward the species' colour: alien, not costume
+        o.material.color.copy(new THREE.Color(0x736b60)).lerp(sp.col, .65).multiplyScalar(.68);
+        o.material.roughness = .82;
+        o.material.metalness = 0;
+        o.material.envMapIntensity = .1;
+      }
       mats.push(o.material);
     }
   });
   rig.scale.setScalar(sp.size);
+  centerVisibleRig(rig);
   const mixer = new THREE.AnimationMixer(rig);
   if (RIG.pack.animations.length) {
     const act = mixer.clipAction(RIG.pack.animations[0]);
@@ -3040,6 +3825,7 @@ function buildRigBody(sp, v) {
   const mesh = new THREE.Group();
   mesh.add(rig);
   mesh.userData = { legs: [], arms: [], heads: [], fins: [], mats: null };
+  if (sp.zombie) addZombieKit(mesh, sp, v);
   return { mesh, mixer, mats };
 }
 function spawnRigged(sp, x, z, v) {
@@ -3082,6 +3868,11 @@ function spawnEntBody(sp, x, z, friendly) {
 {
   const budget = 1 + RUN.deck;
   const lairs = ROOMS.filter(r => r !== startRoom);
+  const zsp = SPECIES.find(s => s.zombie);
+  if (zsp && lairs.length) {
+    const zr = rpick(lairs);
+    spawnEnt(zsp, zr.cx + rr(-zr.w * 1.8, zr.w * 1.8), zr.cz + rr(-zr.h * 1.8, zr.h * 1.8));
+  }
   for (let i = 0; i < Math.min(budget, 14) && lairs.length; i++) {
     const r = rpick(lairs);
     const sp = rpick(SPECIES);
@@ -3101,7 +3892,7 @@ const WEARER_SP = {
 };
 const WEARER_SEEDS = []; // drawn from the seed NOW, so async loading cannot bend fate
 {
-  const n = 1 + Math.min(3, Math.ceil(RUN.deck / 2));
+  const n = 0;
   const lairs = ROOMS.filter(r => r !== startRoom);
   for (let i = 0; i < n && lairs.length; i++) {
     const r = rpick(lairs);
@@ -3124,9 +3915,19 @@ new GLTFLoader().load('assets/models/zombies_pack.glb', gl => {
     });
     const mats = [];
     rig.getObjectByName(pickName).traverse(o => {
-      if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(w.tint); mats.push(o.material); }
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        if (o.geometry) o.geometry.computeVertexNormals();
+        o.material.flatShading = false;
+        o.material.color.multiplyScalar(w.tint);
+        o.material.roughness = .92;
+        o.material.metalness = 0;
+        o.material.envMapIntensity = .1;
+        mats.push(o.material);
+      }
     });
     rig.scale.setScalar(w.s);
+    centerVisibleRig(rig);
     const mixer = new THREE.AnimationMixer(rig);
     if (gl.animations.length) {
       const act = mixer.clipAction(gl.animations[0]);
@@ -3253,7 +4054,13 @@ function updateEnt(e, dt) {
   if (e.voiceT > 0) { e.voiceT -= dt;
     if (e.voiceT <= 0) { e.voiceT = rand(6, 16); if (pd < 24) creatureVoice(sp.voice, clamp(1.6 - pd / 18, .2, 1.2), panFor(e)); } }
   // temperament
-  if (e.state === 'idle' && (pd < 9 || player.heat > 3)) e.state = 'hunt';
+  if (e.state === 'idle' && (pd < 9 || player.heat > 3)) {
+    e.state = 'hunt';
+    if (sp.zombie && sp.quirk === 'pack')
+      for (const o of entities)
+        if (o !== e && !o.dead && !o.friendly && o.sp.zombie && Math.hypot(o.x - e.x, o.z - e.z) < 8)
+          o.state = 'hunt';
+  }
   if (e.state === 'statue') {
     if (pd < 4.5 && !seenByPlayer(e)) { e.state = 'hunt'; SFX.stinger(); toast(sp.name + ' WAS NEVER A STATUE'); }
     return;
@@ -3319,7 +4126,8 @@ function updateEnt(e, dt) {
   if (e.mixer) e.mixer.update(dt * clamp(sp2 * .8 + .25, .25, 2));
   else animCreature(e, refs, dt);
   e.mesh.position.set(e.x, e.y, e.z);
-  if (sp2 > .1) e.mesh.rotation.y = Math.atan2(e.vx, e.vz);
+  if (refs.cutout) faceCutout(e);
+  else if (sp2 > .1) e.mesh.rotation.y = Math.atan2(e.vx, e.vz);
   // attacks
   e.atkCd -= dt;
   const reach = 1.1 + sp.size * .5;
@@ -3365,8 +4173,13 @@ function updateProjectiles(dt) {
 const FRIEND_KINDS = ['lampkeeper', 'barterer', 'gifter', 'warden'];
 function updateFriendly(e, dt, pd) {
   const refs = e.mesh.userData;
-  e.y = .25 + Math.sin(e.t * 1.4) * .1;
+  const floats = e.role === 'lampkeeper' || e.role === 'gifter';
+  e.y = floats ? .25 + Math.sin(e.t * 1.4) * .1 : floorY(e.x, e.z) + Math.sin(e.t * 1.2) * .018;
   e.mesh.position.set(e.x, e.y, e.z);
+  if (refs.cutout) { animCutout(e, refs, dt); faceCutout(e); }
+  if (refs.sway) refs.sway.rotation.z = Math.sin(e.t * .8) * .045;
+  if (refs.beacon && refs.beacon.material)
+    refs.beacon.material.emissiveIntensity = 2.4 + Math.sin(e.t * 2.1) * .45;
   refs.fins.forEach((f, i) => { f.rotation.y = Math.sin(e.t * 2 + i) * .4; });
   if (e.role === 'lampkeeper' && e.tamed) {
     if (pd > 2.8) {
@@ -3386,9 +4199,10 @@ function updateFriendly(e, dt, pd) {
   const homes = ROOMS.filter(r => r !== startRoom && r !== exitRoom);
   for (let i = 0; i < nF && homes.length; i++) {
     const r = homes.splice(rnd() * homes.length | 0, 1)[0];
-    const sp = makeSpecies(false);
+    const role = rpick(FRIEND_KINDS);
+    const sp = makeFriendSpecies(role);
     const e = spawnEnt(sp, r.cx + rr(-1.5, 1.5), r.cz + rr(-1.5, 1.5), true);
-    e.role = rpick(FRIEND_KINDS);
+    e.role = role;
     if (e.role === 'lampkeeper') {
       e.lamp = new THREE.PointLight(0xffeec0, 14, 9, 2);
       e.lamp.position.set(e.x, 1.6, e.z);
@@ -3404,6 +4218,9 @@ function updateFriendly(e, dt, pd) {
 
 /* ------------------------------------------------------------- player io */
 let lightsMul = 1, gravMul = 1;
+let shipHunger = clamp((RUN.hunger || 0) + RUN.deck * 4, 0, 96);
+let hungerBand = Math.floor(shipHunger / 25);
+let hungerDrip = 0, lastHungerDraw = shipHunger | 0;
 const toastQ = [];
 function toast(msg) {
   const el = document.createElement('div');
@@ -3411,6 +4228,37 @@ function toast(msg) {
   $('toasts').appendChild(el);
   requestAnimationFrame(() => el.classList.add('on'));
   setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 500); }, 2600);
+}
+function wakeShip(reason) {
+  const far = ROOMS.filter(r => r !== roomAt(camera.position.x, camera.position.z));
+  if (!far.length) return;
+  const r = rpick(far);
+  const sp = shipHunger > 72 && SPECIES.some(s => s.zombie) ? SPECIES.find(s => s.zombie) : rpick(SPECIES);
+  const e = spawnEnt(sp, r.cx + rr(-r.w * 1.5, r.w * 1.5), r.cz + rr(-r.h * 1.5, r.h * 1.5));
+  if (e) e.state = 'hunt';
+  toast(reason || rpick(['THE SHIP SENDS COMPANY', 'THE HULL ANSWERS YOUR NOISE', 'SOMETHING FINDS THE SCENT']));
+  SFX.clank(rand(-1, 1));
+}
+function addHunger(n, reason, quiet = false) {
+  if (player.dead || godMode) return;
+  const old = shipHunger;
+  shipHunger = clamp(shipHunger + n, 0, 100);
+  const band = Math.floor(shipHunger / 25);
+  if (n < 0 && band < hungerBand) hungerBand = band;
+  if (shipHunger >= 100) {
+    shipHunger = 68;
+    hungerBand = Math.floor(shipHunger / 25);
+    wakeShip('THE SHIP IS HUNGRY ENOUGH TO WALK');
+  } else if (band > hungerBand) {
+    hungerBand = band;
+    wakeShip(reason || 'THE SHIP STIRS');
+  } else if (reason && !quiet) {
+    toast(reason);
+  }
+  if ((shipHunger | 0) !== lastHungerDraw || Math.abs(shipHunger - old) >= 3) {
+    lastHungerDraw = shipHunger | 0;
+    updateHUD();
+  }
 }
 function hurtPlayer(n, src) {
   if (player.dead || godMode) return;
@@ -3500,19 +4348,35 @@ function interact() {
     best.opened = true;
     if (best.door) best.door.rotation.y = -1.9;
     SFX.lootOpen();
+    addHunger(best.table === 'starter' ? 1 : 5, null, true);
     rollLoot(best.table);
     updateHUD();
   } else if (best.kind === 'slate') {
     best.used = true;
     SFX.slate();
+    addHunger(1.5, null, true);
     toast(pick(SLATE_LINES));
+  } else if (best.kind === 'seal') {
+    best.used = true;
+    best.mesh.visible = false;
+    player.seal = true;
+    SFX.confirm();
+    addHunger(8, 'THE HATCH HEARS ITS NAME', true);
+    toast('DECK SEAL TAKEN. THE HATCH CAN OPEN NOW');
+    updateHUD();
   } else if (best.kind === 'hatch') {
+    if (!player.seal) {
+      SFX.deny();
+      addHunger(10, 'THE HATCH WANTS THE DECK SEAL');
+      return;
+    }
     descend();
   } else if (best.kind === 'fakehatch') {
     best.used = true;
     best.mesh.visible = false;
     SFX.stinger();
     camShake = 1;
+    addHunger(18, null, true);
     toast('THE HATCH LIES. IT WAS NEVER HERE');
     const sp = rpick(SPECIES);
     for (let i = 0; i < 2; i++) {
@@ -3522,11 +4386,18 @@ function interact() {
   } else if (best.kind === 'friend') {
     const e = best.ent, role = e.role;
     if (role === 'lampkeeper') {
-      if (!e.tamed) { e.tamed = true; toast(e.sp.name + ' DECIDES YOU ARE A DOOR WORTH FOLLOWING'); creatureVoice(e.sp.voice, .8); }
+      if (!e.tamed) {
+        e.tamed = true;
+        shipHunger = Math.max(0, shipHunger - 12);
+        toast(e.sp.name + ' DECIDES YOU ARE A DOOR WORTH FOLLOWING');
+        creatureVoice(e.sp.voice, .8);
+        updateHUD();
+      }
       best.used = true;
     } else if (role === 'barterer') {
       if (player.idols > 0) {
         player.idols--;
+        shipHunger = Math.max(0, shipHunger - 8);
         const wi = pick(WEAPONS.map((w, i) => i).filter(i => player.owned[i] && !WEAPONS[i].melee));
         toast('IT TAKES THE IDOL. +' + giveAmmo(wi, 1.5) + ' ' + SLOT_TAGS[wi] + ', +30 VITALS');
         player.hp = Math.min(100, player.hp + 30);
@@ -3537,15 +4408,18 @@ function interact() {
       best.used = true;
       rollLoot('common');
       creatureVoice(e.sp.voice, 1);
+      addHunger(-6, null, true);
       toast(e.sp.name + ' GIVES, AND IS GONE');
       e.dead = true; e.dieT = .5;
     } else if (role === 'warden') {
       best.used = true;
       creatureVoice(e.sp.voice, .7);
+      player.schematic = true;
       const dx = exitRoom.cx - camera.position.x, dz = exitRoom.cz - camera.position.z;
       const dirs = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'EAST' : 'WEST') : (dz > 0 ? 'BACK NORTH' : 'DEEPER SOUTH');
       const sp = rpick(SPECIES);
-      toast(`IT GESTURES ${dirs}. IT MIMES: "${sp.name} ${sp.quirk === 'freezeWatched' ? 'HATES YOUR EYES' : sp.quirk === 'lightShy' ? 'FEARS YOUR TORCH' : sp.loco === 'phase' ? 'WALKS WHEN YOU BLINK' : 'IS HUNGRY'}"`);
+      toast(`IT GESTURES ${dirs}. IT MIMES: "${sp.name} ${sp.quirk === 'freezeWatched' ? 'HATES YOUR EYES' : sp.quirk === 'lightShy' ? 'FEARS YOUR TORCH' : sp.zombie ? 'WAKES IN PACKS' : 'IS HUNGRY'}"`);
+      updateHUD();
     }
   }
 }
@@ -3591,6 +4465,10 @@ function drawMap() {
   if (player.schematic || exitRoom.visited) {
     x.fillStyle = '#6affc2';
     x.fillText('⬇', (exitRoom.gx + exitRoom.w / 2) * S - 4, (exitRoom.gy + exitRoom.h / 2) * S + 4);
+  }
+  if (sealRoom && !player.seal && (player.schematic || sealRoom.visited)) {
+    x.fillStyle = '#4be8ff';
+    x.fillText('S', (sealRoom.gx + sealRoom.w / 2) * S - 4, (sealRoom.gy + sealRoom.h / 2) * S + 4);
   }
   // you
   const pc = cellOf(camera.position.x, camera.position.z);
@@ -3734,7 +4612,7 @@ function updateHUD() {
   $('hpf').style.width = Math.max(0, player.hp) + '%';
   $('batf').style.width = Math.max(0, player.battery) + '%';
   $('stat').innerHTML = `<b>DECK ${RUN.deck}</b> · SEED ${RUN.seed}<br>` +
-    `<span class="dim">share: ?seed=${RUN.seed} · best deck ${Math.max(BEST, RUN.deck)}${player.idols ? ' · idols ' + player.idols : ''}</span>`;
+    `<span class="dim">hunger ${shipHunger | 0}% · ${player.seal ? 'seal held' : 'seal missing'} · best deck ${Math.max(BEST, RUN.deck)}${player.idols ? ' · idols ' + player.idols : ''}</span>`;
 }
 updateHUD();
 
@@ -3751,7 +4629,7 @@ if (FRESH && RUN.deck === 1) {
     'you are the one who agreed to go aboard.', '&nbsp;',
     `this hull is <span class="red">SEED ${RUN.seed}</span> — one shelf in an endless library.`,
     'every seed is a different ship, a different zoo, the same hunger.',
-    'find the hatch. go down. it gets worse.',
+    'find the seal. open the hatch. go down. it gets worse.',
   ], 'click to board');
 } else {
   showCover($('card'), 'DECK ' + RUN.deck, [
@@ -3780,7 +4658,7 @@ function descend() {
     ...RUN, deck: RUN.deck + 1,
     hp: player.hp, battery: player.battery,
     owned: player.owned, mags: player.mags, reserve: player.reserve,
-    idols: player.idols, kills: RUN.kills,
+    idols: player.idols, kills: RUN.kills, hunger: Math.max(0, shipHunger - 18),
   }));
   localStorage.setItem('kestrelBest', Math.max(BEST, RUN.deck + 1));
   SFX.confirm();
@@ -3856,6 +4734,7 @@ function frame() {
       if (stepAcc > (player.sprint ? 2.4 : 2.0)) {
         stepAcc = 0; SFX.step();
         player.heat = Math.min(10, player.heat + (player.sprint ? .12 : .05));
+        addHunger(player.sprint ? .32 : .11, null, true);
       }
     }
     camera.position.y = 1.66 + player.y + Math.sin(player.bob) * .028 * Math.min(sp / 2.5, 1) * (player.grounded ? 1 : 0);
@@ -3873,6 +4752,11 @@ function frame() {
     }
     // heat draws things
     player.heat = Math.max(0, player.heat - dt * .25);
+    hungerDrip += dt;
+    if (hungerDrip > 5.5) {
+      hungerDrip = 0;
+      addHunger(.65 + RUN.deck * .08 + (mapOpen ? .2 : 0), null, true);
+    }
     if (player.heat >= 9.9) {
       player.heat = 2;
       const sp2 = rpick(SPECIES);
@@ -4036,15 +4920,48 @@ window.KQA = {
   ents: () => entities.map(e => ({ n: e.sp.name, x: e.x | 0, z: e.z | 0, st: e.state, fr: !!e.friendly })),
   select: selectWeapon, fire() { mouseDownL = true; setTimeout(() => mouseDownL = false, 60); },
   interact, descend, map() { mapOpen = true; mapCv.style.display = 'block'; player.schematic = true; drawMap(); },
+  portrait(arch) { // one creature, alone, facing the lens
+    if (this._p) { scene.remove(this._p.mesh); const ix = entities.indexOf(this._p); if (ix >= 0) entities.splice(ix, 1); }
+    let sp, guard = 0;
+    if (FRIEND_KINDS.includes(arch)) {
+      sp = makeFriendSpecies(arch);
+      this._p = spawnEntBody(sp, startRoom.cx, startRoom.cz - 1.0, true);
+      this._p.role = arch;
+    } else if (arch === 'zombie') {
+      sp = makeZombieSpecies();
+      sp.quirk = 'none';
+      this._p = spawnEntBody(sp, startRoom.cx, startRoom.cz - 1.0, false);
+    } else if (arch === 'rigged') {
+      do { sp = makeSpecies(true); } while (!sp.rigged && ++guard < 300);
+      if (!RIG.pack) return 'pack not loaded';
+      sp.quirk = 'none';
+      this._p = spawnRigged(sp, startRoom.cx, startRoom.cz - 1.0, 5);
+    } else {
+      do { sp = makeSpecies(true); } while ((sp.arch !== arch || sp.rigged) && ++guard < 300);
+      sp.quirk = 'none';
+      this._p = spawnEntBody(sp, startRoom.cx, startRoom.cz - 1.0, false);
+    }
+    this._p.state = 'idle';
+    this._p.mesh.rotation.y = .5; // three-quarter view
+    return sp.name + ' [' + sp.arch + ']';
+  },
   zoo() { // one of each silhouette, lined up for inspection
-    const archs = ['stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike'];
+    const archs = ['zombie', 'stalker', 'widow', 'centipede', 'marionette', 'brute', 'shrike'];
     archs.forEach((arch, i) => {
       let sp, guard = 0;
-      do { sp = makeSpecies(true); } while ((sp.arch !== arch || sp.rigged) && ++guard < 200);
+      if (arch === 'zombie') sp = makeZombieSpecies();
+      else do { sp = makeSpecies(true); } while ((sp.arch !== arch || sp.rigged) && ++guard < 200);
       sp.quirk = 'none';
-      const e = spawnEntBody(sp, startRoom.cx - 4 + i * 1.6, startRoom.cz - 2.0, false);
+      const e = spawnEntBody(sp, startRoom.cx - 5 + i * 1.55, startRoom.cz - 2.0, false);
       e.state = 'idle';
       e.mesh.rotation.y = Math.PI;
+    });
+  },
+  friendZoo() {
+    FRIEND_KINDS.forEach((role, i) => {
+      const sp = makeFriendSpecies(role);
+      const e = spawnEntBody(sp, startRoom.cx - 2.6 + i * 1.7, startRoom.cz - 1.8, true);
+      e.role = role; e.state = 'idle'; e.mesh.rotation.y = Math.PI;
     });
   },
   give() { player.owned = player.owned.map(() => true); player.mags = WEAPONS.map(w => w.magSize); player.reserve = RESERVE_CAP.slice(); updateHUD(); },
