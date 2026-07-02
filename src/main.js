@@ -3653,6 +3653,7 @@ new GLTFLoader().load('assets/models/zombies_pack.glb',gltf=>{
 },undefined,e=>console.warn('zombies_pack.glb missing; the procedural dead march on',e));
 new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
   // the soldier, still breathing: six rigs for the riflemen
+  const DRAB=[0x7d8262,0x83785e,0x6e7660,0x8a8468,0x757c5c,0x7f7a60]; // no two uniforms faded alike
   for(let i=0;i<6;i++){
     const rig=skClone(gltf.scene);
     const mats=[];let hand=null;
@@ -3660,6 +3661,7 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
       if(o.isMesh){
         o.material=o.material.clone();
         o.material.roughness=.92;
+        o.material.color.set(DRAB[i]); // army drab over the armor plate, not parade white
         deathlit(o.material);
         mats.push(o.material);
         o.castShadow=true;o.frustumCulled=false;
@@ -3667,12 +3669,15 @@ new GLTFLoader().load('assets/models/Soldier.glb',gltf=>{
       if(o.isBone&&/RightHand$/.test(o.name)&&!hand)hand=o;
     });
     if(hand)hand.add(buildHandRifle());
+    const b={}; // the aim layer needs names: mixamo kept them
+    rig.traverse(o=>{if(o.isBone)for(const n of['RightArm','RightForeArm','LeftArm','LeftForeArm','Spine2','Head'])
+      if(new RegExp(n+'$').test(o.name)&&!b[n])b[n]=o;});
     rig.visible=false;
     const mixer=new THREE.AnimationMixer(rig);
     const act={};
     for(const c of gltf.animations){act[c.name]=mixer.clipAction(c);act[c.name].play();act[c.name].setEffectiveWeight(0);}
     scene.add(rig);
-    ARIGS.push({rig,mixer,act,mats,a:null});
+    ARIGS.push({rig,mixer,act,mats,b,a:null});
   }
 },undefined,e=>console.warn('Soldier.glb missing; the procedural rigs carry on',e));}
 catch(e){console.warn('no asset loading here; the procedural rigs carry on');}
@@ -3780,6 +3785,19 @@ function poseAllyRig(a,gy,stepping,spd,dt){
     const w=ac.getEffectiveWeight();ac.setEffectiveWeight(w+(tw[k]-w)*Math.min(1,dt*6));}
   if(AR.act.Walk)AR.act.Walk.setEffectiveTimeScale(clamp(spd/1.55,.6,1.6));
   AR.mixer.update(dt);
+  { // the aim layer: when there's work, the rifle comes up to the shoulder
+    const want=(a.recoil>0||a._hasT)&&!a.down?1:0;
+    const k=a._aimK=(a._aimK||0)+(want-(a._aimK||0))*Math.min(1,dt*7);
+    const B=AR.b;
+    if(k>.02&&B){
+      if(B.RightArm){B.RightArm.rotation.x-=k*1.02;B.RightArm.rotation.z+=k*.22;}
+      if(B.RightForeArm)B.RightForeArm.rotation.x-=k*.34;
+      if(B.LeftArm){B.LeftArm.rotation.x-=k*.98;B.LeftArm.rotation.z-=k*.46;}
+      if(B.LeftForeArm){B.LeftForeArm.rotation.x-=k*.85;B.LeftForeArm.rotation.z+=k*.35;}
+      if(B.Spine2)B.Spine2.rotation.x+=k*.07;
+      if(a.recoil>0&&B.RightArm)B.RightArm.rotation.x+=a.recoil*.5; // the kick travels up the arm
+    }
+  }
 }
 let zHats;
 {
@@ -4993,6 +5011,7 @@ function updateAllies(dt,t){
       if(s<bs){bs=s;best=zb;bestD=Math.sqrt(d2);}
     }
     const hurt=a.hp<a.maxhp*.35;
+    a._hasT=!!best&&bestD<38; // work in sight: the aim layer reads this
     if(best&&hurt&&bestD<11){ // hurt and pressed: open the range, keep shooting
       const aw=Math.atan2(a.x-best.x,a.z-best.z);
       a.tx=a.x+Math.sin(aw)*8;a.tz=a.z+Math.cos(aw)*8;a.wanderT=Math.max(a.wanderT,1.2);
