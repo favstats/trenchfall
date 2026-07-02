@@ -58,7 +58,7 @@ renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.06;
+renderer.toneMappingExposure=1.14;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.08,460);
 camera.rotation.order='YXZ';
@@ -111,7 +111,7 @@ moonHalo.scale.setScalar(55);
 scene.add(moonDisc);scene.add(moonHalo);
 const rim=new THREE.DirectionalLight(0x7a93c8,.45);   // cool back-light for silhouettes
 rim.position.set(60,40,70);scene.add(rim);
-const DUSK={fog:new THREE.Color(0x70755c),sun:new THREE.Color(0xffb070),sunI:3.1,hemiI:.6};   // sky fill: real shade is never black
+const DUSK={fog:new THREE.Color(0x7e8370),sun:new THREE.Color(0xffc088),sunI:4.2,hemiI:1.05};  // golden hour, not murk: the day finally acts like one
 const NIGHT={fog:new THREE.Color(0x131826),sun:new THREE.Color(0x8fa6d8),sunI:1.15,hemiI:.4};
 scene.fog=new THREE.Fog(0x70755c,34,150);   // luminous mist: the world dissolves into light
 
@@ -134,8 +134,8 @@ const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,
     void main(){
       vec3 d=normalize(vP);
       float h=clamp(d.y,0.,1.);
-      vec3 top=mix(vec3(.05,.058,.088),vec3(.015,.025,.06),nightF);
-      vec3 hor=mix(vec3(.46,.47,.36),vec3(.075,.095,.16),nightF);
+      vec3 top=mix(vec3(.16,.22,.34),vec3(.015,.025,.06),nightF);  // day owns a blue zenith now
+      vec3 hor=mix(vec3(.58,.58,.47),vec3(.075,.095,.16),nightF);
       vec3 col=mix(hor,top,pow(h,.5));
       // rolling cloud deck
       float cm=0.;
@@ -1388,10 +1388,10 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
   };};
   const leafM=new THREE.MeshStandardMaterial({map:leafTex,alphaTest:.5,side:THREE.DoubleSide,
     roughness:.85,color:0xb9c69a,envMapIntensity:.3,
-    emissive:0x18220e,emissiveMap:leafTex,emissiveIntensity:.85}); // translucency cheat
+    emissive:0x2c3d17,emissiveMap:leafTex,emissiveIntensity:1.05}); // translucency cheat: sun leaks through the crown
   const pineM=new THREE.MeshStandardMaterial({map:pineTex,alphaTest:.45,side:THREE.DoubleSide,
     roughness:.9,color:0xaebd96,envMapIntensity:.25,
-    emissive:0x121a0b,emissiveMap:pineTex,emissiveIntensity:.8});
+    emissive:0x1e2c10,emissiveMap:pineTex,emissiveIntensity:.95});
   swayLeaf(leafM);swayLeaf(pineM);
   // geometries: trunk bases at y=0
   const mkTrunk=(r0,r1,h)=>{const g=new THREE.CylinderGeometry(r0,r1,h,11);g.translate(0,h/2,0);return g;};
@@ -1451,8 +1451,8 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
           P.set(x+srand(-2.2,2.2),top-srand(0,5.5),z+srand(-2.2,2.2));
           M.compose(P,Q,S);DESTRUCT.push({m:leafCards,i:lc,x,z});leafCards.setMatrixAt(lc,M);
           C.setHSL(srand(.22,.30)+BIOME.leafHue,
-            srand(.32,.45)*(BIOME.snow?.4:1),
-            Math.min(.8,srand(.3,.48)*(BIOME.snow?1.5:1)));leafCards.setColorAt(lc++,C);
+            srand(.38,.52)*(BIOME.snow?.4:1),
+            Math.min(.8,srand(.38,.56)*(BIOME.snow?1.5:1)));leafCards.setColorAt(lc++,C); // leaves catch light, they don't drink it
         }
       }else if(kind<.8&&fi<wantF){                // fir + needle tiers
         const sc=srand(.9,1.55);S.set(sc,sc*srand(.9,1.15),sc);
@@ -1463,8 +1463,8 @@ const stumpMat=frostable(new THREE.MeshStandardMaterial({color:0x231a10,roughnes
           P.set(x,h+(3.6+tI*2.7)*sc,z);
           M.compose(P,Q,S);DESTRUCT.push({m:pineCards,i:pc,x,z});pineCards.setMatrixAt(pc,M);
           C.setHSL(srand(.3,.38)+BIOME.leafHue,
-            srand(.28,.42)*(BIOME.snow?.35:1),
-            Math.min(.8,srand(.22,.36)*(BIOME.snow?1.7:1)));pineCards.setColorAt(pc++,C); // snow-laden boughs
+            srand(.34,.48)*(BIOME.snow?.35:1),
+            Math.min(.8,srand(.3,.44)*(BIOME.snow?1.7:1)));pineCards.setColorAt(pc++,C); // snow-laden boughs
         }
       }else if(di<wantD){                         // shell-shattered dead tree
         const sc=srand(.7,1.5);S.setScalar(sc);
