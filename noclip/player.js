@@ -92,6 +92,18 @@ export class Player {
     this.pos.z += this.vel.z * dt;
     this._collide(zone.aabbs);
 
+    // vertical: ramps ease you down, pits you FALL into
+    const fy = world.floorAt(this.pos.x, this.pos.z);
+    if (fy < this.pos.y - 0.05) {
+      this._fallV = (this._fallV || 0) + 22 * dt;
+      this.pos.y = Math.max(fy, this.pos.y - this._fallV * dt);
+      if (this.pos.y === fy && this._fallV > 5) sfxStep(zone.surface);
+      if (this.pos.y === fy) this._fallV = 0;
+    } else {
+      this.pos.y += (fy - this.pos.y) * Math.min(1, dt * 12);
+      this._fallV = 0;
+    }
+
     // footsteps + head-bob keyed to actual movement
     const sp = Math.hypot(this.vel.x, this.vel.z);
     this.moving = sp > 0.4;

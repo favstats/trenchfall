@@ -163,5 +163,67 @@ export function makeTextures() {
     grime(g, w, h, 26, 0.22);
   });
 
-  return { wallpaper, carpet, ceiling, concrete, concreteWall, tile, caustics, crayon, redwall };
+  // ---- food court: checkered vinyl ----
+  const checker = canvas(256, 256, (g, w, h) => {
+    const s = 32;
+    for (let y = 0; y < h; y += s) for (let x = 0; x < w; x += s) {
+      const on = ((x + y) / s) % 2 === 0;
+      const v = on ? 224 + Math.random() * 14 : 30 + Math.random() * 14;
+      g.fillStyle = `rgb(${v},${v - (on ? 6 : 0)},${v - (on ? 14 : 4)})`;
+      g.fillRect(x, y, s, s);
+    }
+    grime(g, w, h, 20, 0.12);
+  });
+
+  // ---- garden: a ceiling painted like a sky by someone who forgot skies ----
+  const skyceil = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#7aa8cc'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 9; i++) {
+      const x = Math.random() * w, y = Math.random() * h, r = 20 + Math.random() * 34;
+      const grd = g.createRadialGradient(x, y, 2, x, y, r);
+      grd.addColorStop(0, 'rgba(240,244,248,0.9)');
+      grd.addColorStop(1, 'rgba(240,244,248,0)');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    grime(g, w, h, 8, 0.06, '60,80,100');
+  });
+
+  // ---- archive: shelves of book spines, tiled up the stacks ----
+  const books = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#3a2c1c'; g.fillRect(0, 0, w, h);
+    const rows = 4, rh = h / rows;
+    const cols = ['#6a3a2a', '#2a4a5a', '#5a5a2a', '#4a2a4a', '#7a6a4a', '#2a3a2a'];
+    for (let r = 0; r < rows; r++) {
+      let x = 0;
+      while (x < w) {
+        const bw = 8 + Math.random() * 14;
+        const bh = rh * (0.62 + Math.random() * 0.28);
+        g.fillStyle = cols[(Math.random() * cols.length) | 0];
+        g.fillRect(x, (r + 1) * rh - bh - 3, bw - 1.5, bh);
+        x += bw;
+      }
+      g.fillStyle = '#241a10'; g.fillRect(0, (r + 1) * rh - 3, w, 3);
+    }
+    grime(g, w, h, 12, 0.14);
+  });
+
+  // ---- hotel: maroon stripe wallpaper + red corridor carpet ----
+  const hotelpaper = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#5a2a28'; g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 22) { g.fillStyle = x % 44 ? '#63302c' : '#521f1e'; g.fillRect(x, 0, 11, h); }
+    speckle(g, w, h, 300, '#401a18', 0.4);
+    grime(g, w, h, 16, 0.14);
+  });
+  const hotelcarpet = canvas(256, 256, (g, w, h) => {
+    g.fillStyle = '#6a1f1c'; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 32) for (let x = 0; x < w; x += 32) {
+      g.strokeStyle = 'rgba(200,160,90,0.35)'; g.lineWidth = 2;
+      g.strokeRect(x + 6, y + 6, 20, 20);
+    }
+    speckle(g, w, h, 2000, '#5a1a16', 0.5);
+    grime(g, w, h, 20, 0.16);
+  });
+
+  return { wallpaper, carpet, ceiling, concrete, concreteWall, tile, caustics, crayon, redwall, checker, skyceil, books, hotelpaper, hotelcarpet };
 }

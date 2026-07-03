@@ -114,13 +114,16 @@ export function createHUD(root, hooks = {}) {
   }
 
   function showEnd(S) {
-    const banked = S.kind === 'bank';
-    el.endHead.textContent = banked ? 'EVIDENCE INTAKE — TAPES RECEIVED' : 'EVIDENCE REVIEW — BATTERY DEAD';
-    el.endTitle.textContent = banked ? 'ASCENDED' : 'TAPE ENDS';
-    el.endTitle.className = `tl-title ${banked ? 'win' : 'lose'}`;
-    el.endSub.textContent = banked
-      ? `the elevator takes a long time. nobody asks where you have been. ${S.earned} tapes banked at ×${S.mult.toFixed(1)}.`
-      : `the last frames show carpet. ${S.earned} of ${S.tapes} tapes survived the dark.`;
+    const banked = S.kind === 'bank', out = S.kind === 'reality';
+    el.endHead.textContent = out ? 'CASE CLOSED — SUBJECT RECOVERED ALIVE'
+      : banked ? 'EVIDENCE INTAKE — TAPES RECEIVED' : 'EVIDENCE REVIEW — BATTERY DEAD';
+    el.endTitle.textContent = out ? 'NOCLIP' : banked ? 'ASCENDED' : 'TAPE ENDS';
+    el.endTitle.className = `tl-title ${banked || out ? 'win' : 'lose'}`;
+    el.endSub.textContent = out
+      ? `you fit through the seam. the parking lot. the sun. nobody believes you, and the tapes — ${S.earned} banked at triple value — do not help your case.`
+      : banked
+        ? `the elevator takes a long time. nobody asks where you have been. ${S.earned} tapes banked at ×${S.mult.toFixed(1)}.`
+        : `the last frames show carpet. ${S.earned} of ${S.tapes} tapes survived the dark.`;
     el.endStats.innerHTML = `
       <div><span>${S.dist}m</span>from the fall</div>
       <div><span>${S.tapes}</span>tapes carried</div>

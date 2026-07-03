@@ -74,16 +74,31 @@ function startRun() {
   player.place(12, 0, 12, Math.PI * 0.25);
   player.enabled = true;
   player.requestLock();
-  hud.zone('THE YELLOW ROOMS', 'it hums · find the light · find the way down');
   hud.whisper(`tape #${(getSeed() % 900 + 100)} begins mid-fall. there is no hole above him.`, 5);
 }
 
-function endRun(kind) { // 'bank' | 'dead'
+// lore is FOUND, not told — scraps in the handwriting of people who kept count
+const NOTES = [
+  'day 4. the hum is coming from inside the walls. or the walls are the hum. water tastes like almonds here. drink it.',
+  'if the lights go out STAND STILL. it only knows shapes that move.',
+  'found a window today. there is nothing outside. there is no outside.',
+  'the elevator took Marco. it came back empty and polite. we bank the tapes anyway.',
+  'counted my steps to the pool halls: 4,406. counted them back: 4,411.',
+  'the party room smells like my sixth birthday. do not eat the cake. do not answer the singing.',
+  'saw a door in the wall three metres up. Erin says a floor used to be there. the building is digesting floors.',
+  'M.E.G. protocol: mark your route. the marks move. mark it anyway. it makes you feel real.',
+  'there is a crack of white light two days east of here. Ruiz stepped through it and did not come back. lucky bastard.',
+  'the mannequin by the tree was facing away yesterday.',
+];
+
+function endRun(kind) { // 'bank' | 'dead' | 'reality'
+  if (G.phase !== 'run') return;
   G.phase = 'end';
   player.enabled = false;
   document.pointerLockElement && document.exitPointerLock();
   const mult = 1 + Math.floor(G.dist / 150) * 0.5;
-  const earned = kind === 'bank' ? Math.round(G.tapes * mult) : Math.floor(G.tapes / 2);
+  const earned = kind === 'reality' ? Math.round(G.tapes * mult * 3) + 50
+    : kind === 'bank' ? Math.round(G.tapes * mult) : Math.floor(G.tapes / 2);
   META.banked += earned;
   META.best = Math.max(META.best, Math.round(G.dist));
   saveMeta();
@@ -111,7 +126,11 @@ player.update = (dt, w) => {
 };
 
 // ---------------- entity director ----------------
-const BIOME_ENTITY = { garage: 'grin', redveins: 'chaser', void: 'stilt', fun: 'party', pillars: 'grin', cathedral: 'grin' };
+const BIOME_ENTITY = {
+  garage: 'grin', redveins: 'chaser', void: 'stilt', fun: 'party',
+  pillars: 'grin', cathedral: 'grin', hotel: 'grin', theater: 'grin',
+  archive: 'grin', lightsout: 'grin', ocean: 'stilt',
+};
 function trySpawnEntity(mode) {
   for (let tries = 0; tries < 14; tries++) {
     const a = player.yaw + Math.PI + (Math.random() - 0.5) * 2.4;
@@ -177,11 +196,11 @@ function frame(now) {
     G.time += dt;
     G.dist = Math.max(G.dist, Math.hypot(player.pos.x, player.pos.z));
 
-    // biome cards as you cross regions — no doors, the world just changes
+    // crossing a region announces NOTHING — at most the tape stutters once,
+    // and you notice the carpet is wrong on your own
     if (G.biome.key !== G.lastBiomeKey) {
       G.lastBiomeKey = G.biome.key;
-      hud.zone(G.biome.name, G.biome.sub);
-      sfxDescend();
+      R.tapeSkip(0.18);
     }
 
     // ---- the battery is your life ----
@@ -203,7 +222,14 @@ function frame(now) {
         it.taken = true; it.mesh.visible = false;
         G.battery = Math.min(G.batteryMax, G.battery + 35);
         sfxPickup();
-        hud.whisper('almond water. the tape drinks first.', 3);
+      } else if (it.kind === 'note' && d < reach) {
+        it.taken = true; it.mesh.visible = false;
+        hud.whisper(NOTES[(getSeed() + Math.round(it.x * 7 + it.z * 13)) % NOTES.length], 7);
+        sfxPickup();
+      } else if (it.kind === 'reality' && d < 1.1) {
+        // the rarest thing in here: a seam in the world, and you fit through
+        endRun('reality');
+        break;
       }
     }
 
@@ -225,9 +251,13 @@ function frame(now) {
 
     runEvents(dt);
     setHum(G.biome.hum * (lit ? 1 : 0.4));
-    setRoomTone({ yellow: 240, pillars: 220, fun: 300, garage: 130, pools: 520, cathedral: 180, suburb: 340, redveins: 110, void: 80 }[G.biome.key] || 240, 0.15);
+    setRoomTone({
+      yellow: 240, pillars: 220, fun: 300, garage: 130, pools: 520, cathedral: 180,
+      suburb: 340, redveins: 110, void: 80, hotel: 200, theater: 90, archive: 260,
+      court: 420, garden: 380, white: 600, lightsout: 60, ocean: 70,
+    }[G.biome.key] || 240, G.biome.key === 'lightsout' ? 0.05 : 0.15);
     G.dripT -= dt;
-    if (G.dripT <= 0 && (G.biome.key === 'pools' || G.biome.key === 'garage')) { G.dripT = 3 + Math.random() * 6; sfxDrip(); }
+    if (G.dripT <= 0 && ['pools', 'garage', 'ocean'].includes(G.biome.key)) { G.dripT = 3 + Math.random() * 6; sfxDrip(); }
   } else if (G.phase === 'menu') {
     player.yaw += dt * 0.05;
   }
