@@ -67,8 +67,11 @@ const bBox=new THREE.Box3();
 for(const g2 of baked){g2.computeBoundingBox();bBox.union(g2.boundingBox);}
 const bC=bBox.getCenter(new THREE.Vector3());
 const s=targetH/(bBox.max.y-bBox.min.y)*1.04;  // gear adds height; near-true scale
-const norm=new THREE.Matrix4().makeScale(s,s,s);
-norm.setPosition(-bC.x*s,-bBox.min.y*s,-bC.z*s); // feet to floor, centered
+const flip=q.get('flip')==='0'?0:Math.PI;     // he was walking away from his own footsteps
+const norm=new THREE.Matrix4().makeRotationY(flip);
+norm.premultiply(new THREE.Matrix4().makeScale(s,s,s));
+const fx=flip?bC.x:-bC.x,fz=flip?bC.z:-bC.z;
+norm.premultiply(new THREE.Matrix4().makeTranslation(fx*s,-bBox.min.y*s,fz*s)); // feet to floor, centered
 for(const g2 of baked)g2.applyMatrix4(norm);
 console.log('baked size',(bBox.max.y-bBox.min.y).toFixed(2),'scale',s.toFixed(3));
 const segDist=(p,A,B)=>{ // distance from p to segment AB and the parameter t
@@ -128,5 +131,8 @@ cam.position.set(Math.sin(ang)*3.4,1.6,Math.cos(ang)*3.4);
 cam.lookAt(0,1,0);
 window.__loaded=true;
 console.log('parts:',recruits.length,'clips:',sold.animations.map(c=>c.name).join(','));
-(function loop(){requestAnimationFrame(loop);r.render(sc,cam);})();
+const clock=new THREE.Clock();
+(function loop(){requestAnimationFrame(loop);
+  if(q.get('live'))mixer.update(clock.getDelta()); // watch it move
+  r.render(sc,cam);})();
 </script>

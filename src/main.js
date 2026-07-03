@@ -2307,7 +2307,82 @@ function scatterRuins(){ // the country keeps its dead architecture
     scene.add(c);WANDER._meshes.push(c);
     WANDER.loot.push({x,z,mesh:c,taken:false,rich});
   };
+  const roofM=frostable(new THREE.MeshStandardMaterial({color:0x38342c,map:woodTex,roughness:.95,bumpMap:woodTex,bumpScale:.3}));
+  const glassM=new THREE.MeshStandardMaterial({color:0x0b0d10,roughness:.3,metalness:.15});
+  const trimM=frostable(new THREE.MeshStandardMaterial({color:0x6b5d49,map:woodTex,roughness:.9}));
+  /* a real house: walls built AROUND framed openings, a pitched roof with eaves,
+     gables, a chimney — and the war lets itself in through one corner of the roof */
+  function houseWall(W,H,T,mat,openings){
+    const wall=new THREE.Group();
+    const seg=(w,h,x,y)=>{if(w<.06||h<.05)return;
+      const s=new THREE.Mesh(new THREE.BoxGeometry(w,h,T),mat);
+      s.position.set(x,y,0);wall.add(s);};
+    let cur=-W/2;
+    for(const o of openings.sort((a,b)=>a.cx-b.cx)){
+      const x0=o.cx-o.w/2,x1=o.cx+o.w/2;
+      seg(x0-cur,H,(cur+x0)/2,H/2);                    // pier before the opening
+      seg(o.w,H-o.y1,o.cx,(o.y1+H)/2);                 // spandrel above
+      if(o.y0>0)seg(o.w,o.y0,o.cx,o.y0/2);             // breast below a window
+      const fr=new THREE.Mesh(new THREE.BoxGeometry(o.w+.14,o.y1-o.y0+.14,T*.5),trimM);
+      fr.position.set(o.cx,(o.y0+o.y1)/2,T*.28);wall.add(fr);   // the frame stands proud
+      const gl=new THREE.Mesh(new THREE.BoxGeometry(o.w-.06,o.y1-o.y0-.06,.03),o.door?trimM:glassM);
+      gl.position.set(o.cx,(o.y0+o.y1)/2,0);wall.add(gl);       // glass, or a shut door
+      cur=x1;
+    }
+    seg(W/2-cur,H,(cur+W/2)/2,H/2);
+    return wall;
+  }
+  function mkHouse(g,W,D,H,RH,damaged){
+    const T=.34,e=.5;
+    const foundM=concrete.clone();foundM.color=new THREE.Color(0x63605a);
+    const found=new THREE.Mesh(new THREE.BoxGeometry(W+.5,.4,D+.5),foundM);
+    found.position.y=.2;g.add(found);
+    const front=houseWall(W,H,T,brickM,[{cx:-W*.22,w:1.05,y0:0,y1:2.15,door:true},{cx:W*.24,w:1.35,y0:.85,y1:2.2}]);
+    front.position.set(0,.4,D/2-T/2);g.add(front);
+    const back=houseWall(W,H,T,brickM,[{cx:-W*.2,w:1.35,y0:.85,y1:2.2},{cx:W*.22,w:1.35,y0:.85,y1:2.2}]);
+    back.position.set(0,.4,-D/2+T/2);g.add(back);
+    for(const s of[-1,1]){
+      const side=houseWall(D-T*2,H,T,brickM,[{cx:0,w:1.25,y0:.85,y1:2.2}]);
+      side.rotation.y=Math.PI/2;side.position.set(s*(W/2-T/2),.4,0);g.add(side);
+    }
+    const yTop=H+.4;
+    for(const s of[-1,1]){ // gable triangles carry the ridge
+      const sh=new THREE.Shape();sh.moveTo(-W/2,0);sh.lineTo(W/2,0);sh.lineTo(0,RH);sh.closePath();
+      const gb=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false}),brickM);
+      gb.position.set(0,yTop,s*(D/2)-(s>0?T:0));g.add(gb);
+    }
+    const a=W/2+e,rise=RH+.06,slope=Math.hypot(a,rise)+.25,ang=Math.atan2(rise,a);
+    const mkSlab=(s,lenK,zOff)=>{ // s=-1 left, +1 right; lenK shortens a bombed panel
+      const sl=new THREE.Mesh(new THREE.BoxGeometry(slope,.13,(D+e*2)*lenK),roofM);
+      sl.rotation.z=-s*ang;
+      sl.position.set(s*a/2,yTop+rise/2+.05,zOff);
+      g.add(sl);
+    };
+    mkSlab(-1,1,0);
+    if(damaged){
+      mkSlab(1,.55,-(D+e*2)*.2);           // the shell took the front half of this side
+      for(let i=0;i<3;i++){                 // rafters dropped into the room
+        const bm=new THREE.Mesh(new THREE.BoxGeometry(.16,.16,srand(2.4,3.6)),roofM);
+        bm.position.set(srand(.4,W*.36),srand(1,H*.75),srand(-.4,D*.28));
+        bm.rotation.set(srand(-.5,.5),srand(TAU),srand(-.9,-.3));g.add(bm);
+      }
+    }else mkSlab(1,1,0);
+    const ridge=new THREE.Mesh(new THREE.BoxGeometry(.22,.14,D+e*2),trimM);
+    ridge.position.set(0,yTop+rise+.08,0);g.add(ridge);
+    const ch=new THREE.Mesh(new THREE.BoxGeometry(.6,RH+1.5,.6),brickM);
+    ch.position.set(W*.26,yTop+RH*.4,D*.14);g.add(ch);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(.78,.14,.78),concrete);
+    cap.position.set(W*.26,yTop+RH*.4+(RH+1.5)/2+.07,D*.14);g.add(cap);
+  }
   const builders={
+    cottage(x,z){ // a farmhouse that still looks like somebody's life
+      const g=new THREE.Group();
+      const W=srand(6.2,7.6),D=srand(5,6.2),H=srand(2.5,2.9),RH=srand(1.5,2);
+      mkHouse(g,W,D,H,RH,srnd()<.6);
+      COLLIDERS.push({x,z,r:Math.max(W,D)*.6});
+      lootHere(x+srand(-1.5,1.5),z+srand(-1.5,1.5),srnd()<.4);
+      return g;
+    },
     barn(x,z){
       const g=new THREE.Group();
       for(const s2 of[-1,1]){ // two gable ends still standing
@@ -2388,7 +2463,7 @@ function scatterRuins(){ // the country keeps its dead architecture
   DEV_RUINS.length=0;
   const n=3+(srnd()*4|0);
   for(let i=0;i<n;i++){
-    const kind=keys[Math.floor(srnd()*keys.length)];
+    const kind=i===0?'cottage':keys[Math.floor(srnd()*keys.length)]; // every world keeps at least one real house
     const sp=spot(kind==='bunker'||kind==='cavemouth'?34:30);
     if(!sp)continue;
     const g=builders[kind](sp.x,sp.z);
