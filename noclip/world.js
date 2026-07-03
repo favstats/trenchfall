@@ -1,18 +1,28 @@
-// world.js — five levels, stacked vertically in one scene, each with its own
-// wrongness. The architecture misbehaves on purpose: pillar forests, ceiling
-// voids trailing dead wires, tilted walls, doorframes to nowhere, clocks that
-// disagree, an EXIT sign that lies. And there is STUFF — chairs, static-filled
-// TVs, a phone that rings, balloons, drowned mannequins, almond water.
-// One AABB list per zone doubles as collision; six pooled lights follow you.
+// world.js — the backrooms, but actually endless. The world streams in 24m
+// chunks around you, seeded fresh every load. Biomes are smooth noise REGIONS,
+// not levels: you walk out of the yellow rooms and the ceiling just... leaves,
+// and you are in the Cathedral. Nothing loads. Nothing warns you. Further from
+// where you fell in, the architecture gets stranger — and following the film's
+// lead, the rooms are eating things: desks half-swallowed by carpet, chairs
+// fused into walls, a suburb misfiled inside an office dimension.
 import * as THREE from './engine/three.js';
 import * as P from './props.js';
 
-const CELL = 6, GRID = 16;
-export const ZONE_Y = [0, -30, -60, -90, -120];
-const WALL_H = 3.0;
+export const CELL = 6, CHUNK_CELLS = 4, CHUNK = CELL * CHUNK_CELLS; // 24m
+const LOAD_R = 2, KEEP_R = 3;
 
-function mulberry(seed) {
-  let a = seed >>> 0;
+// ---------------------------------------------------------------- noise ----
+let SEED = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
+export function setSeed(s) { SEED = s >>> 0; }
+export function getSeed() { return SEED; }
+
+function hash2(x, y) {
+  let h = SEED ^ (x * 374761393) ^ (y * 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function rngFor(cx, cz) {
+  let a = (SEED ^ (cx * 73856093) ^ (cz * 19349663)) >>> 0;
   return () => {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -20,668 +30,466 @@ function mulberry(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-// shared maze generator with guaranteed reachability (flood fill + door punch)
-function mazeSegs(rnd, open = 0.62, doorway = 0.18) {
-  const hWall = Array.from({ length: GRID + 1 }, () => new Array(GRID).fill(true));
-  const vWall = Array.from({ length: GRID }, () => new Array(GRID + 1).fill(true));
-  for (let z = 1; z < GRID; z++) for (let x = 0; x < GRID; x++) if (rnd() < open) hWall[z][x] = false;
-  for (let z = 0; z < GRID; z++) for (let x = 1; x < GRID; x++) if (rnd() < open) vWall[z][x] = false;
-  const reach = Array.from({ length: GRID }, () => new Array(GRID).fill(false));
-  const stack = [[1, 1]]; reach[1][1] = true;
-  while (stack.length) {
-    const [cx, cz] = stack.pop();
-    if (cz > 0 && !hWall[cz][cx] && !reach[cz - 1][cx]) { reach[cz - 1][cx] = true; stack.push([cx, cz - 1]); }
-    if (cz < GRID - 1 && !hWall[cz + 1][cx] && !reach[cz + 1][cx]) { reach[cz + 1][cx] = true; stack.push([cx, cz + 1]); }
-    if (cx > 0 && !vWall[cz][cx] && !reach[cz][cx - 1]) { reach[cz][cx - 1] = true; stack.push([cx - 1, cz]); }
-    if (cx < GRID - 1 && !vWall[cz][cx + 1] && !reach[cz][cx + 1]) { reach[cz][cx + 1] = true; stack.push([cx + 1, cz]); }
-  }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let z = 0; z < GRID; z++) for (let x = 0; x < GRID; x++) {
-      if (reach[z][x]) continue;
-      if (z > 0 && reach[z - 1][x]) hWall[z][x] = false;
-      else if (x > 0 && reach[z][x - 1]) vWall[z][x] = false;
-      else continue;
-      reach[z][x] = true; changed = true;
-    }
-  }
-  const half = (GRID * CELL) / 2;
-  const cx0 = (i) => -half + i * CELL;
-  const segs = [];
-  for (let z = 0; z <= GRID; z++) for (let x = 0; x < GRID; x++) {
-    const border = z === 0 || z === GRID;
-    if (!border && !hWall[z][x]) continue;
-    if (!border && rnd() < doorway) continue;
-    segs.push({ x: cx0(x) + CELL / 2, z: cx0(z), sx: CELL, sz: 0.3 });
-  }
-  for (let x = 0; x <= GRID; x++) for (let z = 0; z < GRID; z++) {
-    const border = x === 0 || x === GRID;
-    if (!border && !vWall[z][x]) continue;
-    if (!border && rnd() < doorway) continue;
-    segs.push({ x: cx0(x), z: cx0(z) + CELL / 2, sx: 0.3, sz: CELL });
-  }
-  return { segs, cx0, half };
+function vnoise(x, y) { // smooth value noise
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-function instanceWalls(g, segs, mat, aabbs, y0, rnd, weird = false) {
-  const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, segs.length);
-  const o = new THREE.Object3D();
-  segs.forEach((s, i) => {
-    // weirdness: some walls tilt, some fall short of the ceiling
-    const tilt = weird && rnd() < 0.07 ? (rnd() - 0.5) * 0.12 : 0;
-    const h = weird && rnd() < 0.05 ? WALL_H * 0.72 : WALL_H;
-    o.position.set(s.x, y0 + h / 2, s.z);
-    o.rotation.set(0, 0, tilt);
-    o.scale.set(Math.max(s.sx, 0.3), h, Math.max(s.sz, 0.3));
-    o.updateMatrix();
-    walls.setMatrixAt(i, o.matrix);
-    aabbs.push({ x1: s.x - s.sx / 2 - 0.15, z1: s.z - s.sz / 2 - 0.15, x2: s.x + s.sx / 2 + 0.15, z2: s.z + s.sz / 2 + 0.15 });
-  });
-  g.add(walls);
+// ---------------------------------------------------------------- biomes ---
+// order matters: index = how deep you must be before it can appear
+export const BIOMES = [
+  { key: 'yellow', name: 'THE YELLOW ROOMS', sub: 'it hums', surface: 'carpet',
+    mood: { sky: 0xa89448, gnd: 0x6a5c2a, i: 1.25, fog: 0x9a8840, fogD: 0.045 }, hum: 1, dark: false },
+  { key: 'pillars', name: 'THE PILLAR HALLS', sub: 'a forest that was filed wrong', surface: 'carpet',
+    mood: { sky: 0x9a8a44, gnd: 0x5a4e24, i: 1.05, fog: 0x8a7838, fogD: 0.06 }, hum: 0.8, dark: false },
+  { key: 'fun', name: 'LEVEL FUN =)', sub: 'the party never stopped', surface: 'carpet',
+    mood: { sky: 0xc8ab92, gnd: 0x7a6252, i: 1.18, fog: 0xab9280, fogD: 0.045 }, hum: 0.6, dark: false },
+  { key: 'garage', name: 'THE PARKING DECK', sub: 'your car is still here', surface: 'concrete',
+    mood: { sky: 0x3c342a, gnd: 0x121216, i: 0.52, fog: 0x0e0c0a, fogD: 0.04 }, hum: 0.4, dark: true },
+  { key: 'pools', name: 'THE POOL HALLS', sub: 'the water is warm', surface: 'tile',
+    mood: { sky: 0xcfe4ea, gnd: 0x7c979e, i: 1.0, fog: 0xd7e9ee, fogD: 0.035 }, hum: 0.15, dark: false },
+  { key: 'cathedral', name: 'THE CATHEDRAL', sub: 'the ceiling left', surface: 'carpet',
+    mood: { sky: 0x8a7a40, gnd: 0x4a4020, i: 0.9, fog: 0x6a5c30, fogD: 0.03 }, hum: 1.2, dark: false },
+  { key: 'suburb', name: 'THE SUBURB', sub: 'somebody filed a neighborhood in here', surface: 'carpet',
+    mood: { sky: 0xb8a468, gnd: 0x6a5c34, i: 1.1, fog: 0xa08c50, fogD: 0.028 }, hum: 0.5, dark: false },
+  { key: 'redveins', name: 'THE RED VEINS', sub: 'RUN', surface: 'concrete',
+    mood: { sky: 0x4a1610, gnd: 0x160604, i: 0.62, fog: 0x1c0806, fogD: 0.055 }, hum: 0.2, dark: true },
+  { key: 'void', name: 'THE COMPLEX', sub: 'do not let it see you stop moving', surface: 'concrete',
+    mood: { sky: 0x14161c, gnd: 0x060608, i: 0.3, fog: 0x08090c, fogD: 0.022 }, hum: 0.1, dark: true },
+];
+const BIOME_IX = Object.fromEntries(BIOMES.map((b, i) => [b.key, i]));
+
+export function biomeAt(cx, cz) {
+  const d = Math.hypot(cx, cz);
+  if (d < 2.2) return BIOMES[0];                       // you always fall into yellow
+  // domain-warped region noise → coherent blobs with organic borders
+  const wx = cx + (vnoise(cx * 0.11 + 40, cz * 0.11) - 0.5) * 6;
+  const wz = cz + (vnoise(cx * 0.11, cz * 0.11 + 80) - 0.5) * 6;
+  const n = vnoise(wx * 0.16, wz * 0.16);
+  const unlocked = Math.min(BIOMES.length, 2 + Math.floor(d / 2.2)); // deeper = stranger
+  let ix = Math.floor(n * unlocked) % unlocked;
+  // yellow stays common as connective tissue
+  if (vnoise(cx * 0.07 + 200, cz * 0.07) < 0.34) ix = 0;
+  return BIOMES[ix];
 }
 
-function addProp(g, zone, mesh, x, z, ry = 0, collide = 0) {
-  mesh.position.set(x, zone.y, z);
-  mesh.rotation.y = ry;
-  g.add(mesh);
-  if (mesh.userData.update) zone.props.push(mesh);
-  if (collide > 0) zone.aabbs.push({ x1: x - collide, z1: z - collide, x2: x + collide, z2: z + collide });
-  return mesh;
-}
-
-function graffiti(g, text, x, y, z, ry, opts = {}) {
-  const t = P.textPlane(text, opts.w || 2.2, opts.h || 0.6, { color: opts.color || 'rgba(40,30,16,0.75)', font: opts.font || 'cursive', size: opts.size || 48 });
-  t.position.set(x, y, z);
-  t.rotation.y = ry;
-  g.add(t);
-}
-
-// ---------------------------------------------------------------- level 0 --
-function buildYellowRooms(scene, tex, rnd) {
-  const g = new THREE.Group();
-  const y0 = ZONE_Y[0];
-  const zone = {
-    name: 'THE YELLOW ROOMS', sub: 'level 0 · it hums', surface: 'carpet',
-    y: y0, aabbs: [], fixtures: [], props: [], pickups: [],
-    ambient: { sky: 0xa89448, gnd: 0x6a5c2a, i: 1.25, fog: 0x9a8840, fogD: 0.04, lightColor: 0xffe9a0 },
-    hum: 1, dark: false,
-  };
-  const { segs, cx0, half } = mazeSegs(rnd);
-  zone.spawn = { x: cx0(1) + CELL / 2, z: cx0(1) + CELL / 2 };
-  zone.bounds = { x1: -half + 0.6, z1: -half + 0.6, x2: half - 0.6, z2: half - 0.6 };
-
-  const floorMat = new THREE.MeshLambertMaterial({ map: tex.carpet });
-  tex.carpet.repeat.set(GRID * 2, GRID * 2);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL), floorMat);
-  floor.rotation.x = -Math.PI / 2; floor.position.y = y0;
-  const ceilMat = new THREE.MeshLambertMaterial({ map: tex.ceiling });
-  tex.ceiling.repeat.set(GRID * 1.5, GRID * 1.5);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL), ceilMat);
-  ceil.rotation.x = Math.PI / 2; ceil.position.y = y0 + WALL_H;
-  g.add(floor, ceil);
-
-  const wallMat = new THREE.MeshLambertMaterial({ map: tex.wallpaper });
-  tex.wallpaper.repeat.set(3, 1.5);
-  instanceWalls(g, segs, wallMat, zone.aabbs, y0, rnd, true);
-
-  // fluorescents
-  const panelGeo = new THREE.PlaneGeometry(2.2, 1.1);
-  const panelMat = new THREE.MeshBasicMaterial({ color: 0xfff6cf });
-  for (let z = 0; z < GRID; z += 2) for (let x = 0; x < GRID; x += 2) {
-    const px = cx0(x) + CELL, pz = cx0(z) + CELL;
-    const p = new THREE.Mesh(panelGeo, panelMat);
-    p.rotation.x = Math.PI / 2;
-    p.position.set(px, y0 + WALL_H - 0.02, pz);
-    g.add(p);
-    zone.fixtures.push({ x: px, y: y0 + WALL_H - 0.5, z: pz, color: 0xfff2b8, base: 20, phase: rnd() * 100 });
-  }
-
-  // ---- ARCHITECTURAL WRONGNESS ----
-  // pillar forests: cells where columns grow like teeth
-  const colMat = new THREE.MeshLambertMaterial({ map: tex.wallpaper });
-  for (let i = 0; i < 6; i++) {
-    const cxx = cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2;
-    const czz = cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2;
-    for (let k = 0; k < 5; k++) {
-      const px = cxx + (rnd() - 0.5) * 4.4, pz = czz + (rnd() - 0.5) * 4.4;
-      const col = new THREE.Mesh(new THREE.BoxGeometry(0.5, WALL_H, 0.5), colMat);
-      col.position.set(px, y0 + WALL_H / 2, pz);
-      col.rotation.y = rnd() * 0.4;
-      g.add(col);
-      zone.aabbs.push({ x1: px - 0.4, z1: pz - 0.4, x2: px + 0.4, z2: pz + 0.4 });
-    }
-  }
-  // ceiling voids: black mouths overhead trailing dead wires
-  for (let i = 0; i < 5; i++) {
-    const vx = cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2;
-    const vz = cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2;
-    const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    mouth.rotation.x = Math.PI / 2; mouth.position.set(vx, y0 + WALL_H - 0.01, vz);
-    g.add(mouth);
-    for (let w = 0; w < 3; w++) {
-      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.8 + rnd() * 1.2, 4),
-        new THREE.MeshBasicMaterial({ color: 0x0c0c0c }));
-      wire.position.set(vx + (rnd() - 0.5) * 2, y0 + WALL_H - 0.5 - rnd() * 0.5, vz + (rnd() - 0.5) * 2);
-      wire.rotation.z = (rnd() - 0.5) * 0.3;
-      g.add(wire);
-    }
-  }
-  // freestanding doorframes; clocks that disagree; the EXIT sign that lies
-  for (let i = 0; i < 4; i++) {
-    addProp(g, zone, P.doorFrame(), cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2, cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2, rnd() * Math.PI);
-  }
-  for (let i = 0; i < 5; i++) {
-    const s = segs[(rnd() * segs.length) | 0];
-    const clock = P.wallClock((rnd() * 12) | 0, (rnd() * 60) | 0);
-    const horiz = s.sx > s.sz;
-    clock.position.set(s.x + (horiz ? 0 : 0.2), y0 + 2.1, s.z + (horiz ? 0.2 : 0));
-    clock.rotation.y = horiz ? 0 : Math.PI / 2;
-    g.add(clock);
-  }
-  const exitLie = P.textPlane('EXIT →', 1.2, 0.4, { bg: '#123a12', color: '#6aff8a', font: 'monospace', size: 60 });
-  exitLie.position.set(cx0(5), y0 + 2.5, cx0(3) + 0.21);
-  g.add(exitLie);
-
-  // ---- STUFF ----
-  for (let i = 0; i < 10; i++) {
-    addProp(g, zone, P.officeChair(), cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2 + (rnd() - 0.5) * 3, cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2 + (rnd() - 0.5) * 3, rnd() * Math.PI * 2);
-  }
-  for (let i = 0; i < 4; i++) {
-    addProp(g, zone, P.fileCabinet(rnd() < 0.5), cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2, cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2, rnd() * Math.PI, 0.5);
-  }
-  for (let i = 0; i < 7; i++) {
-    addProp(g, zone, P.papers(6), cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2, cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2);
-  }
-  addProp(g, zone, P.wetFloorSign(), cx0(4) + 2, cx0(7) + 2, 0.6);
-
-  // the desk with the phone — it will ring
-  const deskX = cx0(9) + CELL / 2, deskZ = cx0(5) + CELL / 2;
-  addProp(g, zone, P.desk(), deskX, deskZ, 0.2, 0.9);
-  const phone = P.rotaryPhone();
-  phone.position.set(deskX + 0.3, y0 + 0.77, deskZ);
-  g.add(phone);
-  zone.phone = { x: deskX, z: deskZ };
-
-  // a bank of CRTs, all static
-  const tvX = cx0(12) + CELL / 2, tvZ = cx0(10) + CELL / 2;
-  for (let i = 0; i < 3; i++) {
-    const tv = P.crtTV();
-    addProp(g, zone, tv, tvX - 0.7 + i * 0.7, tvZ, Math.PI + (rnd() - 0.5) * 0.4, 0);
-  }
-  zone.aabbs.push({ x1: tvX - 1.2, z1: tvZ - 0.5, x2: tvX + 1.2, z2: tvZ + 0.5 });
-
-  graffiti(g, 'the hum lies', cx0(3) + CELL / 2, y0 + 1.7, cx0(6) + 0.21, 0);
-  graffiti(g, 'M.E.G. WAS HERE', cx0(11), y0 + 1.4, cx0(2) + CELL / 2, Math.PI / 2, { font: 'monospace', color: 'rgba(60,20,14,0.8)' });
-  graffiti(g, 'it counts your steps', cx0(7) + CELL / 2, y0 + 0.9, cx0(12) - 0.21, Math.PI);
-
-  // almond water — the only thing down here that helps
-  for (const [ax, az] of [[cx0(13) + 2, cx0(4) + 2], [cx0(3) + 1, cx0(13) + 3]]) {
-    const b = P.almondWater();
-    addProp(g, zone, b, ax, az);
-    zone.pickups.push({ x: ax, z: az, g: b, taken: false });
-  }
-
-  // the way down
-  zone.exit = { x: cx0(GRID - 2) + CELL / 2, z: cx0(GRID - 2) + CELL / 2, r: 2.2 };
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-  hole.rotation.x = -Math.PI / 2; hole.position.set(zone.exit.x, y0 + 0.02, zone.exit.z);
-  const rim = new THREE.Mesh(new THREE.RingGeometry(2.2, 2.6, 24), new THREE.MeshBasicMaterial({ color: 0x3a3320 }));
-  rim.rotation.x = -Math.PI / 2; rim.position.set(zone.exit.x, y0 + 0.03, zone.exit.z);
-  g.add(hole, rim);
-  graffiti(g, '↓ down is out', zone.exit.x, y0 + 1.3, zone.exit.z - 3.2, 0, { color: 'rgba(90,30,20,0.8)' });
-
-  scene.add(g);
-  return zone;
-}
-
-// ---------------------------------------------------------------- level 1 --
-function buildFunRooms(scene, tex, rnd) {
-  const g = new THREE.Group();
-  const y0 = ZONE_Y[1];
-  const zone = {
-    name: 'LEVEL FUN =)', sub: 'the party never stopped', surface: 'carpet',
-    y: y0, aabbs: [], fixtures: [], props: [], pickups: [], balloons: [],
-    ambient: { sky: 0xc8ab92, gnd: 0x7a6252, i: 1.18, fog: 0xab9280, fogD: 0.04, lightColor: 0xffd9c0 },
-    hum: 0.6, dark: false,
-  };
-  const { segs, cx0, half } = mazeSegs(rnd, 0.72, 0.24);   // more open — party halls
-  zone.spawn = { x: cx0(1) + CELL / 2, z: cx0(1) + CELL / 2 };
-  zone.bounds = { x1: -half + 0.6, z1: -half + 0.6, x2: half - 0.6, z2: half - 0.6 };
-
-  tex.crayon.repeat.set(3, 1.5);
-  const wallMat = new THREE.MeshLambertMaterial({ map: tex.crayon });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL),
-    new THREE.MeshLambertMaterial({ color: 0x8a7565 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = y0;
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(GRID * CELL, GRID * CELL),
-    new THREE.MeshLambertMaterial({ color: 0xb8ab98 }));
-  ceil.rotation.x = Math.PI / 2; ceil.position.y = y0 + WALL_H;
-  g.add(floor, ceil);
-  instanceWalls(g, segs, wallMat, zone.aabbs, y0, rnd, true);
-
-  // confetti: hundreds of tiny bright squares ground into the carpet
-  const confN = 900;
-  const confGeo = new THREE.BufferGeometry();
-  const confPos = new Float32Array(confN * 3);
-  const confCol = new Float32Array(confN * 3);
-  const palette = [[0.8, 0.3, 0.3], [0.3, 0.5, 0.8], [0.85, 0.8, 0.3], [0.35, 0.75, 0.42], [0.7, 0.35, 0.8]];
-  for (let i = 0; i < confN; i++) {
-    confPos[i * 3] = (rnd() - 0.5) * GRID * CELL;
-    confPos[i * 3 + 1] = y0 + 0.02;
-    confPos[i * 3 + 2] = (rnd() - 0.5) * GRID * CELL;
-    const c = palette[(rnd() * palette.length) | 0];
-    confCol[i * 3] = c[0]; confCol[i * 3 + 1] = c[1]; confCol[i * 3 + 2] = c[2];
-  }
-  confGeo.setAttribute('position', new THREE.BufferAttribute(confPos, 3));
-  confGeo.setAttribute('color', new THREE.BufferAttribute(confCol, 3));
-  const confetti = new THREE.Points(confGeo, new THREE.PointsMaterial({ size: 0.06, vertexColors: true }));
-  g.add(confetti);
-
-  // fixtures: warm party lights
-  for (let z = 0; z < GRID; z += 2) for (let x = 0; x < GRID; x += 2) {
-    const px = cx0(x) + CELL, pz = cx0(z) + CELL;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshBasicMaterial({ color: 0xffe2c8 }));
-    p.rotation.x = Math.PI / 2; p.position.set(px, y0 + WALL_H - 0.02, pz);
-    g.add(p);
-    zone.fixtures.push({ x: px, y: y0 + WALL_H - 0.5, z: pz, color: 0xffc9a0, base: 16, phase: rnd() * 100 });
-  }
-
-  // balloons drift at the ceiling; bunting sags between cells; tables wait
-  const balloonCols = [0xc84b4b, 0x4b7ec8, 0xd8c22e, 0x4bc86a, 0xb04bc8];
-  for (let i = 0; i < 22; i++) {
-    const b = P.balloon(balloonCols[i % balloonCols.length]);
-    const bx = cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2 + (rnd() - 0.5) * 3;
-    const bz = cx0(1 + ((rnd() * (GRID - 2)) | 0)) + CELL / 2 + (rnd() - 0.5) * 3;
-    b.position.set(bx, y0 + WALL_H - 0.5 - rnd() * 0.4, bz);
-    g.add(b);
-    zone.props.push(b);
-    zone.balloons.push(b);
-  }
-  for (let i = 0; i < 8; i++) {
-    const s = segs[(rnd() * segs.length) | 0];
-    g.add(P.bunting(s.x - 2.4, s.z + 0.3, s.x + 2.4, s.z + 0.3, y0 + WALL_H - 0.15));
-  }
-  for (let i = 0; i < 4; i++) {
-    const tx = cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2;
-    const tz = cx0(2 + ((rnd() * (GRID - 4)) | 0)) + CELL / 2;
-    addProp(g, zone, P.partyTable(), tx, tz, rnd() * Math.PI, 1.1);
-    for (let k = 0; k < 2; k++) {
-      const gb = P.giftBox(balloonCols[(rnd() * 5) | 0]);
-      gb.position.set(tx + (rnd() - 0.5) * 1.4, y0 + 0.75, tz + (rnd() - 0.5) * 0.4);
-      g.add(gb);
-    }
-  }
-
-  graffiti(g, 'JOIN US =)', cx0(6) + CELL / 2, y0 + 1.8, cx0(4) + 0.21, 0, { color: 'rgba(140,40,30,0.85)', size: 56 });
-  graffiti(g, 'the cake is old', cx0(10), y0 + 1.2, cx0(9) + CELL / 2, Math.PI / 2, { color: 'rgba(60,40,90,0.8)' });
-  graffiti(g, 'HAPPY BIRTHDAY', cx0(3) + CELL / 2, y0 + 2.3, cx0(11) - 0.21, Math.PI, { color: 'rgba(150,60,40,0.8)', size: 44 });
-
-  const b = P.almondWater();
-  const ax = cx0(12) + 2, az = cx0(12) + 2;
-  addProp(g, zone, b, ax, az);
-  zone.pickups.push({ x: ax, z: az, g: b, taken: false });
-
-  zone.exit = { x: cx0(GRID - 2) + CELL / 2, z: cx0(1) + CELL / 2, r: 2.2 };
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-  hole.rotation.x = -Math.PI / 2; hole.position.set(zone.exit.x, y0 + 0.02, zone.exit.z);
-  g.add(hole);
-  graffiti(g, 'leaving so soon? =(', zone.exit.x, y0 + 1.4, zone.exit.z + 3.1, Math.PI, { color: 'rgba(140,40,30,0.85)' });
-
-  scene.add(g);
-  return zone;
-}
-
-// ---------------------------------------------------------------- level 2 --
-function buildGarage(scene, tex, rnd) {
-  const g = new THREE.Group();
-  const y0 = ZONE_Y[2];
-  const W = 110, D = 84, H = 3.3;
-  const zone = {
-    name: 'THE GARAGE', sub: 'level 2 · keep to the light', surface: 'concrete',
-    y: y0, aabbs: [], fixtures: [], props: [], pickups: [],
-    spawn: { x: -W / 2 + 8, z: -D / 2 + 8 },
-    bounds: { x1: -W / 2 + 1, z1: -D / 2 + 1, x2: W / 2 - 1, z2: D / 2 - 1 },
-    ambient: { sky: 0x3c342a, gnd: 0x121216, i: 0.52, fog: 0x0e0c0a, fogD: 0.038, lightColor: 0xff9a3c },
-    hum: 0.4, dark: true,
-  };
-
-  tex.concrete.repeat.set(18, 14);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshLambertMaterial({ map: tex.concrete }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = y0;
-  const ceilP = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshLambertMaterial({ color: 0x3c3c40 }));
-  ceilP.rotation.x = Math.PI / 2; ceilP.position.y = y0 + H;
-  g.add(floor, ceilP);
-
-  const wallMat = new THREE.MeshLambertMaterial({ map: tex.concreteWall });
-  tex.concreteWall.repeat.set(8, 1);
-  for (const [x, z, sx, sz] of [[0, -D / 2, W, 0.4], [0, D / 2, W, 0.4], [-W / 2, 0, 0.4, D], [W / 2, 0, 0.4, D]]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, H, sz), wallMat);
-    m.position.set(x, y0 + H / 2, z);
-    g.add(m);
-    zone.aabbs.push({ x1: x - sx / 2 - 0.2, z1: z - sz / 2 - 0.2, x2: x + sx / 2 + 0.2, z2: z + sz / 2 + 0.2 });
-  }
-  const colGeo = new THREE.BoxGeometry(0.9, H, 0.9);
-  const cols = [];
-  for (let x = -W / 2 + 10; x <= W / 2 - 10; x += 10) for (let z = -D / 2 + 9; z <= D / 2 - 9; z += 12) cols.push([x, z]);
-  const colMesh = new THREE.InstancedMesh(colGeo, wallMat, cols.length);
-  const o = new THREE.Object3D();
-  cols.forEach(([x, z], i) => {
-    o.position.set(x, y0 + H / 2, z); o.scale.set(1, 1, 1); o.rotation.set(0, 0, 0); o.updateMatrix();
-    colMesh.setMatrixAt(i, o.matrix);
-    zone.aabbs.push({ x1: x - 0.65, z1: z - 0.65, x2: x + 0.65, z2: z + 0.65 });
-  });
-  g.add(colMesh);
-
-  const stripeMat = new THREE.MeshBasicMaterial({ color: 0xb0a878 });
-  for (let x = -W / 2 + 6; x <= W / 2 - 6; x += 4) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 5), stripeMat);
-    s.rotation.x = -Math.PI / 2; s.position.set(x, y0 + 0.01, -D / 2 + 8);
-    const s2 = s.clone(); s2.position.z = D / 2 - 8;
-    g.add(s, s2);
-  }
-  const pudMat = new THREE.MeshPhongMaterial({ color: 0x0a0a0c, shininess: 220, specular: 0xffa050, transparent: true, opacity: 0.9 });
-  for (let i = 0; i < 16; i++) {
-    const p = new THREE.Mesh(new THREE.CircleGeometry(1.2 + rnd() * 2.4, 20), pudMat);
-    p.rotation.x = -Math.PI / 2;
-    p.position.set((rnd() - 0.5) * (W - 16), y0 + 0.015, (rnd() - 0.5) * (D - 14));
-    p.scale.x = 1 + rnd();
-    g.add(p);
-  }
-  const pipeMat = new THREE.MeshLambertMaterial({ color: 0x4a4a50 });
-  for (let i = 0; i < 5; i++) {
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12 + rnd() * 0.1, 0.12, W - 6, 8), pipeMat);
-    pipe.rotation.z = Math.PI / 2;
-    pipe.position.set(0, y0 + H - 0.25 - rnd() * 0.3, -D / 2 + 6 + i * (D / 5.2));
-    g.add(pipe);
-  }
-
-  // the dead fleet: cars that have been parked for decades
-  for (const [cx, cz, ry, col] of [
-    [-30, -18, 0.05, 0x37424c], [-18, -18, -0.04, 0x4c3a37], [18, 6, 0.02, 0x3a4c37],
-    [30, 22, 3.2, 0x44444a], [-8, 22, 0.03, 0x4c4437], [12, -26, -3.1, 0x37424c],
-  ]) {
-    addProp(g, zone, P.deadCar(col), cx, cz, ry, 2.2);
-  }
-  for (let i = 0; i < 5; i++) addProp(g, zone, P.trafficCone(), (rnd() - 0.5) * (W - 20), (rnd() - 0.5) * (D - 16), 0);
-
-  for (let x = -W / 2 + 10; x <= W / 2 - 8; x += 13) for (let z = -D / 2 + 8; z <= D / 2 - 8; z += 12) {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.12, 0.3), new THREE.MeshBasicMaterial({ color: 0xffb35c }));
-    f.position.set(x, y0 + H - 0.1, z);
-    g.add(f);
-    zone.fixtures.push({ x, y: y0 + H - 0.6, z, color: 0xff9a3c, base: 18, phase: rnd() * 100 });
-  }
-
-  graffiti(g, 'YOUR CAR IS STILL HERE', -W / 2 + 0.41, y0 + 1.6, -8, Math.PI / 2, { color: 'rgba(200,170,120,0.5)', font: 'monospace', size: 40, w: 5, h: 0.8 });
-  graffiti(g, 'B4 →', 20, y0 + 2.4, -D / 2 + 0.41, 0, { color: 'rgba(200,180,140,0.55)', font: 'monospace', size: 90, w: 2.4, h: 1 });
-
-  const b = P.almondWater();
-  addProp(g, zone, b, -2, 2);
-  zone.pickups.push({ x: -2, z: 2, g: b, taken: false });
-
-  zone.exit = { x: W / 2 - 3, z: D / 2 - 6, r: 2.4 };
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.6), new THREE.MeshBasicMaterial({ color: 0x061206 }));
-  door.position.set(zone.exit.x + 2.2, y0 + 1.3, zone.exit.z); door.rotation.y = -Math.PI / 2;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.4), new THREE.MeshBasicMaterial({ color: 0x49ff6a }));
-  sign.position.set(zone.exit.x + 2.15, y0 + 2.75, zone.exit.z); sign.rotation.y = -Math.PI / 2;
-  g.add(door, sign);
-  zone.fixtures.push({ x: zone.exit.x, y: y0 + 2.4, z: zone.exit.z, color: 0x49ff6a, base: 6, phase: 0 });
-
-  scene.add(g);
-  return zone;
-}
-
-// ---------------------------------------------------------------- level 3 --
-function buildPoolrooms(scene, tex, rnd) {
-  const g = new THREE.Group();
-  const y0 = ZONE_Y[3];
-  const W = 88, D = 66, H = 5.2;
-  const zone = {
-    name: 'THE POOLROOMS', sub: 'level 37 · the water is warm', surface: 'tile',
-    y: y0, aabbs: [], fixtures: [], props: [], pickups: [],
-    spawn: { x: -W / 2 + 7, z: D / 2 - 7 },
-    bounds: { x1: -W / 2 + 1, z1: -D / 2 + 1, x2: W / 2 - 1, z2: D / 2 - 1 },
-    ambient: { sky: 0xcfe4ea, gnd: 0x7c979e, i: 1.0, fog: 0xd7e9ee, fogD: 0.03, lightColor: 0xf0faff },
-    hum: 0.15, dark: false,
-  };
-
-  tex.tile.repeat.set(22, 17);
-  const tileMat = new THREE.MeshLambertMaterial({ map: tex.tile });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), tileMat);
-  floor.rotation.x = -Math.PI / 2; floor.position.y = y0;
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, D), tileMat.clone());
-  ceil.rotation.x = Math.PI / 2; ceil.position.y = y0 + H;
-  g.add(floor, ceil);
-
-  const wallMat = tileMat.clone();
-  for (const [x, z, sx, sz] of [[0, -D / 2, W, 0.5], [0, D / 2, W, 0.5], [-W / 2, 0, 0.5, D], [W / 2, 0, 0.5, D]]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, H, sz), wallMat);
-    m.position.set(x, y0 + H / 2, z);
-    g.add(m);
-    zone.aabbs.push({ x1: x - sx / 2 - 0.2, z1: z - sz / 2 - 0.2, x2: x + sx / 2 + 0.2, z2: z + sz / 2 + 0.2 });
-  }
-  for (const [x, z, sx, sz] of [
-    [-W / 4, -D / 6, 0.6, D * 0.42], [W / 5, D / 5, W * 0.4, 0.6],
-    [W / 3.2, -D / 4, 0.6, D * 0.3], [-W / 6, D / 3, W * 0.3, 0.6],
-  ]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, H, sz), wallMat);
-    m.position.set(x, y0 + H / 2, z);
-    g.add(m);
-    zone.aabbs.push({ x1: x - sx / 2 - 0.2, z1: z - sz / 2 - 0.2, x2: x + sx / 2 + 0.2, z2: z + sz / 2 + 0.2 });
-  }
-
-  const waterUniforms = { uTime: { value: 0 } };
-  const waterMat = new THREE.ShaderMaterial({
-    uniforms: waterUniforms, transparent: true,
-    vertexShader: `uniform float uTime; varying vec2 vUv; varying float vW;
-      void main() { vUv = uv; vec3 p = position;
-        vW = sin(p.x * 1.4 + uTime * 1.1) * sin(p.y * 1.7 - uTime * 0.9);
-        p.z += vW * 0.045;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
-    fragmentShader: `uniform float uTime; varying vec2 vUv; varying float vW;
-      void main() {
-        float sparkle = pow(max(0.0, sin(vUv.x * 60.0 + uTime * 2.0) * sin(vUv.y * 52.0 - uTime * 1.7)), 6.0);
-        vec3 c = mix(vec3(0.32, 0.62, 0.66), vec3(0.55, 0.85, 0.88), 0.5 + vW * 0.5);
-        gl_FragColor = vec4(c + sparkle * 0.5, 0.62); }`,
-  });
-  const pools = [[-W / 4 + 12, 8, 20, 14], [W / 4, -D / 5, 24, 12], [-W / 3, -D / 4, 14, 10]];
-  for (const [px, pz, pw, pd] of pools) {
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd, 24, 24), waterMat);
-    w.rotation.x = -Math.PI / 2;
-    w.position.set(px, y0 + 0.1, pz);
-    g.add(w);
-  }
-  const caus = [];
-  tex.caustics.repeat.set(3, 3);
-  for (const [px, pz, pw, pd] of pools) {
-    const c = new THREE.Mesh(new THREE.PlaneGeometry(pw + 10, pd + 10),
-      new THREE.MeshBasicMaterial({ map: tex.caustics, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
-    c.rotation.x = -Math.PI / 2;
-    c.position.set(px, y0 + 0.03, pz);
-    g.add(c); caus.push(c);
-  }
-
-  const shaftMat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  for (const [sx, sz] of [[-W / 4 + 12, 8], [W / 4, -D / 5], [-W / 3, D / 4], [W / 3.4, D / 3.6], [4, -4]]) {
-    const well = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), new THREE.MeshBasicMaterial({ color: 0xf4fbff }));
-    well.rotation.x = Math.PI / 2; well.position.set(sx, y0 + H - 0.02, sz);
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.1, H, 16, 1, true), shaftMat);
-    shaft.position.set(sx, y0 + H / 2, sz);
-    g.add(well, shaft);
-    zone.fixtures.push({ x: sx, y: y0 + H - 0.8, z: sz, color: 0xf0faff, base: 26, phase: Math.random() * 100 });
-  }
-
-  // STUFF: ladders, a drifting swim ring, freestanding doorframes on dry tile,
-  // and the mannequin standing waist-deep — its head finds the lens
-  const lad = P.poolLadder(); lad.position.set(-W / 4 + 12 - 8, y0, 8); g.add(lad);
-  const lad2 = P.poolLadder(); lad2.position.set(W / 4 + 10, y0, -D / 5); g.add(lad2);
-  const ring = P.swimRing();
-  ring.userData.baseY = y0 + 0.16;
-  ring.position.set(W / 4 - 4, y0 + 0.16, -D / 5 + 2);
-  g.add(ring); zone.props.push(ring);
-  for (let i = 0; i < 2; i++) {
-    addProp(g, zone, P.doorFrame(0xdfe4e6), (rnd() - 0.5) * (W - 30), (rnd() - 0.5) * (D - 24), rnd() * Math.PI);
-  }
-  const man = P.mannequin();
-  man.position.set(-W / 4 + 14, y0 - 0.5, 10);       // waist-deep in the first pool
-  g.add(man);
-  zone.mannequin = man;
-
-  const noDiving = P.textPlane('NO DIVING', 2.6, 0.5, { bg: '#e8eef0', color: '#a33', font: 'monospace', size: 52 });
-  noDiving.position.set(-W / 4 + 12, y0 + 2.4, 8 - 14 / 2 - 5.2);
-  g.add(noDiving);
-  graffiti(g, 'the water remembers you', -W / 6, y0 + 1.5, D / 3 - 0.31, Math.PI, { color: 'rgba(80,110,120,0.7)' });
-
-  const b = P.almondWater();
-  addProp(g, zone, b, W / 3, D / 4);
-  zone.pickups.push({ x: W / 3, z: D / 4, g: b, taken: false });
-
-  // the way down now leads to the RED HALL, not out
-  zone.exit = { x: W / 2 - 5, z: -D / 2 + 6, r: 2.2 };
-  const hole = new THREE.Mesh(new THREE.CircleGeometry(2.0, 24), new THREE.MeshBasicMaterial({ color: 0x0a0202 }));
-  hole.rotation.x = -Math.PI / 2; hole.position.set(zone.exit.x, y0 + 0.02, zone.exit.z);
-  g.add(hole);
-  graffiti(g, 'almost. one more.', zone.exit.x - 3, y0 + 1.6, zone.exit.z + 2.6, Math.PI, { color: 'rgba(120,60,50,0.75)' });
-
-  zone._water = waterUniforms; zone._caus = caus;
-  scene.add(g);
-  return zone;
-}
-
-// ---------------------------------------------------------------- level 4 --
-function buildRedHall(scene, tex, rnd) {
-  const g = new THREE.Group();
-  const y0 = ZONE_Y[4];
-  const LEN = 96, WID = 4.2, H = 2.7;
-  const zone = {
-    name: 'THE RED HALL', sub: 'level ! · RUN', surface: 'concrete',
-    y: y0, aabbs: [], fixtures: [], props: [], pickups: [], chase: true,
-    spawn: { x: -LEN / 2 + 3, z: 0 },
-    bounds: { x1: -LEN / 2 + 0.8, z1: -WID / 2 + 0.6, x2: LEN / 2 - 0.8, z2: WID / 2 - 0.6 },
-    ambient: { sky: 0x4a1610, gnd: 0x160604, i: 0.62, fog: 0x1c0806, fogD: 0.05, lightColor: 0xff5040 },
-    hum: 0.2, dark: false,
-  };
-
-  tex.redwall.repeat.set(24, 1);
-  const wallMat = new THREE.MeshLambertMaterial({ map: tex.redwall });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(LEN, WID), new THREE.MeshLambertMaterial({ color: 0x2c1210 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = y0;
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(LEN, WID), wallMat.clone());
-  ceil.rotation.x = Math.PI / 2; ceil.position.y = y0 + H;
-  g.add(floor, ceil);
-  for (const s of [-1, 1]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(LEN, H, 0.4), wallMat);
-    w.position.set(0, y0 + H / 2, s * WID / 2);
-    g.add(w);
-  }
-  // strip lights every 8m — they will die behind you
-  zone.stripLights = [];
-  for (let x = -LEN / 2 + 4; x < LEN / 2; x += 8) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.2), new THREE.MeshBasicMaterial({ color: 0xff8a76 }));
-    bar.position.set(x, y0 + H - 0.08, 0);
-    g.add(bar);
-    const fx = { x, y: y0 + H - 0.5, z: 0, color: 0xff5040, base: 12, phase: rnd() * 100, mesh: bar, dead: false };
-    zone.fixtures.push(fx);
-    zone.stripLights.push(fx);
-  }
-  // RUN, painted over and over, bigger each time
-  for (let i = 0; i < 5; i++) {
-    graffiti(g, 'RUN', -LEN / 2 + 12 + i * 17, y0 + 1.5, WID / 2 - 0.21 - 0.01 * i, Math.PI,
-      { color: 'rgba(255,220,200,0.8)', size: 60 + i * 24, w: 2 + i * 0.8, h: 1 + i * 0.3 });
-  }
-  // pipes + valve wheels for texture
-  const pipeMat = new THREE.MeshLambertMaterial({ color: 0x3a1a16 });
-  for (const s of [-1, 1]) {
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, LEN - 4, 8), pipeMat);
-    pipe.rotation.z = Math.PI / 2;
-    pipe.position.set(0, y0 + H - 0.35, s * (WID / 2 - 0.35));
-    g.add(pipe);
-  }
-
-  // the final door: white light in a red world
-  zone.exit = { x: LEN / 2 - 2.2, z: 0, r: 1.8 };
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), new THREE.MeshBasicMaterial({ color: 0xfff4e0 }));
-  door.position.set(LEN / 2 - 0.5, y0 + 1.2, 0); door.rotation.y = -Math.PI / 2;
-  g.add(door);
-  zone.fixtures.push({ x: zone.exit.x, y: y0 + 2, z: 0, color: 0xfff4e0, base: 20, phase: 0 });
-
-  scene.add(g);
-  return zone;
-}
-
-// ------------------------------------------------------------------ world --
+// ---------------------------------------------------------------- world ----
 export function buildWorld(scene, tex) {
-  const rnd = mulberry(1998);
-  const zones = [
-    buildYellowRooms(scene, tex, rnd),
-    buildFunRooms(scene, tex, rnd),
-    buildGarage(scene, tex, rnd),
-    buildPoolrooms(scene, tex, rnd),
-    buildRedHall(scene, tex, rnd),
-  ];
+  // shared materials/geometry (never disposed; chunks only own their groups)
+  tex.wallpaper.repeat.set(3, 1.5); tex.carpet.repeat.set(8, 8); tex.ceiling.repeat.set(6, 6);
+  tex.concrete.repeat.set(6, 6); tex.concreteWall.repeat.set(4, 1); tex.tile.repeat.set(9, 7);
+  tex.crayon.repeat.set(3, 1.5); tex.redwall.repeat.set(6, 1); tex.caustics.repeat.set(2, 2);
+  const M = {
+    wall: new THREE.MeshLambertMaterial({ map: tex.wallpaper }),
+    carpet: new THREE.MeshLambertMaterial({ map: tex.carpet }),
+    ceiling: new THREE.MeshLambertMaterial({ map: tex.ceiling }),
+    concrete: new THREE.MeshLambertMaterial({ map: tex.concrete }),
+    cwall: new THREE.MeshLambertMaterial({ map: tex.concreteWall }),
+    tile: new THREE.MeshLambertMaterial({ map: tex.tile }),
+    crayon: new THREE.MeshLambertMaterial({ map: tex.crayon }),
+    red: new THREE.MeshLambertMaterial({ map: tex.redwall }),
+    panel: new THREE.MeshBasicMaterial({ color: 0xfff6cf }),
+    sodium: new THREE.MeshBasicMaterial({ color: 0xffb35c }),
+    dark: new THREE.MeshLambertMaterial({ color: 0x3c3c40 }),
+    black: new THREE.MeshBasicMaterial({ color: 0x000000 }),
+    siding: new THREE.MeshLambertMaterial({ color: 0xb8a888 }),
+    siding2: new THREE.MeshLambertMaterial({ color: 0x9aa8b0 }),
+    roof: new THREE.MeshLambertMaterial({ color: 0x5a4636 }),
+    window: new THREE.MeshBasicMaterial({ color: 0xffe9b0 }),
+    scaffold: new THREE.MeshLambertMaterial({ color: 0x38404a }),
+    tapeGlow: new THREE.MeshBasicMaterial({ color: 0x8adfff }),
+    fence: new THREE.MeshLambertMaterial({ color: 0xd8d2c0 }),
+  };
+  const G = {
+    box: new THREE.BoxGeometry(1, 1, 1),
+    panel: new THREE.PlaneGeometry(2.2, 1.1),
+    tape: new THREE.BoxGeometry(0.36, 0.06, 0.22),
+  };
+  const water = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } }, transparent: true,
+    vertexShader: `uniform float uTime; varying vec2 vUv; varying float vW;
+      void main(){ vUv=uv; vec3 p=position;
+        vW=sin(p.x*1.3+uTime*1.1)*sin(p.y*1.6-uTime*0.9); p.z+=vW*0.05;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0); }`,
+    fragmentShader: `uniform float uTime; varying vec2 vUv; varying float vW;
+      void main(){ float s=pow(max(0.0,sin(vUv.x*50.0+uTime*2.0)*sin(vUv.y*44.0-uTime*1.6)),6.0);
+        vec3 c=mix(vec3(0.32,0.62,0.66),vec3(0.55,0.85,0.88),0.5+vW*0.5);
+        gl_FragColor=vec4(c+s*0.5,0.62); }`,
+  });
 
+  const chunks = new Map();       // "cx,cz" -> { group, aabbs, fixtures, items, biome }
   const lights = [];
-  for (let i = 0; i < 6; i++) {
-    const L = new THREE.PointLight(0xffffff, 0, 26, 1.8);
-    scene.add(L); lights.push(L);
-  }
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.6);
+  for (let i = 0; i < 6; i++) { const L = new THREE.PointLight(0xffffff, 0, 26, 1.8); scene.add(L); lights.push(L); }
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 1);
   scene.add(hemi);
-  scene.fog = new THREE.FogExp2(0x9a8840, 0.05);
+  scene.fog = new THREE.FogExp2(0x9a8840, 0.045);
+  scene.background = new THREE.Color(0x9a8840);
 
-  let flickerTimer = 0, flickering = -1;
-  let blackout = 0;
-
-  function setZoneMood(z) {
-    const a = z.ambient;
-    hemi.color.setHex(a.sky); hemi.groundColor.setHex(a.gnd); hemi.intensity = a.i;
-    scene.fog.color.setHex(a.fog); scene.fog.density = a.fogD;
-    scene.background = new THREE.Color(a.fog);
+  // helpers used by every biome builder ------------------------------------
+  function mkBox(g, c, x, y, z, sx, sy, sz, mat, collide = true, ry = 0, rz = 0) {
+    const m = new THREE.Mesh(G.box, mat);
+    m.position.set(x, y, z); m.scale.set(sx, sy, sz);
+    m.rotation.y = ry; m.rotation.z = rz;
+    g.add(m);
+    if (collide) c.aabbs.push({ x1: x - sx / 2 - 0.12, z1: z - sz / 2 - 0.12, x2: x + sx / 2 + 0.12, z2: z + sz / 2 + 0.12 });
+    return m;
+  }
+  function mkFloorCeil(g, ox, oz, floorMat, ceilMat, h) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK, CHUNK), floorMat);
+    f.rotation.x = -Math.PI / 2; f.position.set(ox + CHUNK / 2, 0, oz + CHUNK / 2);
+    g.add(f);
+    if (ceilMat) {
+      const cl = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK, CHUNK), ceilMat);
+      cl.rotation.x = Math.PI / 2; cl.position.set(ox + CHUNK / 2, h, oz + CHUNK / 2);
+      g.add(cl);
+    }
+  }
+  function mkPanel(g, c, x, z, h, color = 0xfff2b8, base = 20, mat = M.panel) {
+    const p = new THREE.Mesh(G.panel, mat);
+    p.rotation.x = Math.PI / 2; p.position.set(x, h - 0.02, z);
+    g.add(p);
+    c.fixtures.push({ x, y: h - 0.5, z, color, base, phase: hash2(x | 0, z | 0) * 100 });
+  }
+  // pickups + anomalies ------------------------------------------------------
+  function mkTape(g, c, x, z) {
+    const t = new THREE.Mesh(G.tape, M.tapeGlow);
+    t.position.set(x, 0.6, z);
+    g.add(t);
+    const halo = new THREE.PointLight(0x6ad1ff, 2.5, 5, 2);
+    halo.position.set(x, 1, z); g.add(halo);
+    c.items.push({ kind: 'tape', x, z, mesh: t, halo, taken: false });
+  }
+  function mkWater(g, c, x, z) {
+    const b = P.almondWater(); b.position.set(x, 0, z); g.add(b);
+    c.items.push({ kind: 'water', x, z, mesh: b, taken: false });
+  }
+  function mkElevator(g, c, x, z, biomeH) {
+    const h = Math.min(biomeH, 3.4);
+    mkBox(g, c, x, h / 2, z - 1.35, 3, h, 0.3, M.dark);
+    mkBox(g, c, x - 1.35, h / 2, z, 0.3, h, 2.4, M.dark);
+    mkBox(g, c, x + 1.35, h / 2, z, 0.3, h, 2.4, M.dark);
+    const door = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: 0x9fe8c8 }));
+    door.position.set(x, h / 2, z - 1.15); door.scale.set(2.2, h - 0.6, 0.1);
+    g.add(door);
+    const l = new THREE.PointLight(0x6affb0, 8, 12, 1.6);
+    l.position.set(x, h - 0.5, z); g.add(l);
+    c.items.push({ kind: 'elevator', x, z, mesh: door });
+    c.fixtures.push({ x, y: h - 0.5, z, color: 0x6affb0, base: 10, phase: 0 });
+  }
+  // the film's signature: the room is digesting the furniture
+  function mkConsumed(g, c, rnd, x, z) {
+    const pick = rnd();
+    let prop;
+    if (pick < 0.35) prop = P.desk();
+    else if (pick < 0.65) prop = P.officeChair();
+    else prop = P.fileCabinet(false);
+    const mode = rnd();
+    if (mode < 0.45) { prop.position.set(x, -0.45 - rnd() * 0.4, z); prop.rotation.z = (rnd() - 0.5) * 0.5; }        // sinking into the floor
+    else if (mode < 0.8) { prop.position.set(x, 0, z); prop.rotation.x = -0.9 - rnd(); prop.position.y = 1.4 + rnd(); } // fused into the wall-height
+    else { prop.position.set(x, 2.6 + rnd(), z); prop.rotation.x = Math.PI; }                                          // hanging from the ceiling
+    g.add(prop);
   }
 
-  function doBlackout(secs = 3) { blackout = secs; }
+  // ---- per-biome chunk builders -------------------------------------------
+  const BUILDERS = {
+    yellow(g, c, rnd, ox, oz, cx, cz) {
+      mkFloorCeil(g, ox, oz, M.carpet, M.ceiling, 3);
+      // every chunk carves one open row + one open column — the lanes weave a
+      // percolating network so the endless maze can never seal you in
+      const laneI = (rnd() * CHUNK_CELLS) | 0, laneJ = (rnd() * CHUNK_CELLS) | 0;
+      const plaza = cx === 0 && cz === 0;   // where you fall in stays open
+      for (let i = 0; i < CHUNK_CELLS; i++) for (let j = 0; j < CHUNK_CELLS; j++) {
+        if (plaza && i >= 1 && i <= 2 && j >= 1 && j <= 2) continue;
+        const x = ox + i * CELL, z = oz + j * CELL;
+        if (j !== laneJ && rnd() < 0.5) mkBox(g, c, x + CELL / 2, 1.5, z, CELL, 3, 0.3, M.wall, true, 0, rnd() < 0.06 ? (rnd() - 0.5) * 0.12 : 0);
+        if (i !== laneI && rnd() < 0.5) mkBox(g, c, x, 1.5, z + CELL / 2, 0.3, 3, CELL, M.wall);
+      }
+      for (let i = 0; i < CHUNK_CELLS; i += 2) for (let j = 0; j < CHUNK_CELLS; j += 2) {
+        mkPanel(g, c, ox + i * CELL + CELL / 2, oz + j * CELL + CELL / 2, 3);
+      }
+      if (rnd() < 0.3) mkConsumed(g, c, rnd, ox + 4 + rnd() * 16, oz + 4 + rnd() * 16);
+      if (rnd() < 0.25) { const p = P.papers(6); p.position.set(ox + rnd() * 20, 0, oz + rnd() * 20); g.add(p); }
+      if (rnd() < 0.12) { const cl = P.wallClock((rnd() * 12) | 0, (rnd() * 60) | 0); cl.position.set(ox + 6 + rnd() * 12, 2.1, oz + 0.35); g.add(cl); }
+    },
+    pillars(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, M.carpet, M.ceiling, 2.6);
+      for (let i = 0; i < 14; i++) {
+        const x = ox + 1.5 + rnd() * (CHUNK - 3), z = oz + 1.5 + rnd() * (CHUNK - 3);
+        mkBox(g, c, x, 1.3, z, 0.55, 2.6, 0.55, M.wall, true, rnd() * 0.5);
+      }
+      mkPanel(g, c, ox + CHUNK / 2, oz + CHUNK / 2, 2.6);
+      if (rnd() < 0.4) mkPanel(g, c, ox + 5, oz + 5, 2.6);
+      if (rnd() < 0.35) mkConsumed(g, c, rnd, ox + rnd() * 20 + 2, oz + rnd() * 20 + 2);
+    },
+    fun(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, M.carpet, M.ceiling, 3);
+      const laneJ = (rnd() * CHUNK_CELLS) | 0;
+      for (let i = 0; i < CHUNK_CELLS; i++) for (let j = 0; j < CHUNK_CELLS; j++) {
+        const x = ox + i * CELL, z = oz + j * CELL;
+        if (j !== laneJ && rnd() < 0.4) mkBox(g, c, x + CELL / 2, 1.5, z, CELL, 3, 0.3, M.crayon);
+        if (i !== laneJ && rnd() < 0.4) mkBox(g, c, x, 1.5, z + CELL / 2, 0.3, 3, CELL, M.crayon);
+        if ((i + j) % 2 === 0) mkPanel(g, c, x + CELL / 2, z + CELL / 2, 3, 0xffc9a0, 16);
+      }
+      for (let i = 0; i < 4; i++) {
+        const b = P.balloon([0xc84b4b, 0x4b7ec8, 0xd8c22e, 0x4bc86a][i % 4]);
+        b.position.set(ox + 2 + rnd() * 20, 2.4 + rnd() * 0.4, oz + 2 + rnd() * 20);
+        g.add(b); c.anim.push(b);
+      }
+      if (rnd() < 0.5) { const t = P.partyTable(); t.position.set(ox + 6 + rnd() * 10, 0, oz + 6 + rnd() * 10); g.add(t); }
+    },
+    garage(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, M.concrete, M.dark, 3.3);
+      for (let i = 0; i < 4; i++) {
+        const x = ox + 3 + (i % 2) * 12 + rnd() * 3, z = oz + 4 + ((i / 2) | 0) * 12 + rnd() * 3;
+        mkBox(g, c, x, 1.65, z, 0.9, 3.3, 0.9, M.cwall);
+      }
+      if (rnd() < 0.5) mkPanel(g, c, ox + 5 + rnd() * 14, oz + 5 + rnd() * 14, 3.3, 0xff9a3c, 18, M.sodium);
+      if (rnd() < 0.45) { const car = P.deadCar([0x37424c, 0x4c3a37][rnd() < 0.5 ? 0 : 1]); car.position.set(ox + 6 + rnd() * 12, 0, oz + 6 + rnd() * 12); car.rotation.y = rnd() * 6.28; g.add(car); c.aabbs.push({ x1: car.position.x - 2.2, z1: car.position.z - 2.2, x2: car.position.x + 2.2, z2: car.position.z + 2.2 }); }
+      if (rnd() < 0.3) { const cone = P.trafficCone(); cone.position.set(ox + rnd() * 20 + 2, 0, oz + rnd() * 20 + 2); g.add(cone); }
+    },
+    pools(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, M.tile, M.tile, 5);
+      // chamber walls with wide gaps
+      if (rnd() < 0.6) mkBox(g, c, ox + CHUNK / 2, 2.5, oz + 2, CHUNK * 0.55, 5, 0.5, M.tile);
+      if (rnd() < 0.6) mkBox(g, c, ox + 3, 2.5, oz + CHUNK / 2, 0.5, 5, CHUNK * 0.5, M.tile);
+      // sunken pool
+      if (rnd() < 0.65) {
+        const px = ox + 6 + rnd() * 10, pz = oz + 6 + rnd() * 10, pw = 8 + rnd() * 6, pd = 6 + rnd() * 5;
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd, 12, 12), water);
+        w.rotation.x = -Math.PI / 2; w.position.set(px, 0.12, pz);
+        g.add(w);
+        const caus = new THREE.Mesh(new THREE.PlaneGeometry(pw + 6, pd + 6),
+          new THREE.MeshBasicMaterial({ map: tex.caustics, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+        caus.rotation.x = -Math.PI / 2; caus.position.set(px, 0.04, pz);
+        g.add(caus); c.caustics.push(caus);
+      }
+      mkPanel(g, c, ox + CHUNK / 2, oz + CHUNK / 2, 5, 0xf0faff, 26);
+      if (rnd() < 0.2) { const man = P.mannequin(); man.position.set(ox + 4 + rnd() * 16, 0, oz + 4 + rnd() * 16); g.add(man); c.mannequins.push(man); }
+      if (rnd() < 0.25) { const l = P.poolLadder(); l.position.set(ox + 4 + rnd() * 16, 0, oz + 4 + rnd() * 16); g.add(l); }
+    },
+    cathedral(g, c, rnd, ox, oz) {
+      const H = 22;
+      mkFloorCeil(g, ox, oz, M.carpet, null, H);            // the ceiling is a rumor
+      const cap = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK, CHUNK), M.black);
+      cap.rotation.x = Math.PI / 2; cap.position.set(ox + CHUNK / 2, H, oz + CHUNK / 2);
+      g.add(cap);
+      const laneC = (rnd() * CHUNK_CELLS) | 0;
+      for (let i = 0; i < CHUNK_CELLS; i++) for (let j = 0; j < CHUNK_CELLS; j++) {
+        const x = ox + i * CELL, z = oz + j * CELL;
+        if (j !== laneC && rnd() < 0.4) mkBox(g, c, x + CELL / 2, H / 2, z, CELL, H, 0.4, M.wall);
+        if (i !== laneC && rnd() < 0.4) mkBox(g, c, x, H / 2, z + CELL / 2, 0.4, H, CELL, M.wall);
+      }
+      // fluorescents stacked up the walls — light climbing into nothing
+      for (let k = 0; k < 3; k++) mkPanel(g, c, ox + 4 + rnd() * 16, oz + 4 + rnd() * 16, 3 + k * 6.5);
+      // hanging wires from the dark
+      for (let i = 0; i < 4; i++) {
+        const w = new THREE.Mesh(G.box, M.black);
+        w.position.set(ox + 2 + rnd() * 20, H - 3 - rnd() * 5, oz + 2 + rnd() * 20);
+        w.scale.set(0.03, 6 + rnd() * 6, 0.03);
+        g.add(w);
+      }
+      if (rnd() < 0.4) { const df = P.doorFrame(); df.position.set(ox + 4 + rnd() * 16, 0, oz + 4 + rnd() * 16); df.rotation.y = rnd() * 3; g.add(df); }
+    },
+    suburb(g, c, rnd, ox, oz) {
+      const H = 9;
+      mkFloorCeil(g, ox, oz, M.carpet, M.ceiling, H);
+      mkPanel(g, c, ox + CHUNK / 2, oz + CHUNK / 2, H, 0xffe9b0, 26);
+      // a house that should not be here
+      if (rnd() < 0.7) {
+        const hx = ox + 7 + rnd() * 9, hz = oz + 7 + rnd() * 9;
+        const hw = 6 + rnd() * 2.5, hd = 5 + rnd() * 2, hh = 3.2 + rnd();
+        const sid = rnd() < 0.5 ? M.siding : M.siding2;
+        mkBox(g, c, hx, hh / 2, hz, hw, hh, hd, sid, true, rnd() * 0.3 - 0.15);
+        const roof = new THREE.Mesh(G.box, M.roof);
+        roof.position.set(hx, hh + 0.9, hz); roof.scale.set(hw * 1.06, 1.8, hd * 1.06);
+        roof.rotation.z = Math.PI / 4;
+        g.add(roof);
+        for (const sx of [-1, 1]) {
+          const win = new THREE.Mesh(G.box, M.window);
+          win.position.set(hx + sx * hw * 0.28, 1.5, hz + hd / 2 + 0.05);
+          win.scale.set(0.9, 1.1, 0.06);
+          g.add(win);
+          const wl = new THREE.PointLight(0xffe9b0, 3, 8, 2);
+          wl.position.copy(win.position).z += 0.6;
+          g.add(wl);
+        }
+      }
+      // picket fence lines + a streetlamp under the office ceiling
+      if (rnd() < 0.6) {
+        const fz = oz + 3 + rnd() * 18;
+        for (let i = 0; i < 8; i++) mkBox(g, c, ox + 2 + i * 1.1, 0.55, fz, 0.12, 1.1, 0.06, M.fence, false);
+        mkBox(g, c, ox + 2 + 4, 0.85, fz, 9, 0.1, 0.05, M.fence, false);
+      }
+      if (rnd() < 0.5) {
+        const lx = ox + 3 + rnd() * 18, lz = oz + 3 + rnd() * 18;
+        mkBox(g, c, lx, 2.2, lz, 0.12, 4.4, 0.12, M.dark);
+        mkPanel(g, c, lx, lz, 4.5, 0xffd9a0, 14);
+      }
+    },
+    redveins(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, new THREE.MeshLambertMaterial({ color: 0x2c1210 }), M.red, 2.7);
+      // corridors: dense walls with one guaranteed lane
+      const lane = (rnd() * CHUNK_CELLS) | 0;
+      for (let i = 0; i < CHUNK_CELLS; i++) for (let j = 0; j < CHUNK_CELLS; j++) {
+        const x = ox + i * CELL, z = oz + j * CELL;
+        if (j !== lane && rnd() < 0.7) mkBox(g, c, x + CELL / 2, 1.35, z, CELL, 2.7, 0.35, M.red);
+        if (i !== lane && rnd() < 0.7) mkBox(g, c, x, 1.35, z + CELL / 2, 0.35, 2.7, CELL, M.red);
+      }
+      mkPanel(g, c, ox + CHUNK / 2, oz + CHUNK / 2, 2.7, 0xff5040, 12, new THREE.MeshBasicMaterial({ color: 0xff8a76 }));
+      if (rnd() < 0.3) {
+        const t = P.textPlane('RUN', 2.4, 1, { color: 'rgba(255,220,200,0.8)', size: 90 });
+        t.position.set(ox + 4 + rnd() * 16, 1.5, oz + 0.4); g.add(t);
+      }
+    },
+    void(g, c, rnd, ox, oz) {
+      mkFloorCeil(g, ox, oz, M.concrete, null, 60);          // no ceiling. none.
+      // scaffold towers in the dark distance
+      if (rnd() < 0.55) {
+        const sx = ox + 4 + rnd() * 16, sz = oz + 4 + rnd() * 16, sh = 10 + rnd() * 22;
+        for (const [dx, dz] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]])
+          mkBox(g, c, sx + dx, sh / 2, sz + dz, 0.16, sh, 0.16, M.scaffold);
+        for (let k = 1; k < sh / 3; k++) mkBox(g, c, sx, k * 3, sz, 3.2, 0.12, 3.2, M.scaffold, false);
+      }
+      // one work light, maybe — pools of light with a LOT of dark between
+      if (rnd() < 0.4) {
+        const lx = ox + 3 + rnd() * 18, lz = oz + 3 + rnd() * 18;
+        mkBox(g, c, lx, 1.1, lz, 0.3, 2.2, 0.3, M.scaffold, false);
+        c.fixtures.push({ x: lx, y: 2.4, z: lz, color: 0xcfe0ff, base: 16, phase: rnd() * 100 });
+        const gl = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: 0xcfe0ff }));
+        gl.position.set(lx, 2.2, lz); gl.scale.set(0.5, 0.3, 0.3); g.add(gl);
+      }
+      if (rnd() < 0.2) mkBox(g, c, ox + rnd() * 20 + 2, 0.5, oz + rnd() * 20 + 2, 2 + rnd() * 3, 1, 1.5, M.cwall);
+    },
+  };
 
-  function update(dt, playerPos, zi, t) {
-    const z = zones[zi];
+  // ---- chunk lifecycle ----------------------------------------------------
+  function buildChunk(cx, cz) {
+    const key = `${cx},${cz}`;
+    if (chunks.has(key)) return;
+    const rnd = rngFor(cx, cz);
+    const biome = biomeAt(cx, cz);
+    const g = new THREE.Group();
+    const c = { group: g, aabbs: [], fixtures: [], items: [], anim: [], caustics: [], mannequins: [], biome };
+    const ox = cx * CHUNK, oz = cz * CHUNK;
+    BUILDERS[biome.key](g, c, rnd, ox, oz, cx, cz);
+    // pickups & the rare way out (never in the first ring)
+    const d = Math.hypot(cx, cz);
+    if (rnd() < 0.24) mkTape(g, c, ox + 3 + rnd() * 18, oz + 3 + rnd() * 18);
+    if (rnd() < 0.1) mkWater(g, c, ox + 3 + rnd() * 18, oz + 3 + rnd() * 18);
+    if (d > 3 && rnd() < 0.035) mkElevator(g, c, ox + 8 + rnd() * 8, oz + 8 + rnd() * 8, biome.key === 'pools' ? 5 : 3);
+    if (rnd() < 0.14) {
+      const gr = P.textPlane(['NO', 'it counts your steps', 'the hum lies', 'M.E.G.', 'don’t trust the doors', 'deeper'][(rnd() * 6) | 0],
+        2, 0.6, { color: 'rgba(60,30,16,0.75)', font: 'cursive', size: 44 });
+      gr.position.set(ox + 4 + rnd() * 16, 1.4 + rnd(), oz + 4 + rnd() * 16);
+      gr.rotation.y = rnd() * 6.28;
+      g.add(gr);
+    }
+    scene.add(g);
+    chunks.set(key, c);
+  }
+
+  function disposeChunk(key) {
+    const c = chunks.get(key);
+    if (!c) return;
+    scene.remove(c.group);
+    c.group.traverse(o => { if (o.geometry && !Object.values(G).includes(o.geometry)) o.geometry.dispose?.(); });
+    chunks.delete(key);
+  }
+
+  function chunkOf(x, z) { return [Math.floor(x / CHUNK), Math.floor(z / CHUNK)]; }
+
+  function stream(px, pz) {
+    const [cx, cz] = chunkOf(px, pz);
+    for (let i = -LOAD_R; i <= LOAD_R; i++) for (let j = -LOAD_R; j <= LOAD_R; j++) buildChunk(cx + i, cz + j);
+    for (const key of [...chunks.keys()]) {
+      const [kx, kz] = key.split(',').map(Number);
+      if (Math.abs(kx - cx) > KEEP_R || Math.abs(kz - cz) > KEEP_R) disposeChunk(key);
+    }
+  }
+
+  // ---- queries the rest of the game asks ----------------------------------
+  function near(px, pz, r = 1) {
+    const [cx, cz] = chunkOf(px, pz);
+    const out = [];
+    for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+      const c = chunks.get(`${cx + i},${cz + j}`);
+      if (c) out.push(c);
+    }
+    return out;
+  }
+  function collidersNear(px, pz) {
+    const out = [];
+    for (const c of near(px, pz)) for (const a of c.aabbs) out.push(a);
+    return out;
+  }
+  function litAt(x, z) {
+    for (const c of near(x, z)) for (const f of c.fixtures) {
+      if (f.dead) continue;
+      if ((f.x - x) ** 2 + (f.z - z) ** 2 < 6.5 * 6.5) return true;
+    }
+    return false;
+  }
+  function biomeAtPos(x, z) { const [cx, cz] = chunkOf(x, z); return biomeAt(cx, cz); }
+  function itemsNear(px, pz) {
+    const out = [];
+    for (const c of near(px, pz, 1)) for (const it of c.items) if (!it.taken) out.push(it);
+    return out;
+  }
+
+  // ---- per-frame ------------------------------------------------------------
+  const moodCur = { sky: new THREE.Color(0xa89448), gnd: new THREE.Color(0x6a5c2a), fog: new THREE.Color(0x9a8840), i: 1.25, fogD: 0.045 };
+  let flickerTimer = 0, flickering = -1, blackout = 0;
+  function doBlackout(s = 2.5) { blackout = s; }
+
+  function update(dt, playerPos, t) {
+    stream(playerPos.x, playerPos.z);
     blackout = Math.max(0, blackout - dt);
-    const near = z.fixtures
-      .filter(f => !f.dead)
-      .map(f => ({ f, d: (f.x - playerPos.x) ** 2 + (f.z - playerPos.z) ** 2 }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, lights.length);
+    water.uniforms.uTime.value = t;
+
+    // seamless mood: lerp toward the local biome's palette as you walk
+    const b = biomeAtPos(playerPos.x, playerPos.z);
+    const k = Math.min(1, dt * 0.8);
+    moodCur.sky.lerp(new THREE.Color(b.mood.sky), k);
+    moodCur.gnd.lerp(new THREE.Color(b.mood.gnd), k);
+    moodCur.fog.lerp(new THREE.Color(b.mood.fog), k);
+    moodCur.i += (b.mood.i - moodCur.i) * k;
+    moodCur.fogD += (b.mood.fogD - moodCur.fogD) * k;
+    hemi.color.copy(moodCur.sky); hemi.groundColor.copy(moodCur.gnd);
+    hemi.intensity = blackout > 0 ? moodCur.i * 0.1 : moodCur.i;
+    scene.fog.color.copy(moodCur.fog); scene.fog.density = moodCur.fogD;
+    scene.background.copy(moodCur.fog);
+
+    // travelling light pool over nearby fixtures
+    const fixtures = [];
+    for (const c of near(playerPos.x, playerPos.z)) for (const f of c.fixtures) if (!f.dead) fixtures.push(f);
+    fixtures.sort((a, bb) => ((a.x - playerPos.x) ** 2 + (a.z - playerPos.z) ** 2) - ((bb.x - playerPos.x) ** 2 + (bb.z - playerPos.z) ** 2));
     flickerTimer -= dt;
-    if (flickerTimer <= 0) { flickerTimer = 1.5 + Math.random() * 4; flickering = (Math.random() * near.length) | 0; }
-    near.forEach(({ f }, i) => {
-      const L = lights[i];
+    if (flickerTimer <= 0) { flickerTimer = 1.5 + Math.random() * 4; flickering = (Math.random() * 6) | 0; }
+    for (let i = 0; i < lights.length; i++) {
+      const L = lights[i], f = fixtures[i];
+      if (!f) { L.intensity = 0; continue; }
       L.position.set(f.x, f.y, f.z);
       L.color.setHex(f.color);
-      let k = blackout > 0 ? 0 : 1;
-      if (i === flickering && flickerTimer > 0.9) k *= 0.35 + Math.abs(Math.sin(t * 43 + f.phase)) * 0.65;
-      L.intensity = f.base * k;
-    });
-    for (let i = near.length; i < lights.length; i++) lights[i].intensity = 0;
-    hemi.intensity = blackout > 0 ? z.ambient.i * 0.12 : z.ambient.i;
-
-    // animated props (TV static, balloons, almond water, swim ring)
-    for (const p of z.props) p.userData.update && p.userData.update(dt, t);
-
-    // poolrooms motion: water, caustics, and the head that follows
-    const pr = zones[3];
-    pr._water.uTime.value = t;
-    for (const c of pr._caus) c.material.map.offset.set(Math.sin(t * 0.11) * 0.2, t * 0.014);
-    if (zi === 3 && pr.mannequin) {
-      const head = pr.mannequin.userData.head;
-      const lp = new THREE.Vector3(playerPos.x, pr.y + 1.6, playerPos.z);
-      const cur = new THREE.Vector3();
-      head.getWorldPosition(cur);
-      const want = Math.atan2(lp.x - cur.x, lp.z - cur.z) - pr.mannequin.rotation.y;
-      head.rotation.y += (want - head.rotation.y) * Math.min(1, dt * 0.4); // slow. deliberate.
+      let kk = blackout > 0 ? 0 : 1;
+      if (i === flickering && flickerTimer > 0.9) kk *= 0.35 + Math.abs(Math.sin(t * 43 + f.phase)) * 0.65;
+      L.intensity = f.base * kk;
     }
 
-    return flickering >= 0 && flickerTimer > 0.9 && near[flickering] &&
-      ((near[flickering].f.x - playerPos.x) ** 2 + (near[flickering].f.z - playerPos.z) ** 2) < 130;
+    // animated props in nearby chunks
+    for (const c of near(playerPos.x, playerPos.z)) {
+      for (const a of c.anim) a.userData.update && a.userData.update(dt, t);
+      for (const ca of c.caustics) ca.material.map && ca.material.map.offset.set(Math.sin(t * 0.11) * 0.2, t * 0.014);
+      for (const m of c.mannequins) {
+        const head = m.userData.head;
+        const want = Math.atan2(playerPos.x - m.position.x, playerPos.z - m.position.z) - m.rotation.y;
+        head.rotation.y += (want - head.rotation.y) * Math.min(1, dt * 0.4);
+      }
+      for (const it of c.items) if (it.kind === 'tape' && !it.taken) it.mesh.rotation.y = t * 1.4;
+    }
+    return b;
   }
 
-  return { zones, update, setZoneMood, doBlackout };
+  return { update, collidersNear, litAt, biomeAtPos, itemsNear, doBlackout, chunkOf, get chunkCount() { return chunks.size; } };
 }

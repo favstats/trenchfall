@@ -40,6 +40,8 @@ const MODES = {
   grin:   { freeze: true,  lit: true,  speed: 1.7, tint: 0xffffff },
   party:  { freeze: false, lit: true,  speed: 1.05, tint: 0xffd24a },
   chaser: { freeze: false, lit: false, speed: 4.5, tint: 0xff5040 },
+  // the Complex: it only walks while YOU walk — stand still and it stands too
+  stilt:  { freeze: false, lit: false, speed: 3.1, tint: 0xbfc8d8, mirrors: true, tall: true },
 };
 
 export class Entity {
@@ -69,6 +71,9 @@ export class Entity {
     this.mode = mode;
     this.cfg = MODES[mode] || MODES.grin;
     this.face.material.color.setHex(this.cfg.tint);
+    const tall = this.cfg.tall ? 2.2 : 1;
+    this.body.scale.set(1, tall, 1);
+    this.faceH = this.cfg.tall ? 3.6 : 1.55;
     this.pos.set(x, y, z);
     this.seenOnce = false;
   }
@@ -83,7 +88,7 @@ export class Entity {
   update(dt, ctx) {
     // ctx: { player (feet Vector3), camera, litAt(x,z)->bool, zoneY }
     if (this.state !== 'STALK') { setDrone(0); return { dist: Infinity, observed: false }; }
-    const head = this._tmp.set(this.pos.x, this.pos.y + 1.55, this.pos.z);
+    const head = this._tmp.set(this.pos.x, this.pos.y + (this.faceH || 1.55), this.pos.z);
     const cam = ctx.camera.position;
     const dx = this.pos.x - ctx.player.x, dz = this.pos.z - ctx.player.z;
     const dist = Math.hypot(dx, dz);
@@ -96,7 +101,8 @@ export class Entity {
     if (observed && !this.seenOnce) { this.seenOnce = true; sfxStinger(); }
 
     // movement rule depends on what this one is
-    const mayMove = this.cfg.freeze ? !observed : true;
+    let mayMove = this.cfg.freeze ? !observed : true;
+    if (this.cfg.mirrors) mayMove = !!ctx.playerMoving;   // it walks when you walk
     if (mayMove && dist > 0.6) {
       const speed = this.cfg.speed
         + (ctx.sprinting && this.mode !== 'chaser' ? 1.6 : 0)
@@ -118,7 +124,7 @@ export class Entity {
     // presentation: the face only truly reads when observed — that beat where
     // the camera finds it is the whole scare
     this.face.position.copy(head);
-    this.body.position.set(this.pos.x, this.pos.y + 1.25, this.pos.z);
+    this.body.position.set(this.pos.x, this.pos.y + (this.cfg.tall ? 2.75 : 1.25), this.pos.z);
     const vis = Math.max(0, 1 - dist / 34);
     this.face.material.opacity += (((observed ? 0.95 : 0.4) * vis) - this.face.material.opacity) * Math.min(1, dt * 4);
     this.body.material.opacity += ((0.85 * vis) - this.body.material.opacity) * Math.min(1, dt * 3);

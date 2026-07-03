@@ -50,11 +50,9 @@ export class Player {
     this.vel.set(0, 0, 0);
   }
 
-  // slide against every wall box in the active zone
-  _collide(aabbs, bounds) {
+  // slide against every wall box near us — the world is endless, no bounds
+  _collide(aabbs) {
     const p = this.pos;
-    p.x = clamp(p.x, bounds.x1 + RADIUS, bounds.x2 - RADIUS);
-    p.z = clamp(p.z, bounds.z1 + RADIUS, bounds.z2 - RADIUS);
     for (const b of aabbs) {
       const nx = clamp(p.x, b.x1, b.x2), nz = clamp(p.z, b.z1, b.z2);
       const dx = p.x - nx, dz = p.z - nz;
@@ -66,7 +64,8 @@ export class Player {
     }
   }
 
-  update(dt, zone) {
+  update(dt, world) {
+    const zone = { aabbs: world.collidersNear(this.pos.x, this.pos.z), surface: world.biomeAtPos(this.pos.x, this.pos.z).surface };
     if (this.lookLock > 0) this.lookLock -= dt;
 
     let mf = 0, mr = 0;
@@ -79,7 +78,7 @@ export class Player {
     const wantSprint = this.enabled && this.keys.has('shift') && mf > 0;
     const sprinting = wantSprint && this.stamina > 0.05;
     this.stamina = clamp(this.stamina + (sprinting ? -0.22 : 0.14) * dt, 0, 1);
-    const speed = sprinting ? 5.6 : 3.0;
+    const speed = (sprinting ? 5.6 : 3.0) * (this.speedScale || 1);
 
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
@@ -91,7 +90,7 @@ export class Player {
     this.vel.z += (tz - this.vel.z) * k;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
-    this._collide(zone.aabbs, zone.bounds);
+    this._collide(zone.aabbs);
 
     // footsteps + head-bob keyed to actual movement
     const sp = Math.hypot(this.vel.x, this.vel.z);
