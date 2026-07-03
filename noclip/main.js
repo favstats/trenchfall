@@ -166,6 +166,7 @@ function runEvents(dt) {
 
 window.addEventListener('resize', R.setSize);
 window.addEventListener('keydown', e => {
+  if (e.key === ' ' && G.phase === 'run') e.preventDefault();   // space = jump, never a button
   if (e.key.toLowerCase() === 'f') player.lamp.visible = !player.lamp.visible;
   if (e.key.toLowerCase() === 'r' && G.phase === 'end') location.reload();
   if (e.key.toLowerCase() === 'e' && G.phase === 'run') {

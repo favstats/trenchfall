@@ -159,24 +159,29 @@ export function buildWorld(scene, tex) {
       const roll = rnd();
       const shaft = roll < (style.shaft ?? 0.05);
       const sunken = !shaft && roll < (style.sunken ?? 0.05) + (style.shaft ?? 0.05) + 0.07;
-      const raked = !shaft && !sunken && rnd() < 0.1;
-      const h = shaft ? 9 : style.h[0] + rnd() * (style.h[1] - style.h[0]);
-      const f0 = sunken ? -1.8 : 0;
+      const raised = !shaft && !sunken && rnd() < 0.12;      // a mezzanine, misfiled
+      const raked = !shaft && !sunken && !raised && rnd() < 0.1;
+      const f0 = sunken ? -1.8 : raised ? 1.8 : 0;
+      const h = (shaft ? 9 : style.h[0] + rnd() * (style.h[1] - style.h[0])) + Math.max(0, f0);
       const rakeDir = rnd() < 0.5 ? 1 : 0, rakeAmt = raked ? 0.9 + rnd() * 0.7 : 0;
       for (let i = x0; i < x0 + w; i++) for (let j = z0; j < z0 + d; j++) {
         // cut corners on some rooms — rooms stop being rectangles
-        if (rnd() < 0.0 || ((i === x0 || i === x0 + w - 1) && (j === z0 || j === z0 + d - 1) && rnd() < 0.35)) continue;
+        if ((i === x0 || i === x0 + w - 1) && (j === z0 || j === z0 + d - 1) && rnd() < 0.35) continue;
         const t = rakeDir ? (i - x0) / Math.max(1, w - 1) : (j - z0) / Math.max(1, d - 1);
         open(i, j, f0 + (raked ? -rakeAmt * t : 0), h, false);
       }
-      rooms.push({ x0, z0, w, d, h, f: f0, shaft, sunken, raked, cx: x0 + w / 2, cz: z0 + d / 2 });
-      // sunken rooms get one ramp strip back up
-      if (sunken) {
+      rooms.push({ x0, z0, w, d, h, f: f0, shaft, sunken, raised, raked, cx: x0 + w / 2, cz: z0 + d / 2 });
+      // sunken pits and raised mezzanines each get ONE staircase to ground level
+      if (sunken || raised) {
         const side = rnd() < 0.5;
-        for (let k = 0; k < 4; k++) {
+        const steps = 4;
+        for (let k = 0; k < steps; k++) {
           const i = side ? x0 + k : x0 + (w >> 1);
           const j = side ? z0 + (d >> 1) : z0 + k;
-          if (cells[i]?.[j]) cells[i][j].f = -1.8 + (k + 1) * 0.45;
+          if (cells[i]?.[j]) {
+            cells[i][j].f = f0 - f0 * (k + 1) / steps;       // grades toward 0 at the room edge
+            cells[i][j].ramp = { axis: side ? 'x' : 'z' };
+          }
         }
       }
     }
@@ -259,6 +264,25 @@ export function buildWorld(scene, tex) {
       cl.position.set(x, cell.h + 0.05, z);
       cl.scale.set(r.len * CELL, 0.1, CELL);
       g.add(cl);
+      if (cells[r.i][r.j].ramp && r.len === 1) {
+        // actual stair steps: three treads climbing toward the higher neighbour
+        const cellRef = cells[r.i][r.j];
+        const ax = cellRef.ramp.axis;
+        const nA = ax === 'x' ? cells[r.i + 1]?.[r.j] : cells[r.i]?.[r.j + 1];
+        const nB = ax === 'x' ? cells[r.i - 1]?.[r.j] : cells[r.i]?.[r.j - 1];
+        const upSign = ((nA?.f ?? cellRef.f) >= (nB?.f ?? cellRef.f)) ? 1 : -1;
+        const target = Math.max(nA?.f ?? cellRef.f, nB?.f ?? cellRef.f);
+        const rise = Math.min(0.6, Math.max(0.15, target - cellRef.f));
+        for (let s = 1; s <= 3; s++) {
+          const st = new THREE.Mesh(G.box, style.floor);
+          st.position.set(
+            x + (ax === 'x' ? upSign * (s - 2) * (CELL / 3) : 0),
+            cellRef.f + (rise * s) / 3 - 0.04,
+            z + (ax === 'z' ? upSign * (s - 2) * (CELL / 3) : 0));
+          st.scale.set(ax === 'x' ? CELL / 3 : CELL, 0.09, ax === 'z' ? CELL / 3 : CELL);
+          g.add(st);
+        }
+      }
       if (style.wet && cell.f < -1 && rnd() < 0.9) {
         const w = new THREE.Mesh(new THREE.PlaneGeometry(r.len * CELL, CELL, 4, 2), water);
         w.rotation.x = -Math.PI / 2;
@@ -626,6 +650,62 @@ export function buildWorld(scene, tex) {
     }
   }
 
+  // ---- THE FIRST ROOM: a generative recreation of the 2002 photograph that
+  // started everything. One large low room; freestanding partition walls with
+  // pale edge caps that you walk AROUND; a diagonal line of fluorescents
+  // receding; wooden chair-rail trim; an outlet. It appears rarely, without a
+  // word, and if you know, you know.
+  function buildFirstRoom(c, ox, oz, rnd) {
+    const g = c.group, H = 2.9;
+    const fl = new THREE.Mesh(G.box, M.carpet);
+    fl.position.set(ox + CHUNK / 2, -0.05, oz + CHUNK / 2);
+    fl.scale.set(CHUNK, 0.1, CHUNK);
+    const cl = new THREE.Mesh(G.box, M.ceiling);
+    cl.position.set(ox + CHUNK / 2, H + 0.05, oz + CHUNK / 2);
+    cl.scale.set(CHUNK, 0.1, CHUNK);
+    g.add(fl, cl);
+    // freestanding partitions at slightly disagreeing angles
+    for (let k = 0; k < 5; k++) {
+      const px = ox + 3 + rnd() * 18, pz = oz + 3 + rnd() * 18;
+      const len = 3.5 + rnd() * 5, ry = (rnd() < 0.6 ? 0 : Math.PI / 2) + (rnd() - 0.5) * 0.09;
+      const wm = new THREE.Mesh(G.box, M.wall);
+      wm.position.set(px, H / 2, pz);
+      wm.scale.set(len, H, 0.24);
+      wm.rotation.y = ry;
+      g.add(wm);
+      const cap = new THREE.Mesh(G.box, M.whiteM);  // the pale end caps
+      cap.position.set(px, H / 2, pz);
+      cap.scale.set(len + 0.06, H - 0.15, 0.1);
+      cap.rotation.y = ry;
+      g.add(cap);
+      const trim = new THREE.Mesh(G.box, M.roof);   // wooden chair rail
+      trim.position.set(px, 0.42, pz);
+      trim.scale.set(len * 0.9, 0.07, 0.27);
+      trim.rotation.y = ry;
+      g.add(trim);
+      c.aabbs.push({ x1: px - len / 2, z1: pz - 0.5, x2: px + len / 2, z2: pz + 0.5 });
+    }
+    // the diagonal of lights, receding
+    for (let k = 0; k < 5; k++) {
+      const lx = ox + 4 + k * 4.2, lz = oz + 4 + k * 3.4;
+      const pm = new THREE.Mesh(G.box, M.panel);
+      pm.position.set(lx, H - 0.04, lz);
+      pm.scale.set(2, 0.07, 0.9);
+      pm.rotation.y = 0.06;
+      g.add(pm);
+      if (k % 2 === 0) c.fixtures.push({ x: lx, y: H - 0.5, z: lz, color: 0xfff6cf, base: 18, phase: k });
+    }
+    const outlet = new THREE.Mesh(G.box, M.whiteM);
+    outlet.position.set(ox + 8, 0.35, oz + 8);
+    outlet.scale.set(0.12, 0.18, 0.06);
+    g.add(outlet);
+    // it remembers being photographed
+    const t = new THREE.Mesh(G.tape, M.tapeGlow);
+    t.position.set(ox + 12, 0.5, oz + 12);
+    g.add(t);
+    c.items.push({ kind: 'tape', x: ox + 12, z: oz + 12, mesh: t, taken: false });
+  }
+
   // ---- chunk lifecycle ------------------------------------------------------
   function buildChunk(cx, cz) {
     const key = `${cx},${cz}`;
@@ -635,6 +715,12 @@ export function buildWorld(scene, tex) {
     const g = new THREE.Group();
     const c = { group: g, aabbs: [], fixtures: [], items: [], anim: [], mannequins: [], biome, cells: null };
     const ox = cx * CHUNK, oz = cz * CHUNK;
+    if (!biome.open && biome.key === 'yellow' && Math.hypot(cx, cz) > 2 && hash2(cx * 17 + 3, cz * 17 + 5) < 0.02) {
+      buildFirstRoom(c, ox, oz, rnd);
+      scene.add(g);
+      chunks.set(key, c);
+      return;
+    }
     if (biome.open) {
       buildOpen(c, null, biome.key, ox, oz, rnd, cx, cz);
     } else {

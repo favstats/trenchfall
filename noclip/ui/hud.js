@@ -17,7 +17,7 @@ export function createHUD(root, hooks = {}) {
     <div id="zoneCard"><div id="zcName"></div><div id="zcSub"></div></div>
     <div id="whisper"></div>
     <div id="elevPrompt">◈ ELEVATOR — <b>E</b> TO BANK YOUR TAPES AND ASCEND</div>
-    <div id="hint"><b>WASD</b> move · <b>SHIFT</b> run — it hears · <b>F</b> lamp · light feeds the battery · dark eats it</div>
+    <div id="hint"><b>WASD</b> move · <b>SPACE</b> jump · <b>SHIFT</b> run — it hears · <b>F</b> lamp · light feeds the battery · dark eats it</div>
 
     <div id="intro"><div class="tape-label">
       <div class="tl-head">PROPERTY OF ███████ COUNTY SHERIFF — EVIDENCE</div>
@@ -56,7 +56,9 @@ export function createHUD(root, hooks = {}) {
     intro: $('#intro'), end: $('#endscreen'),
     endHead: $('#endHead'), endTitle: $('#endTitle'), endSub: $('#endSub'), endStats: $('#endStats'),
   };
-  $('#playBtn').onclick = () => { el.intro.classList.add('gone'); hooks.onStart && hooks.onStart(); };
+  // blur after click — otherwise SPACE "re-presses" the focused button and
+  // restarts the run mid-game
+  $('#playBtn').onclick = (e) => { e.target.blur(); el.intro.classList.add('gone'); hooks.onStart && hooks.onStart(); };
   $('#againBtn').onclick = () => location.reload();
 
   // meta + shop rendered into both the intro and the end screen

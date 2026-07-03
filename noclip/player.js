@@ -92,16 +92,18 @@ export class Player {
     this.pos.z += this.vel.z * dt;
     this._collide(zone.aabbs);
 
-    // vertical: ramps ease you down, pits you FALL into
+    // vertical: gravity + JUMP; stairs snap you up, pits you fall into
     const fy = world.floorAt(this.pos.x, this.pos.z);
-    if (fy < this.pos.y - 0.05) {
-      this._fallV = (this._fallV || 0) + 22 * dt;
-      this.pos.y = Math.max(fy, this.pos.y - this._fallV * dt);
-      if (this.pos.y === fy && this._fallV > 5) sfxStep(zone.surface);
-      if (this.pos.y === fy) this._fallV = 0;
-    } else {
-      this.pos.y += (fy - this.pos.y) * Math.min(1, dt * 12);
-      this._fallV = 0;
+    const grounded = this.pos.y <= fy + 0.03 && (this._vy ?? 0) <= 0;
+    if (this.enabled && grounded && this.keys.has(' ')) this._vy = 6.4;
+    this._vy = (this._vy ?? 0) - 21 * dt;
+    this.pos.y += this._vy * dt;
+    if (this.pos.y <= fy && this._vy <= 0) {
+      if (-this._vy > 6) sfxStep(zone.surface);      // landing thud
+      // stairs and small rises: ease up instead of teleporting
+      if (fy - this.pos.y > 0.02) this.pos.y += (fy - this.pos.y) * Math.min(1, dt * 14);
+      else this.pos.y = fy;
+      this._vy = 0;
     }
 
     // footsteps + head-bob keyed to actual movement
