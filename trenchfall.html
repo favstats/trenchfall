@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRENCHFALL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;600;700&family=Special+Elite&display=swap" rel="stylesheet">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+</script>
+  <script type="module" crossorigin src="./assets/trenchfall-DuLbgjAM.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="./assets/three-BROBeMa5.js">
+  <link rel="stylesheet" crossorigin href="./assets/trenchfall-zXH-ee6a.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="lboxT" class="lbox"></div><div id="lboxB" class="lbox"></div>
+<div id="dlg"><div class="n"></div><div class="r"></div><div class="q"></div><div id="dlgC"></div></div>
+<div id="inv" class="ov"><h1 class="stencil" style="font-size:38px">INVENTORY</h1>
+<div class="tag2">everything you carry · I to close</div><div class="wrap"><div id="invGrid"></div><div id="invDetail"></div></div></div>
+<div id="l3"><div class="n"></div><div class="r"></div><div class="q"></div><div class="h">CLICK TO CONTINUE</div></div>
+<div id="vignette"></div>
+<div id="scope"></div>
+<div id="hurt"></div>
+<div id="acidFx"></div>
+
+<div id="hud">
+  <div id="crosshair"><div class="dot"></div><div class="arm a1"></div><div class="arm a2"></div><div class="arm a3"></div><div class="arm a4"></div></div>
+  <div id="waveBox" class="panel">
+    <div class="big stencil" id="waveTxt">WAVE 1</div>
+    <div class="sub" id="waveSub">hostiles: 0</div>
+    <div id="weatherTag">CLEAR SKIES</div>
+    <div id="chainTag">CHAIN ×0</div>
+  </div>
+  <div id="depotBox" class="panel">
+    <div class="barlbl"><span id="depotLbl">CONVOY</span><span id="depotPct"></span></div>
+    <div id="convoyBars"></div>
+    <div id="convoy">ROLLING</div>
+  </div>
+  <div id="mapWrap"><canvas id="map" width="170" height="170"></canvas><div class="tag">FIELD MAP</div></div>
+  <div id="vitals" class="panel">
+    <div class="barlbl"><span>VITALS</span><span id="hpPct">100</span></div>
+    <div class="bar"><i id="hpBar" style="width:100%"></i></div>
+    <div class="row"><span>SCRAP <b id="scrap">60</b></span><span>DIRT <b id="dirt">0</b></span><span>SCORE <b id="score">0</b></span></div>
+  </div>
+  <div id="ammoBox" class="panel">
+    <div id="wname">M1 Service Rifle</div>
+    <div id="mag" class="stencil">30</div>
+    <div id="reserve">RESERVE 90</div>
+    <div id="reloadBar"><i></i></div>
+    <div id="slots"></div>
+    <div id="modes">
+      <div class="mode" id="tShovel">Q SHOVEL</div>
+      <div class="mode" id="tBuild">T BUILD</div>
+      <div class="mode sel" id="tTorch">F TORCH</div>
+      <div class="mode" id="tShop">B SHOP</div>
+    </div>
+    <div id="consum"></div>
+  </div>
+  <div id="prompt"></div>
+  <div id="hint"></div>
+  <div id="announce" class="stencil"><div id="annMain"></div><div class="s2" id="annSub"></div></div>
+</div>
+
+<div id="start" class="ov show">
+  <div id="bootTag">ZOMBIE SURVIVAL FPS</div>
+  <h1 class="stencil" id="bootTitle">TRENCHFALL</h1>
+  <div class="tag2" id="bootSub">procedurally generated worlds · campaign, horde, and open-world modes</div>
+  <div id="menu" class="cards">
+    <div class="card">
+      <canvas class="cardArt" id="artCamp" width="280" height="120"></canvas>
+      <div class="cardTitle">CAMPAIGN</div>
+      <div class="cardSub" id="campBest">9-mission convoy campaign · permadeath</div>
+      <div class="mItem" id="startBtn">NEW GAME</div>
+      <div class="mItem" id="contBtn" style="display:none">CONTINUE</div>
+    </div>
+    <div class="card">
+      <canvas class="cardArt" id="artBast" width="280" height="120"></canvas>
+      <div class="cardTitle">HORDE MODE</div>
+      <div class="cardSub" id="bastBest">defend the fort · endless waves · 4 fort layouts</div>
+      <div class="mItem" id="bastBtn">PLAY</div>
+      <div class="mItem" id="contB" style="display:none">CONTINUE<span class="ms" id="contBms"></span></div>
+      <div class="mItem" id="coopBtn">CO-OP<span class="ms">2-4 players online</span></div>
+      <div class="paceRow" id="paceRow">DIFFICULTY
+        <span class="paceOpt" data-pace="nights" title="waves with a break between">STANDARD</span>
+        <span class="paceOpt" data-pace="relent" title="the next wave starts on a timer">RELENTLESS</span>
+      </div>
+    </div>
+    <div class="card">
+      <canvas class="cardArt" id="artWand" width="280" height="120"></canvas>
+      <div class="cardTitle">OPEN WORLD</div>
+      <div class="cardSub" id="wandBest">explore region to region · quests, allies, loot</div>
+      <div class="mItem" id="wandBtn">PLAY</div>
+      <div class="mItem" id="contW" style="display:none">CONTINUE<span class="ms" id="contWms"></span></div>
+    </div>
+    <div class="card">
+      <canvas class="cardArt" id="artSbox" width="280" height="120"></canvas>
+      <div class="cardTitle">SANDBOX</div>
+      <div class="cardSub">custom game · all weapons · no saves</div>
+      <div class="mItem" id="sboxBtn">CUSTOM GAME</div>
+    </div>
+  </div>
+  <div class="underCards">
+    <div class="mItem" id="mHow">HOW TO PLAY</div>
+    <div class="mItem" onclick="location.href='skirmish.html'" style="opacity:.75">SKIRMISH · classic mode</div>
+  </div>
+  <div id="howBox" style="display:none">
+    <div class="ctl">
+      <span><b>WASD</b> + mouse</span><span>move &amp; aim · <b>SHIFT</b> sprint · <b>RMB</b> aim</span>
+      <span><b>1 - 6</b> / <b>I</b></span><span>weapons / inventory</span>
+      <span><b>Q</b> / <b>T</b></span><span>shovel · build kit</span>
+      <span><b>G V X H Z</b></span><span>frag · molotov · mine · medkit · flare</span>
+      <span><b>R</b> / <b>E</b> / <b>CTRL</b></span><span>reload / interact / crouch (steadier aim)</span>
+    </div>
+  </div>
+
+</div>
+
+<div id="coop" class="ov">
+  <h1 class="stencil" style="font-size:44px">CO-OP WALL</h1>
+  <div class="tag2">one room · one host · one wall</div>
+  <div id="coopCard">
+    <div class="coopRow">
+      <label>CALLSIGN</label>
+      <input id="coopName" maxlength="24" autocomplete="off" placeholder="Rifleman">
+    </div>
+    <div class="coopRow">
+      <label>RELAY</label>
+      <input id="coopRelay" autocomplete="off" value="ws://127.0.0.1:8787">
+    </div>
+    <div class="coopJoin">
+      <button class="go" id="coopHost">HOST</button>
+      <div class="coopRoom">
+        <input id="coopRoom" maxlength="5" autocomplete="off" placeholder="CODE">
+        <button class="go" id="coopJoin">JOIN</button>
+      </div>
+    </div>
+    <div id="coopStatus">start the relay with npm run coop</div>
+    <div id="coopPeers"></div>
+    <button class="go" id="coopStart" style="display:none">START THE WALL</button>
+    <button class="go" id="coopBack">BACK</button>
+  </div>
+</div>
+<div id="respawn" class="ov">
+  <h1 class="stencil" style="font-size:54px">OVERRUN</h1>
+  <div class="tag2">dragged back to the depot</div>
+  <div class="n stencil" id="respN">5</div>
+</div>
+
+<div id="resume" class="ov">
+  <h1 class="stencil" style="font-size:48px">STAY SHARP</h1>
+  <div class="tag2">click to return to the line</div>
+</div>
+
+<div id="shop" class="ov">
+  <h1 class="stencil" style="font-size:42px">REQUISITIONS</h1>
+  <div class="tag2">the quartermaster never sleeps · B to close</div>
+  <div id="shopScrap">SCRAP 0</div>
+  <div class="wrap" id="shopWrap"></div>
+</div>
+
+<div id="perks" class="ov">
+  <h1 class="stencil" style="font-size:42px">FIELD PROMOTION</h1>
+  <div class="tag2">choose a doctrine</div>
+  <div class="perkRow" id="perkRow"></div>
+</div>
+
+<div id="event" class="ov">
+  <div class="story">
+    <h2 id="evTitle">ON THE ROAD</h2>
+    <div class="who" id="evWho"></div>
+    <p id="evBody"></p>
+    <div class="choices" id="evChoices"></div>
+  </div>
+</div>
+
+<div id="camp" class="ov">
+  <div class="story" style="max-width:720px">
+    <h2 id="campTitle">CAMP</h2>
+    <div class="who" id="campWho"></div>
+    <p id="campBody"></p>
+    <div class="choices" id="campChoices"></div>
+  </div>
+</div>
+
+<div id="route" class="ov">
+  <h1 class="stencil" style="font-size:40px">CHOOSE THE ROAD</h1>
+  <div class="tag2" id="routeTag">the maps are old · the land is older</div>
+  <div id="routeWrap">
+    <canvas id="routeMap" width="520" height="330"></canvas>
+    <div class="nodeBtns" id="nodeBtns"></div>
+  </div>
+</div>
+
+<div id="roster"></div>
+<div id="squad"></div>
+
+<div id="gameover" class="ov">
+  <h1 class="stencil" style="font-size:64px" id="goTitle">THE ROAD ENDS</h1>
+  <div class="tag2" id="goTag">the convoy is lost</div>
+  <div class="stats2">
+    <div><div class="n stencil" id="goWave">0</div><div class="l">legs travelled</div></div>
+    <div><div class="n stencil" id="goKills">0</div><div class="l">confirmed kills</div></div>
+    <div><div class="n stencil" id="goScore">0</div><div class="l">souls delivered</div></div>
+    <div><div class="n stencil" id="goAcc">0%</div><div class="l">accuracy</div></div>
+  </div>
+  <div class="deadnote" id="goBest"></div>
+  <button class="go" id="againBtn">A NEW ROAD</button>
+</div>
+
+
+
+</body>
+</html>

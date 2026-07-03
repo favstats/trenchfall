@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRENCHFALL, dig deeper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;600;700&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  /* ════════ TRENCHFALL design system, "the field manual & the fire" ════════
+     dark theatre of war · paper artifacts · stamped ink · candlelight */
+  :root{
+    --khaki:#c9bd92; --olive:#7a7d55; --steel:#1b1d15; --panel:rgba(16,18,11,.86);
+    --signal:#e8742c; --blood:#a3271e; --good:#9ab35c;
+    --paper:#d6c9a3; --paper2:#c9b98e; --ink:#2b2419; --stamp:#8c2f23;
+    --noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#0d0e0a}
+  body{font-family:"Saira Condensed","Arial Narrow",sans-serif;color:var(--khaki);
+    -webkit-user-select:none;user-select:none}
+  canvas#gl{display:block;position:fixed;inset:0}
+  .stencil{font-family:"Saira Stencil One","Arial Black",sans-serif}
+  .typed{font-family:"Special Elite","Courier New",monospace}
+
+  /* ---------- HUD: riveted gunmetal plates ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5;display:none}
+  #hud.on{display:block}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+  #crosshair .dot{width:4px;height:4px;background:var(--khaki);border-radius:50%;margin:0 auto;box-shadow:0 0 3px #000}
+  #crosshair.hit .dot{background:var(--signal)}
+
+  .panel{position:relative;background:var(--panel);border:1px solid rgba(201,189,146,.28);
+    padding:8px 12px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 0 26px rgba(0,0,0,.5),0 4px 18px rgba(0,0,0,.45)}
+  .panel::before{content:'';position:absolute;inset:0;background-image:var(--noise);opacity:.10;pointer-events:none;mix-blend-mode:overlay}
+  .panel::after{content:'';position:absolute;width:5px;height:5px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#9a9176,#3a352a 70%);
+    top:4px;left:4px;box-shadow:calc(100% + 0px) 0 0 -999px;pointer-events:none;
+    box-shadow:0 0 0 0 transparent}
+  .panel .rivets,
+  .panel::after{box-shadow:
+    0 0 0 0 #0000;}
+  /* corner rivets via layered gradients on a dedicated overlay */
+  .panel{background-image:
+    radial-gradient(circle 2.6px at 7px 7px,#8d8468 0 2.2px,#000a 2.6px,transparent 3px),
+    radial-gradient(circle 2.6px at calc(100% - 7px) 7px,#8d8468 0 2.2px,#000a 2.6px,transparent 3px),
+    radial-gradient(circle 2.6px at 7px calc(100% - 7px),#8d8468 0 2.2px,#000a 2.6px,transparent 3px),
+    radial-gradient(circle 2.6px at calc(100% - 7px) calc(100% - 7px),#8d8468 0 2.2px,#000a 2.6px,transparent 3px)}
+
+  #waveBox{position:absolute;top:18px;left:18px}
+  #waveBox .big{font-size:25px;line-height:1;letter-spacing:.06em;text-shadow:0 2px 0 #000}
+  #waveBox .sub{font-size:13px;letter-spacing:.18em;color:var(--olive);margin-top:3px;text-transform:uppercase}
+  #chainTag{font-size:14px;letter-spacing:.14em;color:var(--signal);margin-top:5px;display:none}
+  #depotBox{position:absolute;top:18px;right:206px;min-width:230px}
+  .barlbl{font-size:12px;letter-spacing:.22em;color:var(--olive);display:flex;justify-content:space-between;gap:14px}
+  .bar{height:8px;background:rgba(201,189,146,.12);margin-top:4px;position:relative;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.8)}
+  .bar>i{position:absolute;inset:0;right:auto;background:linear-gradient(180deg,#aec46c,#7e9248);transition:width .25s}
+  .bar.depot>i{background:linear-gradient(180deg,#d8cba1,#b3a474)}
+  #convoy{margin-top:8px;font-size:14px;letter-spacing:.12em}
+  #convoy.alert{color:var(--signal);animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.35}}
+  #mapWrap{position:absolute;top:18px;right:18px;border:1px solid rgba(201,189,146,.3);background:var(--panel);
+    box-shadow:0 4px 18px rgba(0,0,0,.45)}
+  #map{display:block}
+  #mapWrap .tag{font-size:10px;letter-spacing:.3em;color:var(--olive);text-align:center;padding:3px 0 4px}
+  #vitals{position:absolute;left:18px;bottom:18px;min-width:250px}
+  #vitals .row{display:flex;gap:16px;margin-top:8px;font-size:15px;letter-spacing:.1em}
+  #vitals .row b{color:var(--signal);font-weight:600}
+  #ammoBox{position:absolute;right:18px;bottom:18px;text-align:right}
+  #mag{font-size:44px;line-height:.95;letter-spacing:.04em;text-shadow:0 3px 0 rgba(0,0,0,.7)}
+  #reserve{font-size:18px;color:var(--olive);letter-spacing:.12em}
+  #modes{margin-top:10px;display:flex;gap:6px;justify-content:flex-end}
+  .mode{font-size:12px;letter-spacing:.1em;padding:4px 10px;border:1px solid rgba(201,189,146,.3);color:var(--olive)}
+  .mode.sel{background:var(--signal);color:#16120a;border-color:var(--signal);font-weight:700}
+  #prompt{position:absolute;left:50%;bottom:140px;transform:translateX(-50%);
+    font-size:16px;letter-spacing:.14em;text-align:center;text-shadow:0 1px 3px #000}
+  #prompt b{color:var(--signal);border:1px solid var(--signal);padding:0 7px;font-weight:600}
+  #hint{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);
+    font-size:14px;letter-spacing:.14em;color:rgba(201,189,146,.7);white-space:nowrap;
+    font-family:"Special Elite","Courier New",monospace;text-shadow:0 1px 3px #000}
+
+  /* cinematic letterbox + announce */
+  #announce{position:absolute;left:50%;top:24%;transform:translateX(-50%);text-align:center;
+    font-size:50px;letter-spacing:.12em;opacity:0;transition:opacity .4s;text-shadow:0 2px 12px #000}
+  #announce .s2{font-size:15px;letter-spacing:.5em;color:var(--signal);margin-top:6px;
+    font-family:"Special Elite",monospace;text-transform:uppercase}
+  .lbox{position:fixed;left:0;right:0;height:0;background:#050503;z-index:5;pointer-events:none;
+    transition:height .55s cubic-bezier(.22,.9,.3,1)}
+  #lboxT{top:0}#lboxB{bottom:0}
+  body.cine #lboxT,body.cine #lboxB{height:7vh}
+
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
+    box-shadow:inset 0 0 180px rgba(0,0,0,.55)}
+  #scope{position:fixed;inset:0;display:none;pointer-events:none;z-index:5;
+    background:radial-gradient(circle at center,transparent 24%,rgba(6,6,3,.985) 31%)}
+  #scope::before{content:'';position:absolute;left:50%;top:50%;width:60vmin;height:1px;
+    transform:translate(-50%,-50%);background:rgba(20,20,12,.8)}
+  #scope::after{content:'';position:absolute;left:50%;top:50%;width:1px;height:60vmin;
+    transform:translate(-50%,-50%);background:rgba(20,20,12,.8)}
+  #hurt{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center,transparent 40%,rgba(163,39,30,.55) 100%)}
+  #acidFx{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center,transparent 35%,rgba(110,150,30,.5) 100%)}
+  #wname{font-size:13px;letter-spacing:.24em;color:var(--olive);margin-bottom:2px;text-transform:uppercase}
+  #slots{display:flex;gap:5px;justify-content:flex-end;margin-top:9px}
+  .slot{font-size:11px;letter-spacing:.08em;padding:3px 8px;border:1px solid rgba(201,189,146,.3);color:var(--olive)}
+  .slot.sel{background:var(--signal);color:#16120a;border-color:var(--signal);font-weight:700}
+  .slot.lock{opacity:.35}
+  #consum{display:flex;gap:10px;justify-content:flex-end;margin-top:7px;font-size:12px;letter-spacing:.1em;color:var(--olive)}
+  #consum b{color:var(--khaki);font-weight:600}
+  #weatherTag{font-size:10.5px;opacity:.8;letter-spacing:.24em;color:#8fa6c8;margin-top:5px;text-transform:uppercase}
+
+  /* ---------- overlays: the dark theatre ---------- */
+  .ov{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+    flex-direction:column;background:
+      radial-gradient(ellipse at 50% 110%,rgba(232,116,44,.07),transparent 55%),
+      radial-gradient(ellipse at center,rgba(10,11,7,.82) 60%,rgba(4,4,2,.96));
+    backdrop-filter:blur(3px) saturate(.85)}
+  .ov.show{display:flex;overflow-y:auto;padding:5vh 20px 6vh}
+  @media (prefers-reduced-motion:no-preference){
+    .ov.show>*{animation:ovIn .55s cubic-bezier(.16,1,.3,1) backwards}
+    .ov.show>*:nth-child(2){animation-delay:.07s}
+    .ov.show>*:nth-child(3){animation-delay:.14s}
+    .ov.show>*:nth-child(4){animation-delay:.21s}
+    .ov.show>*:nth-child(5){animation-delay:.28s}
+    .ov.show>*:nth-child(6){animation-delay:.35s}
+    @keyframes ovIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  }
+  .ov h1{font-size:clamp(52px,9vw,110px);letter-spacing:.1em;color:var(--khaki);line-height:1;
+    position:relative;text-shadow:4px 4px 0 rgba(140,47,35,.55),0 0 50px rgba(0,0,0,.8)}
+  .ov .tag2{font-size:14px;letter-spacing:.5em;color:var(--signal);margin:12px 0 30px;text-transform:uppercase;
+    font-family:"Special Elite",monospace}
+  .ctl{display:grid;grid-template-columns:auto auto;gap:8px 22px;font-size:15px;letter-spacing:.06em;
+    margin-bottom:26px;font-family:"Special Elite","Courier New",monospace;
+    background:linear-gradient(180deg,rgba(214,201,163,.06),rgba(214,201,163,.03));
+    border:1px solid rgba(201,189,146,.2);border-left:3px solid var(--stamp);padding:16px 26px}
+  .ctl span:nth-child(odd){text-align:right;color:var(--olive)}
+  .ctl b{color:var(--khaki);font-weight:600}
+
+  /* the STAMP button, hits the page like a quartermaster's mark */
+  button.go{font-family:"Saira Stencil One","Arial Black",sans-serif;font-size:20px;letter-spacing:.22em;
+    padding:15px 50px;background:transparent;color:#e9b9a1;border:3px double var(--signal);
+    cursor:pointer;position:relative;transform:rotate(-1.2deg);
+    text-shadow:0 0 14px rgba(232,116,44,.4);
+    box-shadow:inset 0 0 22px rgba(232,116,44,.12),0 0 0 1px rgba(0,0,0,.6);
+    transition:transform .14s cubic-bezier(.34,1.56,.64,1),box-shadow .14s,color .14s}
+  button.go::after{content:'';position:absolute;inset:-3px;background-image:var(--noise);opacity:.22;pointer-events:none}
+  button.go:hover{transform:rotate(0deg) scale(1.04);color:#ffd9c2;
+    box-shadow:inset 0 0 34px rgba(232,116,44,.22),0 0 24px rgba(232,116,44,.18)}
+  button.go:active{transform:rotate(0deg) scale(.97)}
+
+  .stats2{display:flex;gap:50px;margin:8px 0 30px;text-align:center}
+  .stats2 .n{font-size:44px;color:var(--khaki);text-shadow:3px 3px 0 rgba(140,47,35,.4)}
+  .stats2 .l{font-size:11px;letter-spacing:.3em;color:var(--olive);margin-top:4px}
+  .deadnote{font-size:16px;letter-spacing:.04em;color:#b8ab87;margin-bottom:24px;max-width:600px;
+    text-align:center;line-height:1.9;font-family:"Special Elite","Courier New",monospace}
+  #respawn .n{font-size:70px;color:var(--signal)}
+  #resume{cursor:pointer}
+
+  /* ---------- the quartermaster's ledger (shop) ---------- */
+  #shop .wrap{display:grid;grid-template-columns:repeat(3,236px);gap:14px;max-height:62vh;overflow:auto;padding:6px}
+  .shopItem{position:relative;border:1px solid #8a7c57;padding:14px 15px;cursor:pointer;
+    background:linear-gradient(160deg,var(--paper) 0%,var(--paper2) 100%);color:var(--ink);
+    box-shadow:2px 3px 0 rgba(0,0,0,.5),inset 0 0 30px rgba(120,95,50,.18);
+    transition:transform .16s cubic-bezier(.34,1.4,.64,1),box-shadow .16s}
+  .shopItem::before{content:'';position:absolute;inset:0;background-image:var(--noise);opacity:.16;pointer-events:none}
+  .shopItem:nth-child(odd){transform:rotate(.5deg)}
+  .shopItem:nth-child(3n){transform:rotate(-.6deg)}
+  .shopItem:hover{transform:rotate(0) translateY(-4px);box-shadow:3px 8px 18px rgba(0,0,0,.55)}
+  .shopItem.owned,.shopItem.poor{opacity:.55;cursor:default}
+  .shopItem.owned:hover,.shopItem.poor:hover{transform:none;box-shadow:2px 3px 0 rgba(0,0,0,.5)}
+  .shopItem.owned::after{content:'ISSUED';position:absolute;top:34%;left:8%;right:8%;text-align:center;
+    font-family:"Saira Stencil One";font-size:26px;letter-spacing:.3em;color:var(--stamp);
+    border:3px double var(--stamp);transform:rotate(-9deg);opacity:.7;pointer-events:none}
+  .shopItem .nm{font-size:15.5px;letter-spacing:.08em;color:var(--ink);font-weight:700;
+    border-bottom:1px solid rgba(43,36,25,.35);padding-bottom:5px}
+  .shopItem .pr{color:var(--stamp);font-size:13px;letter-spacing:.14em;margin-top:7px;
+    font-family:"Special Elite",monospace;font-weight:700}
+  .shopItem .ds{color:#4d4232;font-size:12.5px;margin-top:6px;line-height:1.55;
+    font-family:"Special Elite",monospace}
+  #shopScrap{font-size:16px;letter-spacing:.2em;color:var(--signal);margin-bottom:18px;
+    font-family:"Special Elite",monospace}
+
+  /* ---------- doctrines (perks): campaign medals ---------- */
+  .perkRow{display:flex;gap:22px}
+  .perk{position:relative;width:212px;padding:30px 18px 24px;cursor:pointer;text-align:center;
+    background:linear-gradient(170deg,#23251a,#15170f 70%);
+    border:1px solid #6d6342;outline:1px solid rgba(0,0,0,.7);outline-offset:3px;
+    box-shadow:inset 0 0 40px rgba(0,0,0,.55),0 6px 22px rgba(0,0,0,.5);
+    transition:transform .18s cubic-bezier(.34,1.45,.64,1),box-shadow .18s,border-color .18s}
+  .perk::before{content:'';position:absolute;inset:0;background-image:var(--noise);opacity:.12;pointer-events:none}
+  .perk:hover{transform:translateY(-9px) rotate(-.6deg);border-color:var(--signal);
+    box-shadow:inset 0 0 40px rgba(232,116,44,.08),0 16px 34px rgba(0,0,0,.6)}
+  .perk .ic{width:64px;height:64px;line-height:62px;margin:0 auto;font-size:30px;color:#e9c08a;
+    border:2px solid #6d6342;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#3a3422,#191709 75%);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.8),0 2px 4px rgba(0,0,0,.6)}
+  .perk .nm{font-size:16px;letter-spacing:.12em;color:var(--khaki);margin-top:15px;font-weight:600}
+  .perk .ds{font-size:12.5px;color:var(--olive);margin-top:9px;line-height:1.6;font-family:"Special Elite",monospace}
+  .perk::after{content:'· DOCTRINE ·';position:absolute;top:8px;left:0;right:0;font-size:8.5px;
+    letter-spacing:.4em;color:rgba(201,189,146,.35)}
+
+
+  /* field radio: dialogue cards, top right, like a voice beside you */
+  #sayWrap{position:fixed;top:330px;right:18px;width:300px;z-index:8;pointer-events:none;
+    display:flex;flex-direction:column;gap:8px}
+  .say{position:relative;background:var(--panel);border:1px solid rgba(201,189,146,.35);
+    border-left:3px solid var(--signal);padding:9px 12px 10px 50px;
+    box-shadow:0 6px 18px rgba(0,0,0,.5);overflow:hidden}
+  .say::before{content:'';position:absolute;inset:0;background-image:var(--noise);opacity:.1;pointer-events:none}
+  .say .av{position:absolute;left:9px;top:10px;width:32px;height:32px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#4a4636,#23200f 75%);
+    border:1px solid rgba(201,189,146,.4);color:var(--khaki);
+    font-family:"Saira Stencil One";font-size:15px;text-align:center;line-height:31px}
+  .say .nm{font-size:12px;letter-spacing:.22em;color:var(--signal);text-transform:uppercase}
+  .say .tx{font-size:14px;line-height:1.45;color:var(--khaki);margin-top:2px;
+    font-family:"Special Elite","Courier New",monospace}
+  @media (prefers-reduced-motion:no-preference){
+    .say{animation:sayIn .4s cubic-bezier(.16,1,.3,1)}
+    .say.bye{animation:sayOut .4s ease forwards}
+    @keyframes sayIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+    @keyframes sayOut{to{opacity:0;transform:translateX(40px)}}
+  }
+  #start h1{font-size:clamp(36px,5.6vw,66px)}
+  #start .ctl{font-size:13px;gap:4px 16px;padding:10px 20px;margin-bottom:14px}
+  #start .deadnote{font-size:14px;line-height:1.7;max-width:580px}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001s !important;transition-duration:.001s !important}
+  }
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+  <script type="module" crossorigin src="./assets/skirmish-ab7NwP0w.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="./assets/three-BROBeMa5.js">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="lboxT" class="lbox"></div><div id="lboxB" class="lbox"></div>
+<div id="vignette"></div>
+<div id="scope"></div>
+<div id="hurt"></div>
+<div id="acidFx"></div>
+
+<div id="hud">
+  <div id="crosshair"><div class="dot"></div></div>
+  <div id="waveBox" class="panel">
+    <div class="big stencil" id="waveTxt">WAVE 1</div>
+    <div class="sub" id="waveSub">hostiles: 0</div>
+    <div id="weatherTag">CLEAR SKIES</div>
+    <div id="chainTag">CHAIN ×0</div>
+  </div>
+  <div id="depotBox" class="panel">
+    <div class="barlbl"><span>DEPOT INTEGRITY</span><span id="depotPct">100%</span></div>
+    <div class="bar depot"><i id="depotBar" style="width:100%"></i></div>
+    <div id="convoy">CONVOY, 0:35</div>
+  </div>
+  <div id="mapWrap"><canvas id="map" width="170" height="170"></canvas><div class="tag">FIELD MAP</div></div>
+  <div id="vitals" class="panel">
+    <div class="barlbl"><span>VITALS</span><span id="hpPct">100</span></div>
+    <div class="bar"><i id="hpBar" style="width:100%"></i></div>
+    <div class="row"><span>SCRAP <b id="scrap">60</b></span><span>DIRT <b id="dirt">0</b></span><span>SCORE <b id="score">0</b></span></div>
+  </div>
+  <div id="ammoBox" class="panel">
+    <div id="wname">M1 Service Rifle</div>
+    <div id="mag" class="stencil">30</div>
+    <div id="reserve">RESERVE 90</div>
+    <div id="slots"></div>
+    <div id="modes">
+      <div class="mode" id="tShovel">Q SHOVEL</div>
+      <div class="mode" id="tBuild">T BUILD</div>
+      <div class="mode sel" id="tTorch">F TORCH</div>
+      <div class="mode" id="tShop">B SHOP</div>
+    </div>
+    <div id="consum"></div>
+  </div>
+  <div id="prompt"></div>
+  <div id="hint"></div>
+  <div id="announce" class="stencil"><div id="annMain"></div><div class="s2" id="annSub"></div></div>
+</div>
+
+<div id="start" class="ov show">
+  <h1 class="stencil">TRENCHFALL</h1>
+  <div class="tag2">they keep coming · dig deeper</div>
+  <div class="ctl">
+    <span><b>WASD</b> + mouse</span><span>move &amp; aim, <b>SHIFT</b> sprint, <b>SPACE</b> jump, <b>RMB</b> aim</span>
+    <span><b>1 – 6</b></span><span>weapons, buy new ones at the depot (<b>B</b>)</span>
+    <span><b>Q</b> / <b>T</b></span><span>shovel (dig / pile) · build kit (T again cycles turret → sandbags → wire)</span>
+    <span><b>G V X H Z</b></span><span>frag · molotov · mine · medkit · decoy flare</span>
+    <span><b>R</b> / <b>E</b> / <b>F</b></span><span>reload / interact / torch</span>
+  </div>
+  <div class="deadnote">Convoys resupply the depot by road. Guard the road. And mind your shovel -
+    a trench across your own supply line stops the trucks too. They rise from the earth when darkness falls.</div>
+  <button class="go" id="startBtn">DEPLOY</button>
+</div>
+
+<div id="respawn" class="ov">
+  <h1 class="stencil" style="font-size:54px">OVERRUN</h1>
+  <div class="tag2">dragged back to the depot</div>
+  <div class="n stencil" id="respN">5</div>
+</div>
+
+<div id="resume" class="ov">
+  <h1 class="stencil" style="font-size:48px">STAY SHARP</h1>
+  <div class="tag2">click to return to the line</div>
+</div>
+
+<div id="shop" class="ov">
+  <h1 class="stencil" style="font-size:42px">REQUISITIONS</h1>
+  <div class="tag2">the quartermaster never sleeps · B to close</div>
+  <div id="shopScrap">SCRAP 0</div>
+  <div class="wrap" id="shopWrap"></div>
+</div>
+
+<div id="perks" class="ov">
+  <h1 class="stencil" style="font-size:42px">FIELD PROMOTION</h1>
+  <div class="tag2">choose a doctrine</div>
+  <div class="perkRow" id="perkRow"></div>
+</div>
+
+<div id="gameover" class="ov">
+  <h1 class="stencil" style="font-size:64px">DEPOT LOST</h1>
+  <div class="tag2">the line is broken</div>
+  <div class="stats2">
+    <div><div class="n stencil" id="goWave">0</div><div class="l">waves held</div></div>
+    <div><div class="n stencil" id="goKills">0</div><div class="l">confirmed kills</div></div>
+    <div><div class="n stencil" id="goScore">0</div><div class="l">score</div></div>
+    <div><div class="n stencil" id="goAcc">0%</div><div class="l">accuracy</div></div>
+  </div>
+  <div class="deadnote" id="goBest"></div>
+  <button class="go" id="againBtn">RE-DEPLOY</button>
+</div>
+
+
+</body>
+</html>

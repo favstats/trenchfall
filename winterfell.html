@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE LONG NIGHT — The First Assault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;600;700&family=Special+Elite&display=swap" rel="stylesheet">
+<!-- Importmap: lets CDN-fetched three addons resolve their bare `three` import
+     to the same pinned WebGPU build our modules use. Local modules import via
+     full CDN URL through winterfell/engine/three.js to avoid vite rewriting. -->
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+  "three/webgpu":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+  "three/tsl":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.tsl.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
+</script>
+  <script type="module" crossorigin src="./assets/winterfell-CfL4Ode0.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="./assets/winterfell-FgPp7pJs.css">
+</head>
+<!-- Howler: free game-audio library (UMD global) for battlefield SFX -->
+<script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js"></script>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="bootTag">THE LONG NIGHT · HOLD THE WALL</div>
+</div>
+</body>
+</html>

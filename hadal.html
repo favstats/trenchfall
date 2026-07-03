@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HADAL — the trench remembers light</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Mono:wght@400;700&family=Saira+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- Plain WebGL three (not the WebGPU build): HADAL is hand-shaded — every
+     visible thing is a custom Points/ShaderMaterial fed by sonar + lamp
+     uniforms, so the classic pipeline is all it needs, and it screenshots
+     cleanly headless. Full-URL import via hadal/engine/three.js keeps vite
+     from resolving bare 'three' to the repo's old 0.160. The importmap lets
+     CDN post-processing addons resolve their bare 'three' to the same build. -->
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
+</script>
+  <script type="module" crossorigin src="./assets/hadal-Dxj4wG5u.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="./assets/hadal-kGL3_BZG.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="bootTag">HADAL · DESCENT</div>
+</div>
+</body>
+</html>

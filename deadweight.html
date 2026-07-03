@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEADWEIGHT — the station remembers you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Saira+Condensed:wght@400;600&display=swap" rel="stylesheet">
+<!-- three 0.180 classic + Rapier physics, both pinned CDN ESM. The importmap
+     lets post addons resolve bare 'three'; local modules import full URLs via
+     the engine shims so vite leaves everything alone. -->
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
+</script>
+  <script type="module" crossorigin src="./assets/deadweight-C4wPOrMP.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="./assets/deadweight-BuoCu4m3.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="bootTag">DEADWEIGHT · SALVAGE RIG VESTA-9</div>
+</div>
+</body>
+</html>
